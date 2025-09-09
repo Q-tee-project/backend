@@ -7,9 +7,9 @@
 CREATE SCHEMA IF NOT EXISTS math_service;
 CREATE SCHEMA IF NOT EXISTS english_service;
 
--- 기본 권한 설정
-GRANT ALL PRIVILEGES ON SCHEMA math_service TO postgres;
-GRANT ALL PRIVILEGES ON SCHEMA english_service TO postgres;
+-- 기본 권한 설정 (현재 사용자에게 권한 부여)
+GRANT ALL PRIVILEGES ON SCHEMA math_service TO root;
+GRANT ALL PRIVILEGES ON SCHEMA english_service TO root;
 
 -- 확장 기능 활성화 (필요한 경우)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

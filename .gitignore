@@ -193,8 +193,12 @@ temp/
 #*#
 *.bak
 
+# VS Code history
+.history/
+
 # Service specific ignores
 services/math-service/static/uploads/
 services/english-service/static/uploads/
 services/*/logs/
 services/*/tmp/
+

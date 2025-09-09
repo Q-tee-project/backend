@@ -6,8 +6,8 @@ services:
     image: postgres:15
     container_name: education_platform_db
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_USER: ${DB_USER:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
       POSTGRES_DB: ${DB_NAME:-education_platform}
     ports:
       - "5432:5432"
