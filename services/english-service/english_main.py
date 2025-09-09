@@ -4,8 +4,8 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 from dotenv import load_dotenv
-from database import init_db
-from routes import router
+from app.database import init_db
+from app.routers.routes import router
 
 # FastAPI 애플리케이션 인스턴스 생성
 app = FastAPI(

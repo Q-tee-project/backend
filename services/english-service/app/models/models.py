@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from database import Base
+from app.database import Base
 
 # Grammar Categories 테이블 모델
 class GrammarCategory(Base):

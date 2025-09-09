@@ -38,5 +38,5 @@ def init_db():
     애플리케이션 시작 시 호출됩니다.
     """
     # 모델들을 import해서 Base에 등록
-    import models
+    from app.models import models
     Base.metadata.create_all(bind=engine)

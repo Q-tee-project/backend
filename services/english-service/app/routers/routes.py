@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db, SessionLocal
-from schemas import (
+from app.database import get_db, SessionLocal
+from app.schemas.schemas import (
     QuestionGenerationRequest, CategoriesResponse,
     TextTypeCreate, TextTypeUpdate, TextTypeResponse
 )
-from models import GrammarCategory, GrammarTopic, VocabularyCategory, ReadingType
+from app.models.models import GrammarCategory, GrammarTopic, VocabularyCategory, ReadingType, TextType
 from sqlalchemy import text
 from typing import List
 from datetime import datetime
-from question_generator import PromptGenerator
+from app.services.question_generator import PromptGenerator
 import os
 import json
 try:
