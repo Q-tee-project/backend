@@ -1,5 +1,7 @@
-// API 기본 URL
-const API_BASE = '/api/math-generation';
+// API 기본 URL - 환경별 설정
+const API_BASE = window.location.hostname === 'localhost' 
+    ? '/api/math-generation' 
+    : '/api/math-generation';
 
 // MathJax 렌더링 함수
 function renderMathJax(element) {
@@ -968,6 +970,7 @@ async function loadWorksheets() {
                     <div class="worksheet-actions">
                         <button class="btn-secondary" onclick="viewWorksheetDetail(${worksheet.id})">문제 보기</button>
                         <button class="btn-secondary" onclick="useForGrading(${worksheet.id})">채점하기</button>
+                        <button class="btn-danger" onclick="deleteWorksheet(${worksheet.id}, '${worksheet.title.replace(/'/g, "\\'")}')">삭제</button>
                     </div>
                 </div>
             `).join('');
@@ -1475,6 +1478,8 @@ function createProblemEditElement(problem, sequence) {
             <div class="problem-meta">
                 <span class="problem-type">${problem.problem_type}</span>
                 <span class="problem-difficulty">${problem.difficulty}단계</span>
+                <button class="regenerate-btn" onclick="showRegenerateModal(${problem.id}, ${sequence})">🔄 재생성</button>
+                <button class="delete-btn" onclick="deleteProblem(${problem.id}, ${sequence})">🗑️ 삭제</button>
             </div>
         </div>
         
@@ -1606,6 +1611,148 @@ function cancelEdit() {
         currentEditWorksheet = null;
         originalWorksheetData = null;
     }
+}
+
+// 전역 변수 (재생성 관련)
+let currentRegeneratingProblemId = null;
+let currentRegeneratingSequence = null;
+
+// 재생성 모달 표시
+function showRegenerateModal(problemId, sequence) {
+    currentRegeneratingProblemId = problemId;
+    currentRegeneratingSequence = sequence;
+    
+    document.getElementById('regenerate-problem-info').textContent = `${sequence}번 문제를 재생성합니다`;
+    document.getElementById('regenerate-prompt').value = '';
+    document.getElementById('regenerate-difficulty').value = '';
+    document.getElementById('regenerate-type').value = '';
+    
+    document.getElementById('regenerate-modal').style.display = 'block';
+}
+
+// 재생성 모달 닫기
+function closeRegenerateModal() {
+    document.getElementById('regenerate-modal').style.display = 'none';
+    currentRegeneratingProblemId = null;
+    currentRegeneratingSequence = null;
+}
+
+// 문제 재생성 실행
+async function regenerateProblem() {
+    const userPrompt = document.getElementById('regenerate-prompt').value.trim();
+    if (!userPrompt) {
+        alert('재생성 요청사항을 입력해주세요.');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('regenerate-submit-btn');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '재생성 중...';
+    
+    try {
+        const requestData = {
+            user_prompt: userPrompt
+        };
+        
+        // 선택적 파라미터 추가
+        const difficulty = document.getElementById('regenerate-difficulty').value;
+        const problemType = document.getElementById('regenerate-type').value;
+        
+        if (difficulty) requestData.difficulty = difficulty;
+        if (problemType) requestData.problem_type = problemType;
+        
+        const response = await fetch(`${API_BASE}/problems/${currentRegeneratingProblemId}/regenerate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || '재생성에 실패했습니다.');
+        }
+        
+        const result = await response.json();
+        
+        // 화면에서 해당 문제 업데이트
+        updateProblemInEditView(result.regenerated_problem);
+        
+        // 모달 닫기
+        closeRegenerateModal();
+        
+        // 성공 메시지
+        alert(`${currentRegeneratingSequence}번 문제가 성공적으로 재생성되었습니다!`);
+        
+    } catch (error) {
+        console.error('문제 재생성 오류:', error);
+        alert('문제 재생성 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
+// 편집 화면에서 문제 업데이트
+function updateProblemInEditView(regeneratedProblem) {
+    const problemElement = document.querySelector(`[data-problem-id="${regeneratedProblem.id}"]`);
+    if (!problemElement) {
+        console.error('문제 요소를 찾을 수 없습니다:', regeneratedProblem.id);
+        return;
+    }
+    
+    // 문제 내용 업데이트
+    const questionTextarea = problemElement.querySelector('.problem-question');
+    if (questionTextarea) {
+        questionTextarea.value = regeneratedProblem.question;
+    }
+    
+    // 정답 업데이트
+    const answerInput = problemElement.querySelector('.problem-answer');
+    if (answerInput) {
+        answerInput.value = regeneratedProblem.correct_answer;
+    }
+    
+    // 해설 업데이트
+    const explanationTextarea = problemElement.querySelector('.problem-explanation');
+    if (explanationTextarea) {
+        explanationTextarea.value = regeneratedProblem.explanation || '';
+    }
+    
+    // 난이도 업데이트
+    const difficultySelect = problemElement.querySelector('.problem-difficulty-select');
+    if (difficultySelect) {
+        difficultySelect.value = regeneratedProblem.difficulty;
+    }
+    
+    // 선택지 업데이트 (객관식인 경우)
+    if (regeneratedProblem.choices) {
+        const choiceInputs = problemElement.querySelectorAll('.choice-input');
+        regeneratedProblem.choices.forEach((choice, index) => {
+            if (choiceInputs[index]) {
+                choiceInputs[index].value = choice;
+            }
+        });
+    }
+    
+    // 메타 정보 업데이트
+    const typeSpan = problemElement.querySelector('.problem-type');
+    const difficultySpan = problemElement.querySelector('.problem-difficulty');
+    if (typeSpan) typeSpan.textContent = regeneratedProblem.problem_type;
+    if (difficultySpan) difficultySpan.textContent = `${regeneratedProblem.difficulty}단계`;
+    
+    // MathJax 재렌더링
+    setTimeout(() => renderMathJax(problemElement), 100);
+    
+    // 문제가 업데이트되었음을 시각적으로 표시
+    problemElement.style.border = '2px solid #27ae60';
+    problemElement.style.backgroundColor = '#f8fff8';
+    setTimeout(() => {
+        problemElement.style.border = '';
+        problemElement.style.backgroundColor = '';
+    }, 3000);
 }
 
 // 채점 이력 관련 함수들
@@ -1877,4 +2024,269 @@ function retakeWithWorksheet(worksheetId) {
             behavior: 'smooth' 
         });
     }, 100);
+}
+
+// 수식 편집기 관련 변수
+let mathQuillInstance = null;
+let currentEditingElement = null;
+
+// MathQuill 초기화
+function initMathQuill() {
+    if (window.MathQuill && !mathQuillInstance) {
+        const MQ = MathQuill.getInterface(2);
+        mathQuillInstance = MQ.MathField(document.getElementById('math-editor'), {
+            spaceBehavesLikeTab: true,
+            leftRightIntoCmdGoes: 'up',
+            restrictMismatchedBrackets: true,
+            sumStartsWithNEquals: true,
+            supSubsRequireOperand: true,
+            charsThatBreakOutOfSupSub: '+-=<>',
+            autoSubscriptNumerals: true,
+            autoCommands: 'pi theta sqrt sum prod alpha beta gamma delta epsilon zeta eta mu nu xi omicron rho sigma tau upsilon phi chi psi omega',
+            autoOperatorNames: 'sin cos tan log ln exp max min',
+            handlers: {
+                edit: function(mathField) {
+                    updateMathPreview();
+                }
+            }
+        });
+        
+        console.log('MathQuill 초기화 완료');
+    }
+}
+
+// 수식 편집기 열기
+function openMathEditor(targetElement) {
+    currentEditingElement = targetElement;
+    
+    // MathQuill이 초기화되지 않았으면 초기화
+    if (!mathQuillInstance) {
+        initMathQuill();
+    }
+    
+    // 기존 내용이 있다면 로드
+    if (targetElement.dataset.mathContent) {
+        mathQuillInstance.latex(targetElement.dataset.mathContent);
+    } else {
+        mathQuillInstance.latex('');
+    }
+    
+    // 모달 표시
+    document.getElementById('math-editor-modal').style.display = 'block';
+    
+    // 포커스 설정
+    setTimeout(() => {
+        mathQuillInstance.focus();
+        updateMathPreview();
+    }, 100);
+}
+
+// 수식 편집기 닫기
+function closeMathEditor() {
+    document.getElementById('math-editor-modal').style.display = 'none';
+    currentEditingElement = null;
+    
+    if (mathQuillInstance) {
+        mathQuillInstance.latex('');
+    }
+}
+
+// 수식 삽입 (도구바 버튼)
+function insertMath(latex) {
+    if (mathQuillInstance) {
+        mathQuillInstance.cmd(latex);
+        mathQuillInstance.focus();
+        updateMathPreview();
+    }
+}
+
+// 수식을 에디터에 삽입
+function insertMathToEditor() {
+    if (!currentEditingElement || !mathQuillInstance) {
+        alert('편집 대상이 설정되지 않았습니다.');
+        return;
+    }
+    
+    const latex = mathQuillInstance.latex();
+    
+    if (latex.trim() === '') {
+        alert('수식을 입력해주세요.');
+        return;
+    }
+    
+    // LaTeX 수식을 $ 기호로 감싸서 저장
+    const mathText = `$${latex}$`;
+    
+    // 텍스트 에리어라면 현재 커서 위치에 삽입
+    if (currentEditingElement.tagName === 'TEXTAREA' || currentEditingElement.tagName === 'INPUT') {
+        const cursorPos = currentEditingElement.selectionStart;
+        const textBefore = currentEditingElement.value.substring(0, cursorPos);
+        const textAfter = currentEditingElement.value.substring(currentEditingElement.selectionEnd);
+        
+        currentEditingElement.value = textBefore + mathText + textAfter;
+        
+        // 커서 위치 조정
+        const newPos = cursorPos + mathText.length;
+        currentEditingElement.setSelectionRange(newPos, newPos);
+        currentEditingElement.focus();
+        
+    } else {
+        // 다른 요소라면 innerHTML에 추가
+        if (currentEditingElement.innerHTML.trim() === '') {
+            currentEditingElement.innerHTML = mathText;
+        } else {
+            currentEditingElement.innerHTML += ' ' + mathText;
+        }
+    }
+    
+    // 데이터 속성에 LaTeX 저장
+    currentEditingElement.dataset.mathContent = latex;
+    
+    // 모달 닫기
+    closeMathEditor();
+    
+    // 변경 이벤트 발생
+    if (currentEditingElement.onchange) {
+        currentEditingElement.onchange();
+    }
+}
+
+// 실시간 미리보기 업데이트
+function updateMathPreview() {
+    if (!mathQuillInstance) return;
+    
+    const latex = mathQuillInstance.latex();
+    const previewElement = document.getElementById('math-preview');
+    const latexInput = document.getElementById('math-latex');
+    
+    // LaTeX 코드 표시
+    latexInput.value = latex;
+    
+    // MathJax로 미리보기 렌더링
+    if (latex.trim() !== '') {
+        previewElement.innerHTML = `$$${latex}$$`;
+        renderMathJax(previewElement);
+    } else {
+        previewElement.innerHTML = '수식을 입력하세요...';
+    }
+}
+
+// 편집 텍스트 에리어에 수식 편집 버튼 추가
+function addMathButtonToTextarea(textarea) {
+    // 이미 버튼이 있다면 추가하지 않음
+    if (textarea.nextElementSibling && textarea.nextElementSibling.classList.contains('edit-math-btn')) {
+        return;
+    }
+    
+    const mathButton = document.createElement('button');
+    mathButton.type = 'button';
+    mathButton.className = 'edit-math-btn';
+    mathButton.textContent = '수식 편집';
+    mathButton.onclick = () => openMathEditor(textarea);
+    
+    // 텍스트에리어 다음에 버튼 삽입
+    textarea.parentNode.insertBefore(mathButton, textarea.nextSibling);
+}
+
+// 문서가 로드된 후 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    // MathQuill 라이브러리가 로드되면 초기화
+    if (window.MathQuill) {
+        setTimeout(initMathQuill, 500);
+    } else {
+        // MathQuill 라이브러리가 로드될 때까지 대기
+        const checkMathQuill = setInterval(() => {
+            if (window.MathQuill) {
+                clearInterval(checkMathQuill);
+                initMathQuill();
+            }
+        }, 100);
+    }
+    
+    // 기존 텍스트에리어에 수식 편집 버튼 추가
+    setTimeout(() => {
+        document.querySelectorAll('textarea').forEach(textarea => {
+            if (textarea.id && textarea.id.includes('edit')) {
+                addMathButtonToTextarea(textarea);
+            }
+        });
+    }, 1000);
+});
+
+// 워크시트 삭제
+async function deleteWorksheet(worksheetId, worksheetTitle) {
+    if (!confirm(`정말로 "${worksheetTitle}" 워크시트를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 관련된 모든 문제와 채점 결과가 함께 삭제됩니다.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/worksheets/${worksheetId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || '워크시트 삭제에 실패했습니다.');
+        }
+        
+        await response.json();
+        
+        // 성공 알림
+        alert(`${worksheetTitle} 워크시트가 성공적으로 삭제되었습니다.`);
+        
+        // 워크시트 목록 새로고침
+        await loadWorksheets();
+        await refreshWorksheetsForGrading();
+        await loadWorksheetsForEdit();
+        
+        // 상세보기가 열려있다면 닫기
+        const detailSection = document.getElementById('worksheet-detail-section');
+        if (detailSection && detailSection.style.display !== 'none') {
+            detailSection.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('워크시트 삭제 오류:', error);
+        alert('워크시트 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 개별 문제 삭제
+async function deleteProblem(problemId, sequence) {
+    if (!confirm(`정말로 ${sequence}번 문제를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/problems/${problemId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || '문제 삭제에 실패했습니다.');
+        }
+        
+        const result = await response.json();
+        
+        // 성공 알림
+        alert(result.message);
+        
+        // 현재 편집 중인 워크시트 다시 로드
+        if (currentEditWorksheet) {
+            await loadWorksheetForEdit();
+        }
+        
+    } catch (error) {
+        console.error('문제 삭제 오류:', error);
+        alert('문제 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 모달 외부 클릭 시 닫기
+window.onclick = function(event) {
+    const mathModal = document.getElementById('math-editor-modal');
+    if (event.target === mathModal) {
+        closeMathEditor();
+    }
 }

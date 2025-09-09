@@ -1,0 +1,183 @@
+"""
+수학 문제 생성 로직 분리
+"""
+import os
+import json
+import google.generativeai as genai
+from typing import Dict, List
+from .prompt_templates import PromptTemplates
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class ProblemGenerator:
+    """수학 문제 생성 전용 클래스"""
+    
+    def __init__(self):
+        # AI 모델 직접 초기화 (순환 import 방지)
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is required")
+        
+        genai.configure(api_key=gemini_api_key)
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.prompt_templates = PromptTemplates()
+    
+    def generate_problems(
+        self, 
+        curriculum_data: Dict, 
+        user_prompt: str, 
+        problem_count: int = 1, 
+        difficulty_ratio: Dict = None
+    ) -> List[Dict]:
+        """수학 문제 생성 메인 로직"""
+        
+        # 난이도 분배 계산
+        difficulty_distribution = self._calculate_difficulty_distribution(
+            problem_count, difficulty_ratio
+        )
+        
+        # 참고 문제 가져오기
+        reference_problems = self._get_reference_problems(
+            curriculum_data.get('chapter_name', ''), 
+            difficulty_ratio
+        )
+        
+        # 프롬프트 빌드
+        prompt = self.prompt_templates.build_problem_generation_prompt(
+            curriculum_data=curriculum_data,
+            user_prompt=user_prompt,
+            problem_count=problem_count,
+            difficulty_distribution=difficulty_distribution,
+            reference_problems=reference_problems
+        )
+        
+        # AI 호출 및 응답 처리
+        return self._call_ai_and_parse_response(prompt)
+    
+    def _calculate_difficulty_distribution(self, problem_count: int, difficulty_ratio: Dict) -> str:
+        """난이도 분배 계산"""
+        if difficulty_ratio:
+            # 비율에 따른 각 난이도별 문제 개수 계산
+            total_problems = problem_count
+            a_count = round(total_problems * difficulty_ratio['A'] / 100)
+            b_count = round(total_problems * difficulty_ratio['B'] / 100)
+            c_count = total_problems - a_count - b_count  # 나머지는 C
+            
+            return f"A단계 {a_count}개, B단계 {b_count}개, C단계 {c_count}개"
+        else:
+            return f"모든 문제 B단계"
+    
+    def _get_reference_problems(self, chapter_name: str, difficulty_ratio: Dict) -> str:
+        """참고 문제 가져오기"""
+        try:
+            import os
+            
+            problem_types_file_path = os.path.join(
+                os.path.dirname(__file__), 
+                "../../data/math_problem_types.json"
+            )
+            
+            with open(problem_types_file_path, 'r', encoding='utf-8') as f:
+                problem_types_data = json.load(f)
+            
+            # 챕터명으로 문제 유형 찾기
+            chapter_problem_types = []
+            for chapter_data in problem_types_data["math_problem_types"]:
+                if chapter_data["chapter_name"] == chapter_name:
+                    chapter_problem_types = chapter_data["problem_types"]
+                    break
+            
+            if not chapter_problem_types:
+                return f"'{chapter_name}' 챕터의 참고 문제를 찾을 수 없습니다."
+            
+            # 난이도별 문제 유형 분배
+            total_types = len(chapter_problem_types)
+            a_types = chapter_problem_types[:total_types//3] if total_types >= 3 else [chapter_problem_types[0]]
+            b_types = chapter_problem_types[total_types//3:2*total_types//3] if total_types >= 6 else chapter_problem_types[1:2] if total_types >= 2 else []
+            c_types = chapter_problem_types[2*total_types//3:] if total_types >= 3 else chapter_problem_types[-1:] if total_types >= 3 else []
+            
+            # 참고 문제 텍스트 구성
+            reference_text = f"**{chapter_name} 참고 문제 유형:**\n\n"
+            
+            if difficulty_ratio and difficulty_ratio.get('A', 0) > 0 and a_types:
+                reference_text += f"**A단계 유형**: {', '.join(a_types[:4])}\n"
+                reference_text += "   → 기본 개념과 정의를 직접 적용하는 문제로 변형\n\n"
+            
+            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:  
+                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n" 
+                reference_text += "   → 계산 과정과 공식 적용이 포함된 응용 문제로 변형\n\n"
+                
+            if difficulty_ratio and difficulty_ratio.get('C', 0) > 0 and c_types:
+                reference_text += f"**C단계 유형**: {', '.join(c_types[:4])}\n"
+                reference_text += "   → 조건 분석과 종합적 사고가 필요한 심화 문제로 변형\n\n"
+            
+            return reference_text
+            
+        except Exception as e:
+            print(f"참고 문제 로드 오류: {str(e)}")
+            return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
+    
+    def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
+        """AI 호출 및 응답 파싱"""
+        try:
+            response = self.model.generate_content(prompt)
+            content = response.text
+            
+            # JSON 부분만 추출
+            if "```json" in content:
+                json_start = content.find("```json") + 7
+                json_end = content.find("```", json_start)
+                json_str = content[json_start:json_end].strip()
+            else:
+                json_str = content
+            
+            # JSON 정리 및 파싱
+            problems_array = self._clean_and_parse_json(json_str)
+            return problems_array if isinstance(problems_array, list) else [problems_array]
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"문제 생성 오류: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            raise Exception(error_msg)
+    
+    def _clean_and_parse_json(self, json_str: str):
+        """JSON 문자열 정리 및 파싱"""
+        import re
+        
+        try:
+            # 1차 시도: 원본 그대로 파싱
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            print(f"1차 JSON 파싱 실패: {str(e)}")
+            
+            try:
+                # 2차 시도: 기본적인 정리
+                cleaned = json_str.strip()
+                
+                # 제어 문자 제거
+                cleaned = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', cleaned)
+                
+                # 백슬래시 문제 해결
+                cleaned = cleaned.replace('\\\\', '\\')
+                cleaned = cleaned.replace('\\"', '"')
+                cleaned = cleaned.replace('\\n', '\\n')
+                cleaned = cleaned.replace('\\t', '\\t')
+                
+                return json.loads(cleaned)
+            except json.JSONDecodeError as e2:
+                print(f"2차 JSON 파싱 실패: {str(e2)}")
+                
+                try:
+                    # 3차 시도: JSON 배열 패턴 찾기
+                    array_match = re.search(r'\[.*\]', cleaned, re.DOTALL)
+                    if array_match:
+                        array_part = array_match.group(0)
+                        return json.loads(array_part)
+                    else:
+                        raise e2
+                except (json.JSONDecodeError, Exception) as e3:
+                    print(f"3차 JSON 파싱 실패: {str(e3)}")
+                    print(f"문제가 있는 JSON 앞부분: {json_str[:200]}...")
+                    raise Exception(f"JSON 파싱 완전 실패: {str(e3)}")

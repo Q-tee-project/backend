@@ -541,122 +541,34 @@ def grade_problems_task(self, worksheet_id: int, image_data: bytes, user_id: int
 
 
 def _normalize_fraction_text(text: str) -> str:
-    """OCR 텍스트에서 세로 분수 패턴을 찾아서 표준 형태로 변환"""
-    import re
-    from fractions import Fraction
-    
-    # 여러 줄로 나뉜 분수 패턴 찾기
-    lines = text.split('\n')
-    normalized_lines = []
-    
-    i = 0
-    while i < len(lines):
-        current_line = lines[i].strip()
-        
-        # 분수 패턴 찾기: 숫자 → 선(-, ―, —) → 숫자
-        if (i + 2 < len(lines) and 
-            re.match(r'^\s*\d+\s*$', current_line) and  # 첫 줄: 숫자만
-            re.match(r'^\s*[-―—_]+\s*$', lines[i + 1].strip()) and  # 둘째 줄: 선
-            re.match(r'^\s*\d+\s*$', lines[i + 2].strip())):  # 셋째 줄: 숫자만
-            
-            numerator = current_line
-            denominator = lines[i + 2].strip()
-            
-            # 표준 분수 형태로 변환
-            fraction_text = f"{numerator}/{denominator}"
-            
-            print(f"🔍 세로 분수 발견: {numerator} over {denominator} → {fraction_text}")
-            normalized_lines.append(fraction_text)
-            i += 3  # 3줄을 처리했으므로 건너뛰기
-            continue
-        
-        # 분수가 아닌 경우 그대로 추가
-        normalized_lines.append(current_line)
-        i += 1
-    
-    # 공백으로 분리된 숫자들을 분수로 변환하기 (예: "2 7" → "2/7")
-    result_text = ' '.join(normalized_lines)
-    
-    # 연속된 두 숫자 사이에 공백이 있는 경우 분수로 해석
-    # 단, 문맥상 분수일 가능성이 높은 경우만 (작은 숫자들)
-    def replace_space_fractions(match):
-        num1, num2 = match.groups()
-        # 두 숫자 모두 10 이하인 경우만 분수로 변환
-        if int(num1) <= 20 and int(num2) <= 20:
-            return f"{num1}/{num2}"
-        return match.group(0)  # 원래 텍스트 그대로
-    
-    result_text = re.sub(r'(\d+)\s+(\d+)(?!\d)', replace_space_fractions, result_text)
-    
-    return result_text
+    """OCR 텍스트 정규화 - 분리된 서비스 사용"""
+    from .services.grading_service import GradingService
+    grading_service = GradingService()
+    return grading_service.normalize_fraction_text(text)
 
 def _normalize_answer_for_comparison(answer: str) -> str:
-    """답안을 비교용으로 정규화"""
-    import re
-    from fractions import Fraction
-    
-    answer = answer.strip().lower()
-    
-    # 분수 표현을 찾아서 기약분수로 변환
-    fraction_patterns = [
-        r'(\d+)/(\d+)',  # 2/7
-        r'(\d+)분의(\d+)',  # 7분의2
-        r'(\d+) *분의 *(\d+)',  # 7 분의 2
-    ]
-    
-    def normalize_fraction(match):
-        if '분의' in match.group(0):
-            # '분의' 패턴: 분모가 먼저 온다
-            denominator = int(match.group(1))
-            numerator = int(match.group(2))
-        else:
-            # 일반 분수: 분자가 먼저 온다
-            numerator = int(match.group(1))
-            denominator = int(match.group(2))
-        
-        try:
-            frac = Fraction(numerator, denominator)
-            return f"{frac.numerator}/{frac.denominator}"
-        except:
-            return match.group(0)
-    
-    for pattern in fraction_patterns:
-        answer = re.sub(pattern, normalize_fraction, answer)
-    
-    return answer
+    """답안 정규화 - 분리된 서비스 사용"""
+    from .services.grading_service import GradingService
+    grading_service = GradingService()
+    return grading_service.normalize_answer_for_comparison(answer)
 
 def _extract_answer_from_ocr(ocr_text: str, problem_id: int, problem_number: int) -> str:
-    """OCR 텍스트에서 특정 문제의 답안을 추출"""
-    # 간단한 구현: 문제 번호를 기준으로 답안 추출
-    # 실제로는 더 정교한 패턴 매칭이 필요할 수 있음
-    lines = ocr_text.split('\n')
-    
-    # 문제 번호 패턴 찾기
-    for i, line in enumerate(lines):
-        if f"{problem_number}." in line or f"{problem_number})" in line:
-            # 해당 줄에서 답안 부분 추출
-            answer_part = line.split(f"{problem_number}.")[-1].split(f"{problem_number})")[-1]
-            return answer_part.strip()
-    
-    # 패턴을 찾지 못한 경우 전체 텍스트 반환
-    return ocr_text.strip()
+    """OCR 답안 추출 - 분리된 서비스 사용"""
+    from .services.ocr_service import OCRService
+    ocr_service = OCRService()
+    return ocr_service.extract_answer_from_text(ocr_text, problem_id, problem_number)
 
 
 def _grade_essay_problem(ai_service, problem: Problem, user_answer: str, points_per_problem: int) -> dict:
-    """서술형 문제 채점: 1차 키워드 검사 → 2차 AI 채점"""
+    """서술형 문제 채점 - 분리된 서비스 사용"""
+    from .services.async_task_service import AsyncTaskService
     
-    # 1차 채점: 핵심 키워드 포함 여부 확인
-    correct_answer_keywords = problem.correct_answer.lower().split()
-    user_answer_lower = user_answer.lower()
+    task_service = AsyncTaskService()
     
-    keyword_matches = 0
-    for keyword in correct_answer_keywords:
-        if keyword in user_answer_lower:
-            keyword_matches += 1
+    # 키워드 점수 계산
+    keyword_result = task_service._calculate_keyword_score(problem.correct_answer, user_answer)
     
-    keyword_score_ratio = (keyword_matches / len(correct_answer_keywords)) if correct_answer_keywords else 0
-    
-    # 2차 채점: AI 심층 분석
+    # AI 채점
     ai_result = ai_service.grade_math_answer(
         question=problem.question,
         correct_answer=problem.correct_answer,
@@ -665,7 +577,7 @@ def _grade_essay_problem(ai_service, problem: Problem, user_answer: str, points_
         problem_type="essay"
     )
     
-    # 최종 점수: AI 점수 기준으로 문제별 배점 적용
+    # 최종 점수 계산
     ai_score_ratio = ai_result.get("score", 0) / 100
     final_score = points_per_problem * ai_score_ratio
     
@@ -674,10 +586,10 @@ def _grade_essay_problem(ai_service, problem: Problem, user_answer: str, points_
         "problem_type": "essay",
         "user_answer": user_answer,
         "correct_answer": problem.correct_answer,
-        "is_correct": final_score >= (points_per_problem * 0.6),  # 60% 이상이면 정답
+        "is_correct": final_score >= (points_per_problem * 0.6),
         "score": final_score,
         "points_per_problem": points_per_problem,
-        "keyword_score_ratio": keyword_score_ratio,
+        "keyword_score_ratio": keyword_result["ratio"],
         "ai_score": ai_result.get("score", 0),
         "ai_feedback": ai_result.get("feedback", ""),
         "strengths": ai_result.get("strengths", ""),
@@ -687,78 +599,11 @@ def _grade_essay_problem(ai_service, problem: Problem, user_answer: str, points_
 
 
 def _grade_objective_problem(problem: Problem, user_answer: str, points_per_problem: int) -> dict:
-    """객관식/단답형 문제 채점: 직접 비교"""
+    """객관식/단답형 문제 채점 - 분리된 서비스 사용"""
+    from .services.async_task_service import AsyncTaskService
     
-    # 객관식인 경우 선택지 인덱스를 실제 선택지 내용으로 변환
-    actual_user_answer = user_answer
-    if problem.problem_type == "multiple_choice" and problem.choices:
-        # A, B, C, D를 0, 1, 2, 3 인덱스로 변환
-        choice_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
-        if user_answer.upper() in choice_map:
-            try:
-                import json
-                choices = json.loads(problem.choices)
-                choice_index = choice_map[user_answer.upper()]
-                if 0 <= choice_index < len(choices):
-                    actual_user_answer = choices[choice_index]
-            except (json.JSONDecodeError, IndexError):
-                pass  # 변환 실패시 원래 답안 그대로 사용
-    
-    # 답안 정규화 및 비교 (분수 처리 포함)
-    correct_normalized = _normalize_answer_for_comparison(problem.correct_answer)
-    user_normalized = _normalize_answer_for_comparison(actual_user_answer)
-    
-    print(f"🔍 답안 비교: 정답 '{problem.correct_answer}' → '{correct_normalized}'")
-    print(f"🔍 답안 비교: 학생 '{actual_user_answer}' → '{user_normalized}'")
-    
-    # 기본 문자열 매칭
-    is_correct = correct_normalized == user_normalized
-    
-    # 수학 답안의 경우 유연한 매칭 적용
-    if not is_correct and problem.problem_type == "short_answer":
-        import re
-        
-        # 정답에서 숫자나 수식 부분만 추출
-        correct_values = re.findall(r'-?\d+(?:\.\d+)?', correct_normalized)
-        user_values = re.findall(r'-?\d+(?:\.\d+)?', user_normalized)
-        
-        # 추출된 숫자들이 일치하는지 확인
-        if correct_values and user_values:
-            is_correct = correct_values == user_values
-            print(f"🔍 디버그: 수학 답안 매칭 - 정답 숫자: {correct_values}, 학생 숫자: {user_values}, 결과: {is_correct}")
-        
-        # 추가적으로 콤마로 분리된 값들 비교 (a=3, b=-5 vs 3,-5)
-        if not is_correct:
-            # 콤마로 분리하여 숫자만 추출
-            correct_parts = [part.strip() for part in correct_normalized.replace('=', ',').split(',')]
-            user_parts = [part.strip() for part in user_normalized.split(',')]
-            
-            correct_nums = []
-            user_nums = []
-            
-            for part in correct_parts:
-                nums = re.findall(r'-?\d+(?:\.\d+)?', part)
-                correct_nums.extend(nums)
-            
-            for part in user_parts:
-                nums = re.findall(r'-?\d+(?:\.\d+)?', part)
-                user_nums.extend(nums)
-            
-            is_correct = correct_nums == user_nums
-            print(f"🔍 디버그: 콤마 분리 매칭 - 정답 숫자: {correct_nums}, 학생 숫자: {user_nums}, 결과: {is_correct}")
-    score = points_per_problem if is_correct else 0
-    
-    return {
-        "problem_id": problem.id,
-        "problem_type": problem.problem_type,
-        "user_answer": user_answer,  # 원래 사용자 입력 (A, B, C, D)
-        "actual_user_answer": actual_user_answer,  # 변환된 실제 답안 내용
-        "correct_answer": problem.correct_answer,
-        "is_correct": is_correct,
-        "score": score,
-        "points_per_problem": points_per_problem,
-        "explanation": problem.explanation
-    }
+    task_service = AsyncTaskService()
+    return task_service._grade_objective_sync(problem, user_answer, points_per_problem)
 
 
 @celery_app.task(bind=True, name="app.tasks.get_task_status")
