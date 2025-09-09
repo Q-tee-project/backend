@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 from datetime import datetime
 
@@ -155,3 +155,163 @@ class TextTypeResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ====================================
+# 문제지 저장 관련 스키마
+# ====================================
+
+# 문제지 저장 요청 스키마
+class WorksheetSaveRequest(BaseModel):
+    worksheet_data: Dict[str, Any] = Field(..., description="생성된 문제지 JSON 데이터")
+    answer_data: Dict[str, Any] = Field(..., description="생성된 답안지 JSON 데이터")
+
+# 지문 스키마
+class PassageResponse(BaseModel):
+    id: int
+    passage_id: str
+    passage_type: str
+    passage_content: Dict[str, Any]
+    related_questions: List[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 예문 스키마
+class ExampleResponse(BaseModel):
+    id: int
+    example_id: str
+    example_content: str
+    related_questions: List[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제 스키마
+class QuestionResponse(BaseModel):
+    id: int
+    question_id: str
+    question_text: str
+    question_type: str
+    question_subject: str
+    question_difficulty: str
+    question_detail_type: Optional[str]
+    question_choices: Optional[List[str]]
+    passage_id: Optional[str]
+    example_id: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 답안지 스키마
+class AnswerSheetResponse(BaseModel):
+    id: int
+    answer_data: Dict[str, Any]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제지 전체 응답 스키마
+class WorksheetResponse(BaseModel):
+    id: int
+    worksheet_id: str
+    worksheet_name: str
+    school_level: str
+    grade: str
+    subject: str
+    total_questions: int
+    duration: Optional[int]
+    created_at: datetime
+    passages: List[PassageResponse]
+    examples: List[ExampleResponse]
+    questions: List[QuestionResponse]
+    answer_sheet: Optional[AnswerSheetResponse]
+    
+    class Config:
+        from_attributes = True
+
+# 문제지 목록 조회용 간단한 스키마
+class WorksheetSummary(BaseModel):
+    id: int
+    worksheet_id: str
+    worksheet_name: str
+    school_level: str
+    grade: str
+    total_questions: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제별 채점 결과 스키마
+class QuestionResultResponse(BaseModel):
+    id: int
+    question_id: str
+    question_type: str
+    student_answer: Optional[str]
+    correct_answer: Optional[str]
+    score: int
+    max_score: int
+    is_correct: bool
+    grading_method: str
+    ai_feedback: Optional[str]
+    needs_review: bool
+    reviewed_score: Optional[int]
+    reviewed_feedback: Optional[str]
+    is_reviewed: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 채점 결과 전체 스키마
+class GradingResultResponse(BaseModel):
+    id: int
+    result_id: str
+    worksheet_id: int
+    student_name: str
+    completion_time: int
+    total_score: int
+    max_score: int
+    percentage: float
+    needs_review: bool
+    is_reviewed: bool
+    reviewed_at: Optional[datetime]
+    reviewed_by: Optional[str]
+    created_at: datetime
+    question_results: List[QuestionResultResponse]
+    
+    class Config:
+        from_attributes = True
+
+# 채점 결과 목록 조회용 간단한 스키마
+class GradingResultSummary(BaseModel):
+    id: int
+    result_id: str
+    worksheet_id: int
+    student_name: str
+    completion_time: int
+    total_score: int
+    max_score: int
+    percentage: float
+    needs_review: bool
+    is_reviewed: bool
+    created_at: datetime
+    worksheet_name: Optional[str]  # 조인으로 가져온 문제지 이름
+    
+    class Config:
+        from_attributes = True
+
+# 검수 요청 스키마
+class ReviewRequest(BaseModel):
+    question_results: Dict[str, Dict[str, Any]]  # question_id -> {score, feedback}
+    reviewed_by: Optional[str] = "교사"
+    
+# 답안 제출 요청 스키마
+class SubmissionRequest(BaseModel):
+    student_name: str
+    answers: Dict[str, str]  # question_id -> answer
+    completion_time: int
