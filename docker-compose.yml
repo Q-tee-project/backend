@@ -97,10 +97,12 @@ services:
     container_name: math_flower
     command: celery -A app.celery_app flower
     environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - REDIS_URL=redis://redis:6379/0
     ports:
       - "5555:5555"
     depends_on:
+      - postgres
       - redis
     networks:
       - qt_project_network

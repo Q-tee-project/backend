@@ -9,6 +9,7 @@ import app.models.worksheet
 import app.models.problem
 import app.models.math_generation
 import app.models.grading_result
+import app.models.curriculum
 
 Base.metadata.create_all(bind=engine)
 

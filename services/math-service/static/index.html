@@ -31,6 +31,11 @@
     </script>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- MathQuill CSS 및 JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathquill@0.10.1/build/mathquill.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathquill@0.10.1/build/mathquill.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -200,6 +205,71 @@
                     <h4>문제 목록</h4>
                     <div id="problems-list-edit"></div>
                 </div>
+                
+                <!-- 수식 편집기 모달 -->
+                <div id="math-editor-modal" class="math-modal" style="display: none;">
+                    <div class="math-modal-content">
+                        <div class="math-modal-header">
+                            <h3>수식 편집기</h3>
+                            <span class="math-modal-close" onclick="closeMathEditor()">&times;</span>
+                        </div>
+                        <div class="math-modal-body">
+                            <!-- 수식 편집 도구바 -->
+                            <div class="math-toolbar">
+                                <div class="math-toolbar-section">
+                                    <label>기본 연산:</label>
+                                    <button class="math-btn" onclick="insertMath('x^2')">x²</button>
+                                    <button class="math-btn" onclick="insertMath('x_1')">x₁</button>
+                                    <button class="math-btn" onclick="insertMath('\\frac{a}{b}')">/</button>
+                                    <button class="math-btn" onclick="insertMath('\\sqrt{x}')">√</button>
+                                    <button class="math-btn" onclick="insertMath('\\sqrt[n]{x}')">ⁿ√</button>
+                                </div>
+                                <div class="math-toolbar-section">
+                                    <label>그리스 문자:</label>
+                                    <button class="math-btn" onclick="insertMath('\\alpha')">α</button>
+                                    <button class="math-btn" onclick="insertMath('\\beta')">β</button>
+                                    <button class="math-btn" onclick="insertMath('\\pi')">π</button>
+                                    <button class="math-btn" onclick="insertMath('\\theta')">θ</button>
+                                </div>
+                                <div class="math-toolbar-section">
+                                    <label>비교 연산:</label>
+                                    <button class="math-btn" onclick="insertMath('\\leq')">≤</button>
+                                    <button class="math-btn" onclick="insertMath('\\geq')">≥</button>
+                                    <button class="math-btn" onclick="insertMath('\\neq')">≠</button>
+                                    <button class="math-btn" onclick="insertMath('\\approx')">≈</button>
+                                </div>
+                                <div class="math-toolbar-section">
+                                    <label>함수:</label>
+                                    <button class="math-btn" onclick="insertMath('\\sin(x)')">sin</button>
+                                    <button class="math-btn" onclick="insertMath('\\cos(x)')">cos</button>
+                                    <button class="math-btn" onclick="insertMath('\\tan(x)')">tan</button>
+                                    <button class="math-btn" onclick="insertMath('\\log(x)')">log</button>
+                                </div>
+                            </div>
+                            
+                            <!-- MathQuill 편집기 -->
+                            <div class="math-editor-container">
+                                <div id="math-editor" class="math-field"></div>
+                            </div>
+                            
+                            <!-- 미리보기 -->
+                            <div class="math-preview-container">
+                                <label>미리보기:</label>
+                                <div id="math-preview" class="math-preview"></div>
+                            </div>
+                            
+                            <!-- LaTeX 코드 -->
+                            <div class="math-latex-container">
+                                <label>LaTeX 코드:</label>
+                                <textarea id="math-latex" class="math-latex-input" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="math-modal-footer">
+                            <button onclick="insertMathToEditor()" class="btn-primary">삽입</button>
+                            <button onclick="closeMathEditor()" class="btn-secondary">취소</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="result-section">
@@ -317,6 +387,45 @@
             <div class="result-section">
                 <h3>태스크 상태</h3>
                 <div id="status-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 문제 재생성 모달 -->
+    <div id="regenerate-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>문제 재생성</h3>
+                <span class="close" onclick="closeRegenerateModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p><strong id="regenerate-problem-info"></strong></p>
+                <div class="form-group">
+                    <label for="regenerate-prompt">재생성 요청사항:</label>
+                    <textarea id="regenerate-prompt" rows="4" placeholder="예: 더 어려운 문제로 바꿔주세요, 실생활 문제로 바꿔주세요, 계산이 복잡한 문제로 바꿔주세요..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="regenerate-difficulty">난이도 (선택사항):</label>
+                    <select id="regenerate-difficulty">
+                        <option value="">기존 유지</option>
+                        <option value="A">A단계 (기본)</option>
+                        <option value="B">B단계 (응용)</option>
+                        <option value="C">C단계 (심화)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="regenerate-type">문제 유형 (선택사항):</label>
+                    <select id="regenerate-type">
+                        <option value="">기존 유지</option>
+                        <option value="multiple_choice">객관식</option>
+                        <option value="essay">주관식 (서술형)</option>
+                        <option value="short_answer">단답형</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="regenerateProblem()" class="btn-primary" id="regenerate-submit-btn">재생성 실행</button>
+                <button onclick="closeRegenerateModal()" class="btn-secondary">취소</button>
             </div>
         </div>
     </div>
