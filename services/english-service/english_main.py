@@ -86,6 +86,11 @@ async def startup_event():
     try:
         init_db()
         print("✅ 데이터베이스 초기화 완료")
+        
+        # 초기 데이터 import
+        from init_all_data import init_all_data
+        init_all_data()
+        
     except Exception as e:
         print(f"❌ 데이터베이스 초기화 실패: {e}")
         print("⚠️  데이터베이스 설정을 확인해주세요.")
