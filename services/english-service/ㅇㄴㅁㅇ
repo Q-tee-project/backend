@@ -1,0 +1,55 @@
+{
+    학교 : "중학교"
+    학년 : "1",
+    총 문제 수 : "10"
+    영역 : ["독해", "문법", "어휘"],
+    영역 별 세부영역 : ["주제 및 요지 파악", "문법 카테고리", "어휘 카테고리"],
+    문제 비율 : "6:3:1",
+    문제 형식 : ["객관식", "주관식", "서술형"],
+    문제 형식 별 수 : "6:3:1",
+    난이도 : ["상", "중", "하"],
+    난이도 분배 : ["6:3:1"],
+}
+
+
+{
+    "worksheet_id": "1",
+    "worksheet_name": "1",
+    "worksheet_date": "2025-01-01",
+    "worksheet_time": "10:00",
+    "worksheet_duration": "60",
+    "worksheet_subject": "영어",
+    "worksheet_grade": "1",
+    "worksheet_total_questions": "10",
+    "worksheet_questions": [
+        {
+            "question_id": "1",
+            "question_text": "1",
+            "question_type": "객관식",
+            "question_subject": "독해",
+            "question_difficulty": "상",
+            "question_passage_id": "1",
+            "question_example_id": "1",
+            "question_reference_problem_id": "1",
+            "question_choices": [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5"
+            ]
+        }
+    ],
+    "worksheet_answers": [
+        {
+            "question_id": "1",
+            "question_answer": "1",
+        }
+    ],
+    "worksheet_explanations": [
+        {
+            "question_id": "1",
+            "question_explanation": "1"
+        }
+    ]
+}

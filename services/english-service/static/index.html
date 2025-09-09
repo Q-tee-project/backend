@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>문제 생성 옵션 설정</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+        }
+        
+        .form-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #444;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        
+        .form-group {
+            flex: 1;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        select, input[type="number"], input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ratio-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .ratio-item {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .range-value {
+            font-weight: bold;
+            color: #007bff;
+            margin-left: 10px;
+        }
+        
+        .submit-section {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f5e8;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            display: none;
+        }
+        
+        .exam-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .exam-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        
+        .passage {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        
+        .question {
+            background: #fff;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .question-number {
+            font-weight: bold;
+            color: #dc3545;
+            margin-bottom: 10px;
+        }
+        
+        .choices {
+            margin-left: 20px;
+        }
+        
+        .answer {
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            border-left: 3px solid #28a745;
+        }
+        
+        .explanation {
+            background: #f0f8ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            border-left: 3px solid #007bff;
+            font-size: 0.9rem;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1rem;
+            color: #666;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .error-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8d7da;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+            display: none;
+        }
+        
+        .passage-for-question, .example-for-question {
+            background: #f0f8ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .passage-title, .example-title {
+            font-weight: bold;
+            color: #0066cc;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .passage-content, .example-content {
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .reference-note {
+            background: #fffbf0;
+            border: 1px solid #ffd700;
+            border-radius: 5px;
+            padding: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 문제 생성 옵션 설정</h1>
+        
+        <form id="questionForm">
+            <!-- 기본 정보 -->
+            <div class="form-section">
+                <div class="section-title">📖 기본 정보</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="schoolLevel">학교급</label>
+                        <select id="schoolLevel" name="school_level" required>
+                            <option value="">선택하세요</option>
+                            <option value="중학교">중학교</option>
+                            <option value="고등학교">고등학교</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="grade">학년</label>
+                        <select id="grade" name="grade" required>
+                            <option value="">선택하세요</option>
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                            <option value="3">3학년</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="totalQuestions">총 문제 수</label>
+                        <input type="number" id="totalQuestions" name="total_questions" min="1" max="100" value="20" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 영역 선택 -->
+            <div class="form-section">
+                <div class="section-title">📝 영역 선택</div>
+                <div class="form-group">
+                    <label>주요 영역 (중복 선택 가능)</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="subject_reading" value="독해" name="subjects" onchange="updateSubjectDetails()">
+                            <label for="subject_reading">독해</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="subject_grammar" value="문법" name="subjects" onchange="updateSubjectDetails()">
+                            <label for="subject_grammar">문법</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="subject_vocabulary" value="어휘" name="subjects" onchange="updateSubjectDetails()">
+                            <label for="subject_vocabulary">어휘</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="subjectDetails" style="margin-top: 20px;">
+                    <!-- 세부 영역은 JavaScript로 동적 생성 -->
+                </div>
+            </div>
+
+            <!-- 문제 비율 -->
+            <div class="form-section">
+                <div class="section-title">⚖️ 영역별 문제 비율</div>
+                <div id="subjectRatios" class="ratio-group">
+                    <!-- JavaScript로 동적 생성 -->
+                </div>
+                <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                    총 비율: <span id="totalRatio">0</span>% (100%가 되어야 합니다)
+                </div>
+            </div>
+
+            <!-- 문제 형식 -->
+            <div class="form-section">
+                <div class="section-title">📋 문제 형식</div>
+                <div class="form-group">
+                    <label for="questionFormat">문제 형식</label>
+                    <select id="questionFormat" name="question_format" required>
+                        <option value="">선택하세요</option>
+                        <option value="전체">전체</option>
+                        <option value="객관식">객관식</option>
+                        <option value="주관식">주관식</option>
+                        <option value="서술형">서술형</option>
+                    </select>
+                </div>
+                
+                <div id="formatCounts" style="margin-top: 20px;">
+                    <!-- JavaScript로 동적 생성 -->
+                </div>
+            </div>
+
+            <!-- 난이도 분배 -->
+            <div class="form-section">
+                <div class="section-title">🎯 난이도 분배</div>
+                <div class="ratio-group">
+                    <div class="ratio-item">
+                        <label for="difficultyHigh">상 (어려움)</label>
+                        <input type="range" id="difficultyHigh" min="0" max="100" value="30" oninput="updateDifficultyRatio()">
+                        <input type="number" id="difficultyHighNum" min="0" max="100" value="30" oninput="syncDifficultyRatio('difficultyHigh')" style="width: 60px; margin-left: 10px;">
+                        <span class="range-value" id="difficultyHighValue">30%</span>
+                    </div>
+                    <div class="ratio-item">
+                        <label for="difficultyMedium">중 (보통)</label>
+                        <input type="range" id="difficultyMedium" min="0" max="100" value="50" oninput="updateDifficultyRatio()">
+                        <input type="number" id="difficultyMediumNum" min="0" max="100" value="50" oninput="syncDifficultyRatio('difficultyMedium')" style="width: 60px; margin-left: 10px;">
+                        <span class="range-value" id="difficultyMediumValue">50%</span>
+                    </div>
+                    <div class="ratio-item">
+                        <label for="difficultyLow">하 (쉬움)</label>
+                        <input type="range" id="difficultyLow" min="0" max="100" value="20" oninput="updateDifficultyRatio()">
+                        <input type="number" id="difficultyLowNum" min="0" max="100" value="20" oninput="syncDifficultyRatio('difficultyLow')" style="width: 60px; margin-left: 10px;">
+                        <span class="range-value" id="difficultyLowValue">20%</span>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                    총 난이도 비율: <span id="totalDifficultyRatio">100</span>% (100%가 되어야 합니다)
+                </div>
+            </div>
+
+            <!-- 추가 요구사항 -->
+            <div class="form-section">
+                <h3>📝 추가 요구사항 (선택사항)</h3>
+                <div class="input-group">
+                    <label for="additionalRequirements">특별한 요구사항이 있다면 입력해주세요:</label>
+                    <textarea 
+                        id="additionalRequirements" 
+                        name="additionalRequirements"
+                        placeholder="예: 특정 주제나 상황을 포함해주세요, 문제 스타일 요청, 특별한 형식 등..."
+                        style="width: 100%; height: 100px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                    ></textarea>
+                    <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                        💡 예시: "학교생활과 관련된 상황을 포함해주세요", "대화문 위주로 문제를 만들어주세요", "실생활 예시를 많이 사용해주세요" 등
+                    </div>
+                </div>
+            </div>
+
+            <div class="submit-section">
+                <button type="button" class="submit-btn" onclick="generateExam()" style="background: linear-gradient(45deg, #28a745, #20c997);">🚀 문제지 생성</button>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>처리 중입니다...</p>
+        </div>
+
+        <div class="result-section" id="result">
+            <h3>✅ 제출 성공!</h3>
+            <pre id="resultData"></pre>
+        </div>
+
+        <div class="error-section" id="error">
+            <h3>❌ 오류 발생</h3>
+            <pre id="errorData"></pre>
+        </div>
+
+        <div class="result-section" id="examResult" style="display: none;">
+            <h3>🎉 문제지 생성 완료!</h3>
+            <div id="examContent">
+                <!-- 생성된 문제지 내용이 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let categories = {};
+
+        // 페이지 로드 시 카테고리 데이터 가져오기
+        async function loadCategories() {
+            try {
+                const response = await fetch('/categories');
+                categories = await response.json();
+                console.log('카테고리 로드됨:', categories);
+            } catch (error) {
+                console.error('카테고리 로드 실패:', error);
+            }
+        }
+
+        // 현재 선택 상태를 저장할 객체
+        let selectedDetails = {
+            reading_types: [],
+            grammar_categories: [],
+            grammar_topics: {},
+            vocabulary_categories: []
+        };
+
+        // 영역 선택에 따른 세부 영역 표시
+        function updateSubjectDetails() {
+            // 현재 선택된 세부 항목들을 저장
+            saveCurrentSelections();
+            
+            const selectedSubjects = [];
+            document.querySelectorAll('input[name="subjects"]:checked').forEach(checkbox => {
+                selectedSubjects.push(checkbox.value);
+            });
+            
+            const detailsDiv = document.getElementById('subjectDetails');
+            
+            if (selectedSubjects.length === 0) {
+                detailsDiv.innerHTML = '';
+                return;
+            }
+
+            let html = '<div class="section-title">세부 영역 선택</div>';
+            
+            // 독해가 선택된 경우
+            if (selectedSubjects.includes('독해') && categories.reading_types) {
+                html += '<div style="margin-bottom: 20px;">';
+                html += '<h4 style="color: #007bff; margin-bottom: 10px;">📖 독해 유형</h4>';
+                html += '<div class="checkbox-group">';
+                categories.reading_types.forEach(type => {
+                    const isChecked = selectedDetails.reading_types.includes(type.name) ? 'checked' : '';
+                    html += `
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="reading_${type.id}" value="${type.name}" name="reading_types" ${isChecked}>
+                            <label for="reading_${type.id}">${type.name}</label>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+            }
+            
+            // 문법이 선택된 경우
+            if (selectedSubjects.includes('문법') && categories.grammar_categories) {
+                html += '<div style="margin-bottom: 20px;">';
+                html += '<h4 style="color: #007bff; margin-bottom: 10px;">📝 문법 카테고리</h4>';
+                categories.grammar_categories.forEach(cat => {
+                    const isCatChecked = selectedDetails.grammar_categories.includes(cat.name) ? 'checked' : '';
+                    const topicsVisible = selectedDetails.grammar_categories.includes(cat.name) ? 'block' : 'none';
+                    
+                    html += `
+                        <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9;">
+                            <div class="checkbox-item" style="margin-bottom: 10px;">
+                                <input type="checkbox" id="grammar_cat_${cat.id}" value="${cat.name}" name="grammar_categories" onchange="toggleGrammarTopics(${cat.id})" ${isCatChecked}>
+                                <label for="grammar_cat_${cat.id}" style="font-weight: bold;">${cat.name}</label>
+                            </div>
+                            <div id="grammar_topics_${cat.id}" style="margin-left: 20px; display: ${topicsVisible};">
+                                <div class="checkbox-group">
+                    `;
+                    if (cat.topics && cat.topics.length > 0) {
+                        cat.topics.forEach(topic => {
+                            const isTopicChecked = selectedDetails.grammar_topics.includes(topic.name) ? 'checked' : '';
+                            html += `
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="topic_${topic.id}" value="${topic.name}" name="grammar_topics_${cat.id}" ${isTopicChecked}>
+                                    <label for="topic_${topic.id}">${topic.name}</label>
+                                </div>
+                            `;
+                        });
+                    }
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            // 어휘가 선택된 경우
+            if (selectedSubjects.includes('어휘') && categories.vocabulary_categories) {
+                html += '<div style="margin-bottom: 20px;">';
+                html += '<h4 style="color: #007bff; margin-bottom: 10px;">📚 어휘 카테고리</h4>';
+                html += '<div class="checkbox-group">';
+                categories.vocabulary_categories.forEach(cat => {
+                    const isChecked = selectedDetails.vocabulary_categories.includes(cat.name) ? 'checked' : '';
+                    html += `
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="vocab_${cat.id}" value="${cat.name}" name="vocabulary_categories" ${isChecked}>
+                            <label for="vocab_${cat.id}">${cat.name}</label>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+            }
+            
+            detailsDiv.innerHTML = html;
+        }
+
+        // 현재 선택된 세부 항목들을 저장하는 함수
+        function saveCurrentSelections() {
+            // 독해 유형 저장 (텍스트 값으로)
+            selectedDetails.reading_types = [];
+            document.querySelectorAll('input[name="reading_types"]:checked').forEach(cb => {
+                selectedDetails.reading_types.push(cb.value);
+            });
+            
+            // 문법 카테고리 저장 (텍스트 값으로)
+            selectedDetails.grammar_categories = [];
+            document.querySelectorAll('input[name="grammar_categories"]:checked').forEach(cb => {
+                selectedDetails.grammar_categories.push(cb.value);
+            });
+            
+            // 문법 토픽 저장 (텍스트 값으로)
+            selectedDetails.grammar_topics = [];
+            document.querySelectorAll('input[name^="grammar_topics_"]:checked').forEach(cb => {
+                selectedDetails.grammar_topics.push(cb.value);
+            });
+            
+            // 어휘 카테고리 저장 (텍스트 값으로)
+            selectedDetails.vocabulary_categories = [];
+            document.querySelectorAll('input[name="vocabulary_categories"]:checked').forEach(cb => {
+                selectedDetails.vocabulary_categories.push(cb.value);
+            });
+        }
+
+        // 문법 카테고리 선택 시 토픽 표시/숨김
+        function toggleGrammarTopics(categoryId) {
+            const checkbox = document.getElementById(`grammar_cat_${categoryId}`);
+            const topicsDiv = document.getElementById(`grammar_topics_${categoryId}`);
+            
+            if (checkbox.checked) {
+                topicsDiv.style.display = 'block';
+            } else {
+                topicsDiv.style.display = 'none';
+                // 카테고리 해제 시 해당 토픽들도 모두 해제
+                const topicCheckboxes = topicsDiv.querySelectorAll('input[type="checkbox"]');
+                topicCheckboxes.forEach(cb => cb.checked = false);
+            }
+        }
+
+        // 영역별 비율 업데이트
+        function updateSubjectRatios() {
+            const selectedSubjects = [];
+            document.querySelectorAll('input[name="subjects"]:checked').forEach(checkbox => {
+                selectedSubjects.push(checkbox.value);
+            });
+            
+            const ratiosDiv = document.getElementById('subjectRatios');
+            
+            if (selectedSubjects.length === 0) {
+                ratiosDiv.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            const defaultRatio = Math.floor(100 / selectedSubjects.length);
+            const remainder = 100 % selectedSubjects.length;
+            
+            selectedSubjects.forEach((subject, index) => {
+                const ratio = index === 0 ? defaultRatio + remainder : defaultRatio;
+                html += `
+                    <div class="ratio-item">
+                        <label for="ratio${subject}">${subject} 비율</label>
+                        <input type="range" id="ratio${subject}" min="0" max="100" value="${ratio}" oninput="updateTotalRatio()">
+                        <input type="number" id="ratio${subject}Num" min="0" max="100" value="${ratio}" oninput="syncSubjectRatio('ratio${subject}')" style="width: 60px; margin-left: 10px;">
+                        <span class="range-value" id="ratio${subject}Value">${ratio}%</span>
+                    </div>
+                `;
+            });
+            
+            ratiosDiv.innerHTML = html;
+            updateTotalRatio();
+        }
+
+        // 총 비율 계산
+        function updateTotalRatio() {
+            const ranges = document.querySelectorAll('#subjectRatios input[type="range"]');
+            let total = 0;
+            
+            ranges.forEach(range => {
+                const value = parseInt(range.value);
+                total += value;
+                
+                // 슬라이더 값을 숫자 입력란에 동기화
+                const numberInput = document.getElementById(range.id + 'Num');
+                if (numberInput) {
+                    numberInput.value = value;
+                }
+                
+                // 퍼센트 표시 업데이트
+                const valueSpan = document.getElementById(range.id + 'Value');
+                if (valueSpan) {
+                    valueSpan.textContent = value + '%';
+                }
+            });
+            
+            document.getElementById('totalRatio').textContent = total;
+            document.getElementById('totalRatio').style.color = total === 100 ? '#28a745' : '#dc3545';
+        }
+
+        // 숫자 입력에서 영역별 슬라이더로 동기화
+        function syncSubjectRatio(sliderId) {
+            const slider = document.getElementById(sliderId);
+            const numberInput = document.getElementById(sliderId + 'Num');
+            
+            if (slider && numberInput) {
+                slider.value = numberInput.value;
+                updateTotalRatio();
+            }
+        }
+
+        // 문제 형식별 수 업데이트
+        function updateFormatCounts() {
+            const format = document.getElementById('questionFormat').value;
+            const countsDiv = document.getElementById('formatCounts');
+            const totalQuestions = parseInt(document.getElementById('totalQuestions').value) || 20;
+            
+            if (!format || format === '전체') {
+                countsDiv.innerHTML = `
+                    <div class="section-title">형식별 문제 비율</div>
+                    <div class="ratio-group">
+                        <div class="ratio-item">
+                            <label for="ratioMultiple">객관식</label>
+                            <input type="range" id="ratioMultiple" min="0" max="100" value="60" oninput="updateFormatRatio()">
+                            <input type="number" id="ratioMultipleNum" min="0" max="100" value="60" oninput="syncFormatRatio('ratioMultiple')" style="width: 60px; margin-left: 10px;">
+                            <span class="range-value" id="ratioMultipleValue">60%</span>
+                        </div>
+                        <div class="ratio-item">
+                            <label for="ratioShort">주관식</label>
+                            <input type="range" id="ratioShort" min="0" max="100" value="30" oninput="updateFormatRatio()">
+                            <input type="number" id="ratioShortNum" min="0" max="100" value="30" oninput="syncFormatRatio('ratioShort')" style="width: 60px; margin-left: 10px;">
+                            <span class="range-value" id="ratioShortValue">30%</span>
+                        </div>
+                        <div class="ratio-item">
+                            <label for="ratioEssay">서술형</label>
+                            <input type="range" id="ratioEssay" min="0" max="100" value="10" oninput="updateFormatRatio()">
+                            <input type="number" id="ratioEssayNum" min="0" max="100" value="10" oninput="syncFormatRatio('ratioEssay')" style="width: 60px; margin-left: 10px;">
+                            <span class="range-value" id="ratioEssayValue">10%</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                        총 비율: <span id="totalFormatRatio">100</span>% / 100%
+                    </div>
+                `;
+            } else {
+                countsDiv.innerHTML = `
+                    <div class="section-title">문제 수</div>
+                    <div class="ratio-item">
+                        <label for="countSingle">${format} 문제 수</label>
+                        <input type="number" id="countSingle" min="0" max="${totalQuestions}" value="${totalQuestions}" readonly>
+                    </div>
+                `;
+            }
+            updateFormatRatio();
+        }
+
+        // 형식별 비율 업데이트
+        function updateFormatRatio() {
+            const ratioMultiple = parseInt(document.getElementById('ratioMultiple')?.value) || 0;
+            const ratioShort = parseInt(document.getElementById('ratioShort')?.value) || 0;
+            const ratioEssay = parseInt(document.getElementById('ratioEssay')?.value) || 0;
+            
+            // 슬라이더 값을 숫자 입력란에 동기화
+            const multipleNum = document.getElementById('ratioMultipleNum');
+            const shortNum = document.getElementById('ratioShortNum');
+            const essayNum = document.getElementById('ratioEssayNum');
+            
+            if (multipleNum) multipleNum.value = ratioMultiple;
+            if (shortNum) shortNum.value = ratioShort;
+            if (essayNum) essayNum.value = ratioEssay;
+            
+            // 퍼센트 표시 업데이트
+            const multipleValue = document.getElementById('ratioMultipleValue');
+            const shortValue = document.getElementById('ratioShortValue');
+            const essayValue = document.getElementById('ratioEssayValue');
+            
+            if (multipleValue) multipleValue.textContent = ratioMultiple + '%';
+            if (shortValue) shortValue.textContent = ratioShort + '%';
+            if (essayValue) essayValue.textContent = ratioEssay + '%';
+            
+            const total = ratioMultiple + ratioShort + ratioEssay;
+            
+            const totalSpan = document.getElementById('totalFormatRatio');
+            if (totalSpan) {
+                totalSpan.textContent = total;
+                totalSpan.style.color = total === 100 ? '#28a745' : '#dc3545';
+            }
+        }
+
+        // 숫자 입력에서 슬라이더로 동기화
+        function syncFormatRatio(sliderId) {
+            const slider = document.getElementById(sliderId);
+            const numberInput = document.getElementById(sliderId + 'Num');
+            
+            if (slider && numberInput) {
+                slider.value = numberInput.value;
+                updateFormatRatio();
+            }
+        }
+
+        // 난이도 비율 업데이트
+        function updateDifficultyRatio() {
+            const high = parseInt(document.getElementById('difficultyHigh').value);
+            const medium = parseInt(document.getElementById('difficultyMedium').value);
+            const low = parseInt(document.getElementById('difficultyLow').value);
+            
+            // 슬라이더 값을 숫자 입력란에 동기화
+            const highNum = document.getElementById('difficultyHighNum');
+            const mediumNum = document.getElementById('difficultyMediumNum');
+            const lowNum = document.getElementById('difficultyLowNum');
+            
+            if (highNum) highNum.value = high;
+            if (mediumNum) mediumNum.value = medium;
+            if (lowNum) lowNum.value = low;
+            
+            // 퍼센트 표시 업데이트
+            document.getElementById('difficultyHighValue').textContent = high + '%';
+            document.getElementById('difficultyMediumValue').textContent = medium + '%';
+            document.getElementById('difficultyLowValue').textContent = low + '%';
+            
+            const total = high + medium + low;
+            document.getElementById('totalDifficultyRatio').textContent = total;
+            document.getElementById('totalDifficultyRatio').style.color = total === 100 ? '#28a745' : '#dc3545';
+        }
+
+        // 숫자 입력에서 난이도 슬라이더로 동기화
+        function syncDifficultyRatio(sliderId) {
+            const slider = document.getElementById(sliderId);
+            const numberInput = document.getElementById(sliderId + 'Num');
+            
+            if (slider && numberInput) {
+                slider.value = numberInput.value;
+                updateDifficultyRatio();
+            }
+        }
+
+
+        // 폼 데이터 수집
+        function collectFormData() {
+            // 선택된 주요 영역들 수집
+            const selectedSubjects = [];
+            document.querySelectorAll('input[name="subjects"]:checked').forEach(checkbox => {
+                selectedSubjects.push(checkbox.value);
+            });
+
+            const data = {
+                school_level: document.getElementById('schoolLevel').value,
+                grade: parseInt(document.getElementById('grade').value),
+                total_questions: parseInt(document.getElementById('totalQuestions').value),
+                subjects: selectedSubjects, // 복수 선택 가능
+                subject_details: [],
+                subject_ratios: [],
+                question_format: document.getElementById('questionFormat').value,
+                format_counts: [],
+                difficulty_distribution: []
+            };
+
+            // 세부 영역 수집
+            const subjectDetails = {};
+            
+            // 독해 유형 수집 (텍스트 값으로)
+            const selectedReadingTypes = [];
+            document.querySelectorAll('input[name="reading_types"]:checked').forEach(cb => {
+                selectedReadingTypes.push(cb.value); // ID가 아닌 텍스트 값
+            });
+            if (selectedReadingTypes.length > 0) {
+                subjectDetails.reading_types = selectedReadingTypes;
+            }
+
+            // 문법 카테고리 및 토픽 수집 (텍스트 값으로)
+            const selectedGrammarCategories = [];
+            const selectedGrammarTopics = [];
+            document.querySelectorAll('input[name="grammar_categories"]:checked').forEach(cb => {
+                selectedGrammarCategories.push(cb.value); // ID가 아닌 텍스트 값
+            });
+            document.querySelectorAll('input[name^="grammar_topics_"]:checked').forEach(cb => {
+                selectedGrammarTopics.push(cb.value); // ID가 아닌 텍스트 값
+            });
+            if (selectedGrammarCategories.length > 0) {
+                subjectDetails.grammar_categories = selectedGrammarCategories;
+            }
+            if (selectedGrammarTopics.length > 0) {
+                subjectDetails.grammar_topics = selectedGrammarTopics;
+            }
+
+            // 어휘 카테고리 수집 (텍스트 값으로)
+            const selectedVocabCategories = [];
+            document.querySelectorAll('input[name="vocabulary_categories"]:checked').forEach(cb => {
+                selectedVocabCategories.push(cb.value); // ID가 아닌 텍스트 값
+            });
+            if (selectedVocabCategories.length > 0) {
+                subjectDetails.vocabulary_categories = selectedVocabCategories;
+            }
+
+            data.subject_details = subjectDetails;
+
+            // 영역별 비율 수집
+            selectedSubjects.forEach(subject => {
+                const ratioElement = document.getElementById(`ratio${subject}`);
+                if (ratioElement) {
+                    data.subject_ratios.push({
+                        subject: subject,
+                        ratio: parseInt(ratioElement.value)
+                    });
+                }
+            });
+
+            // 형식별 문제 비율 수집
+            const format = data.question_format;
+            if (format === '전체') {
+                const multipleElement = document.getElementById('ratioMultiple');
+                const shortElement = document.getElementById('ratioShort');
+                const essayElement = document.getElementById('ratioEssay');
+                
+                data.format_ratios = [
+                    { format: '객관식', ratio: multipleElement ? parseInt(multipleElement.value) : 0 },
+                    { format: '주관식', ratio: shortElement ? parseInt(shortElement.value) : 0 },
+                    { format: '서술형', ratio: essayElement ? parseInt(essayElement.value) : 0 }
+                ];
+            } else {
+                data.format_ratios = [
+                    { format: format, ratio: 100 }
+                ];
+            }
+
+            // 난이도 분배 수집
+            data.difficulty_distribution = [
+                { difficulty: '상', ratio: parseInt(document.getElementById('difficultyHigh').value) },
+                { difficulty: '중', ratio: parseInt(document.getElementById('difficultyMedium').value) },
+                { difficulty: '하', ratio: parseInt(document.getElementById('difficultyLow').value) }
+            ];
+
+            // 추가 요구사항 수집
+            const additionalRequirements = document.getElementById('additionalRequirements').value.trim();
+            if (additionalRequirements) {
+                data.additional_requirements = additionalRequirements;
+            }
+
+            return data;
+        }
+
+        // 문제지 생성 함수
+        async function generateExam() {
+            console.log('🚨 generateExam 함수 시작!');
+            
+            // 로딩 표시
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('examResult').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+
+            try {
+                // 폼 데이터 수집
+                console.log('🔍 collectFormData 호출 시작...');
+                const formData = collectFormData();
+                console.log('✅ collectFormData 완료!');
+                console.log('문제지 생성 요청 데이터:', formData);
+
+                // API 호출
+                const response = await fetch('/question-options', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                
+                // 응답 데이터를 콘솔에 출력 (개발자 도구에서 확인 가능)
+                console.log('='.repeat(80));
+                console.log('🎉 옵션 입력 완료! 응답 데이터:');
+                console.log('='.repeat(80));
+                console.log('📊 전체 응답:', result);
+                console.log('📝 입력 데이터:', result.request_data);
+                console.log('='.repeat(80));
+                
+                if (response.ok && result.status === 'success') {
+                    displayInputResult(result);
+                    document.getElementById('examResult').style.display = 'block';
+                } else {
+                    throw new Error(result.message || '서버 오류');
+                }
+
+            } catch (error) {
+                console.error('='.repeat(80));
+                console.error('❌ 문제지 생성 오류 발생:');
+                console.error('='.repeat(80));
+                console.error('오류 메시지:', error.message);
+                console.error('전체 오류 객체:', error);
+                if (typeof result !== 'undefined') {
+                    console.error('서버 응답:', result);
+                }
+                console.error('='.repeat(80));
+                
+                document.getElementById('errorData').textContent = error.message;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // 프롬프트 복사 함수
+        function copyPrompt() {
+            const promptContent = document.getElementById('promptContent');
+            if (promptContent) {
+                const textArea = document.createElement('textarea');
+                textArea.value = promptContent.textContent;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                // 복사 완료 알림
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✅ 복사됨!';
+                button.style.background = '#28a745';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#007bff';
+                }, 2000);
+            }
+        }
+
+        // 제미나이 응답 복사 함수
+        function copyResponse() {
+            const responseContent = document.getElementById('responseContent');
+            if (responseContent) {
+                const textArea = document.createElement('textarea');
+                textArea.value = responseContent.textContent;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                // 복사 완료 알림
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✅ 복사됨!';
+                button.style.background = '#198754';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#28a745';
+                }, 2000);
+            }
+        }
+
+        // 입력 결과 표시 함수
+        function displayInputResult(result) {
+            const examContent = document.getElementById('examContent');
+            const requestData = result.request_data;
+            const distributionSummary = result.distribution_summary;
+            const prompt = result.prompt;
+            const llmResponse = result.llm_response;
+            const llmError = result.llm_error;
+            const subjectTypesValidation = result.subject_types_validation;
+            
+            let html = `
+                <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                    <h2 style="color: #28a745; margin-bottom: 15px;">✅ ${result.message}</h2>`;
+            
+            // 분배 결과가 있으면 표시
+            if (distributionSummary) {
+                html += `
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">📊 문제 분배 결과</h4>
+                        <p><strong>총 문제 수:</strong> ${distributionSummary.total_questions}문제</p>
+                        <p><strong>검증 통과:</strong> ${distributionSummary.validation_passed ? '✅ 통과' : '❌ 실패'}</p>
+                        
+                        <h5 style="margin-top: 15px;">영역별 분배:</h5>
+                        ${distributionSummary.subject_distribution.map(item => 
+                            `<p>• <strong>${item.subject}:</strong> ${item.count}문제 (${item.ratio}%)</p>`
+                        ).join('')}
+                        
+                        <h5 style="margin-top: 15px;">형식별 분배:</h5>
+                        ${distributionSummary.format_distribution.map(item => 
+                            `<p>• <strong>${item.format}:</strong> ${item.count}문제 (${item.ratio}%)</p>`
+                        ).join('')}
+                        
+                        <h5 style="margin-top: 15px;">난이도별 분배:</h5>
+                        ${distributionSummary.difficulty_distribution.map(item => 
+                            `<p>• <strong>${item.difficulty}:</strong> ${item.count}문제 (${item.ratio}%)</p>`
+                        ).join('')}
+                    </div>`;
+            }
+            
+            // 영역별 출제 유형 검증 결과
+            if (subjectTypesValidation) {
+                html += `
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">🎯 영역별 출제 유형 확인</h4>
+                        ${subjectTypesValidation.reading_types.length > 0 ? 
+                            `<p><strong>📖 독해 유형:</strong> ${subjectTypesValidation.reading_types.join(', ')}</p>` : ''}
+                        ${subjectTypesValidation.grammar_categories.length > 0 ? 
+                            `<p><strong>📝 문법 카테고리:</strong> ${subjectTypesValidation.grammar_categories.join(', ')}</p>` : ''}
+                        ${subjectTypesValidation.grammar_topics.length > 0 ? 
+                            `<p><strong>📝 문법 토픽:</strong> ${subjectTypesValidation.grammar_topics.join(', ')}</p>` : ''}
+                        ${subjectTypesValidation.vocabulary_categories.length > 0 ? 
+                            `<p><strong>📚 어휘 카테고리:</strong> ${subjectTypesValidation.vocabulary_categories.join(', ')}</p>` : ''}
+                    </div>`;
+            }
+            
+            // 제미나이 응답 결과 표시
+            if (llmResponse) {
+                html += `
+                    <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #28a745;">
+                        <h3 style="color: #28a745; margin-bottom: 15px; display: flex; align-items: center;">
+                            🤖 제미나이 AI 응답 결과
+                            <button onclick="copyResponse()" style="margin-left: auto; padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📋 복사</button>
+                        </h3>
+                        <div id="responseContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745; font-family: 'Courier New', monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4; max-height: 800px; overflow-y: auto; border: 1px solid #dee2e6;">${llmResponse}</div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
+                            🎯 제미나이 AI가 생성한 문제지입니다!
+                        </div>
+                    </div>`;
+            }
+            
+            // LLM 오류 표시
+            if (llmError) {
+                html += `
+                    <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #dc3545;">
+                        <h3 style="color: #dc3545; margin-bottom: 15px;">❌ AI 응답 오류</h3>
+                        <div style="background: #f8d7da; padding: 15px; border-radius: 6px; border-left: 4px solid #dc3545; color: #721c24;">${llmError}</div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
+                            💡 API 키를 확인하거나 나중에 다시 시도해주세요.
+                        </div>
+                    </div>`;
+            }
+            
+            // 생성된 프롬프트 표시
+            if (prompt) {
+                html += `
+                    <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #007bff;">
+                        <h3 style="color: #007bff; margin-bottom: 15px; display: flex; align-items: center;">
+                            🚀 생성된 프롬프트
+                            <button onclick="copyPrompt()" style="margin-left: auto; padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📋 복사</button>
+                        </h3>
+                        <div id="promptContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #007bff; font-family: 'Courier New', monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4; max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">${prompt}</div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
+                            💡 이 프롬프트를 복사해서 ChatGPT, Claude, 또는 다른 AI 모델에 붙여넣어 사용하세요!
+                        </div>
+                    </div>`;
+            }
+            
+            html += `
+                    <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">📋 입력받은 데이터:</h3>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">🏫 기본 정보</h4>
+                        <p><strong>학교급:</strong> ${requestData.school_level}</p>
+                        <p><strong>학년:</strong> ${requestData.grade}학년</p>
+                        <p><strong>총 문제 수:</strong> ${requestData.total_questions}개</p>
+                    </div>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">🎯 선택된 영역</h4>
+                        <p><strong>영역:</strong> ${requestData.subjects.join(', ')}</p>
+                        
+                        ${requestData.subject_details.reading_types.length > 0 ? 
+                            `<p><strong>📖 독해 유형:</strong> ${requestData.subject_details.reading_types.join(', ')}</p>` : ''}
+                        
+                        ${requestData.subject_details.grammar_categories.length > 0 ? 
+                            `<p><strong>📝 문법 카테고리:</strong> ${requestData.subject_details.grammar_categories.join(', ')}</p>` : ''}
+                        
+                        ${requestData.subject_details.grammar_topics.length > 0 ? 
+                            `<p><strong>📝 문법 토픽:</strong> ${requestData.subject_details.grammar_topics.join(', ')}</p>` : ''}
+                        
+                        ${requestData.subject_details.vocabulary_categories.length > 0 ? 
+                            `<p><strong>📚 어휘 카테고리:</strong> ${requestData.subject_details.vocabulary_categories.join(', ')}</p>` : ''}
+                    </div>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">⚖️ 영역별 비율</h4>
+                        ${requestData.subject_ratios.map(ratio => 
+                            `<p><strong>${ratio.subject}:</strong> ${ratio.ratio}%</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">📋 문제 형식</h4>
+                        <p><strong>선택된 형식:</strong> ${requestData.question_format}</p>
+                        ${requestData.format_ratios.map(format => 
+                            `<p><strong>${format.format}:</strong> ${format.ratio}%</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="color: #007bff;">🎯 난이도 분배</h4>
+                        ${requestData.difficulty_distribution.map(diff => 
+                            `<p><strong>${diff.difficulty}:</strong> ${diff.ratio}%</p>`
+                        ).join('')}
+                    </div>`;
+            
+            // 추가 요구사항 표시
+            if (requestData.additional_requirements) {
+                html += `
+                    <div style="background: white; padding: 15px; border-radius: 5px;">
+                        <h4 style="color: #007bff;">📝 추가 요구사항</h4>
+                        <p style="background: #f8f9fa; padding: 10px; border-radius: 4px; border-left: 4px solid #007bff; white-space: pre-wrap;">${requestData.additional_requirements}</p>
+                    </div>`;
+            }
+            
+            html += `</div>
+            `;
+            
+            examContent.innerHTML = html;
+        }
+
+        // 기존 문제지 결과 표시 함수 (사용하지 않음)
+        function displayExamResult(examData) {
+            const examContent = document.getElementById('examContent');
+            
+            let html = `
+                <div class="exam-section">
+                    <div class="exam-title">📋 시험 정보</div>
+                    <p><strong>학교급:</strong> ${examData.exam_info.school_level}</p>
+                    <p><strong>학년:</strong> ${examData.exam_info.grade}학년</p>
+                    <p><strong>총 문제 수:</strong> ${examData.exam_info.total_questions}개</p>
+                    <p><strong>영역:</strong> ${examData.exam_info.subjects.join(', ')}</p>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('question-paper')">📝 문제지</button>
+                    <button class="tab" onclick="showTab('answer-sheet')">✅ 답안지</button>
+                </div>
+
+                <div id="question-paper" class="tab-content active">
+            `;
+
+            // 지문들은 각 문제와 함께 표시되므로 별도 표시 불필요
+
+            // 문제들 표시 (지문/예문과 함께)
+            if (examData.questions && examData.questions.length > 0) {
+                html += '<div class="exam-section"><div class="exam-title">❓ 문제</div>';
+                examData.questions.forEach(question => {
+                    html += `<div class="question">`;
+                    
+                    // 관련 지문 찾기 및 표시
+                    if (question.passage_id && examData.passages) {
+                        const relatedPassage = examData.passages.find(p => p.id === question.passage_id);
+                        if (relatedPassage) {
+                            html += `
+                                <div class="passage-for-question">
+                                    <div class="passage-title">📖 지문: ${relatedPassage.title}</div>
+                                    <div class="passage-content">${relatedPassage.content}</div>
+                                    <small>단어 수: ${relatedPassage.word_count}개</small>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // 관련 예문 찾기 및 표시  
+                    if (question.example_id && examData.examples) {
+                        const relatedExample = examData.examples.find(e => e.target_problem === `problem_${question.question_number}`);
+                        if (relatedExample) {
+                            html += `
+                                <div class="example-for-question">
+                                    <div class="example-title">📝 예문:</div>
+                                    <div class="example-content">${relatedExample.content}</div>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // 참조 문제의 지문 표시 (같은 지문을 사용하는 연속 문제)
+                    if (question.reference_problem_id && !question.passage_id && !question.example_id) {
+                        html += `
+                            <div class="reference-note">
+                                <small>※ 위 지문을 바탕으로 한 문제입니다.</small>
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
+                        <div class="question-number">${question.question_number}번</div>
+                        <p><strong>${question.question_text}</strong></p>
+                    `;
+                    
+                    if (question.choices && question.choices.length > 0) {
+                        html += '<div class="choices">';
+                        question.choices.forEach(choice => {
+                            html += `<p>${choice}</p>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    html += `
+                        <small>영역: ${question.subject} | 난이도: ${question.difficulty} | 형식: ${question.question_type}</small>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            html += '</div>'; // question-paper 끝
+
+            // 답안지 탭
+            html += '<div id="answer-sheet" class="tab-content">';
+            
+            if (examData.answer_sheet && examData.answer_sheet.answers) {
+                html += '<div class="exam-section"><div class="exam-title">✅ 정답 및 해설</div>';
+                examData.answer_sheet.answers.forEach(answer => {
+                    html += `
+                        <div class="answer">
+                            <div class="question-number">${answer.question_number}번</div>
+                            <p><strong>정답:</strong> ${answer.correct_answer}</p>
+                            <div class="explanation">
+                                <strong>해설:</strong> ${answer.explanation}
+                            </div>
+                            ${answer.key_points ? `
+                                <div style="margin-top: 10px;">
+                                    <strong>핵심 포인트:</strong>
+                                    <ul>
+                                        ${answer.key_points.map(point => `<li>${point}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+
+                // 채점 기준
+                if (examData.answer_sheet.grading_criteria) {
+                    html += `
+                        <div class="exam-section">
+                            <div class="exam-title">📊 채점 기준</div>
+                            ${Object.entries(examData.answer_sheet.grading_criteria).map(([format, criteria]) => 
+                                `<p><strong>${format}:</strong> ${criteria}</p>`
+                            ).join('')}
+                        </div>
+                    `;
+                }
+            }
+
+            html += '</div>'; // answer-sheet 끝
+
+            examContent.innerHTML = html;
+        }
+
+        // 탭 전환 함수
+        function showTab(tabName) {
+            // 모든 탭과 콘텐츠 비활성화
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // 선택된 탭과 콘텐츠 활성화
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // 이벤트 리스너 등록
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCategories();
+            
+            document.querySelectorAll('input[name="subjects"]').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    updateSubjectDetails();
+                    updateSubjectRatios();
+                });
+            });
+            
+            document.getElementById('questionFormat').addEventListener('change', updateFormatCounts);
+            document.getElementById('totalQuestions').addEventListener('input', updateFormatCounts);
+            
+            document.getElementById('questionForm').addEventListener('submit', generateExam);
+            
+            // 초기 설정
+            updateSubjectRatios();
+            updateFormatCounts();
+        });
+    </script>
+</body>
+</html>
