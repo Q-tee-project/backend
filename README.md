@@ -47,17 +47,19 @@ cp .env.example .env
 
 ## 서비스 실행
 
-### Math Service (포트: 8001)
+### Math Service (포트: 8000)
 ```bash
 cd services/math-service
 python math_main.py
 ```
 
-### English Service (포트: 8002)
+### English Service (포트: 8000)
 ```bash
 cd services/english-service
 python english_main.py
 ```
+
+**주의**: 두 서비스 모두 포트 8000을 사용하므로 동시에 실행할 수 없습니다. 개발 시에는 하나씩 실행하세요.
 
 ## Git 협업 워크플로우
 
@@ -99,11 +101,11 @@ git push origin your-branch
 
 ## API 엔드포인트
 
-### Math Service (http://localhost:8001)
+### Math Service (http://localhost:8000)
 - `POST /api/math-generation/generate`: 수학 문제 생성
 - `POST /api/math-generation/grade`: 수학 문제 채점
 
-### English Service (http://localhost:8002)
+### English Service (http://localhost:8000)
 - `POST /generate-test`: 영어 문제 생성
 - `GET /text-types`: 텍스트 유형 조회
 
@@ -123,8 +125,8 @@ git push origin your-branch
 
 ## 트러블슈팅
 
-### 포트 충돌
-서비스 포트를 변경하려면 `.env` 파일에서 `PORT_MATH`, `PORT_ENGLISH` 값을 수정하세요.
+### 포트 설정
+두 서비스 모두 포트 8000을 사용합니다. 개발 시에는 필요한 서비스만 실행하세요.
 
 ### API 키 오류
 각 서비스별로 다른 API 키를 사용할 수 있습니다. `.env` 파일에서 개별 키를 설정하세요.

@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .app.routers import math_generation
-from .app.database import engine
-from .app.models import Base
+from app.routers import math_generation
+from app.database import engine
+from app.models import Base
 # Import all models to ensure they are registered with Base.metadata
-import services.math_service.app.models.worksheet
-import services.math_service.app.models.problem
-import services.math_service.app.models.math_generation
-import services.math_service.app.models.grading_result
+import app.models.worksheet
+import app.models.problem
+import app.models.math_generation
+import app.models.grading_result
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,3 +29,7 @@ app.include_router(math_generation.router, prefix="/api/math-generation", tags=[
 @app.get("/")
 async def root():
     return {"message": "Math Problem Generation API is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

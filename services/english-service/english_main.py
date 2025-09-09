@@ -93,7 +93,7 @@ async def startup_event():
 # 서버 실행 설정
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        "english_main:app",
         host="0.0.0.0",
         port=8000,
         reload=True  # 개발 모드에서 파일 변경 시 자동 재시작

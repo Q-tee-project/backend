@@ -36,9 +36,9 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-education_platform}
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
-      - PORT=8001
+      - PORT=8000
     ports:
-      - "8001:8001"
+      - "8001:8000"
     depends_on:
       - postgres
       - redis
@@ -57,9 +57,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-education_platform}
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
-      - PORT=8002
+      - PORT=8000
     ports:
-      - "8002:8002"
+      - "8002:8000"
     depends_on:
       - postgres
     volumes:
