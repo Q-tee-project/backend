@@ -38,9 +38,10 @@ cp .env.example .env
 각 개발자는 자신만의 설정을 사용할 수 있습니다:
 
 **API 키:**
-- `MATH_GEMINI_API_KEY`: 수학 서비스용 API 키
-- `ENGLISH_GEMINI_API_KEY`: 영어 서비스용 API 키
-- `GEMINI_API_KEY`: 공통 API 키 (개별 키가 없을 때 사용)
+- `MATH_GEMINI_API_KEY`: 수학 서비스용 Gemini API 키
+- `ENGLISH_GEMINI_API_KEY`: 영어 서비스용 Gemini API 키
+- `GEMINI_API_KEY`: 공통 Gemini API 키 (개별 키가 없을 때 사용)
+- `GOOGLE_VISION_API_KEY`: Google Vision API 키 (수학 서비스의 손글씨/이미지 OCR용)
 
 **데이터베이스 설정:**
 - `DB_USER`: 데이터베이스 사용자명 (예: postgres, root)

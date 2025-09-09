@@ -14,7 +14,7 @@ class AIService:
         self.model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Google Vision API 키 설정
-        self.vision_api_key = "AIzaSyCVjBI7eFbggDVLZVU0hRloQk0HAgjp5vE"
+        self.vision_api_key = os.getenv("GOOGLE_VISION_API_KEY", "")
         self.model_name = "gemini-2.5-flash"
         
         # Google Vision은 API 키 방식으로 초기화
