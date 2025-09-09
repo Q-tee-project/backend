@@ -7,9 +7,10 @@ from ..database import Base
 class Problem(Base):
     """수학 문제 모델 - 워크시트에 속하는 문제 저장용"""
     __tablename__ = "problems"
+    __table_args__ = {"schema": "math_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("worksheets.id"), nullable=False)  # 소속 워크시트
+    worksheet_id = Column(Integer, ForeignKey("math_service.worksheets.id"), nullable=False)  # 소속 워크시트
     sequence_order = Column(Integer, nullable=False)  # 워크시트 내 순서 (1, 2, 3, ...)
     
     # 문제 기본 정보

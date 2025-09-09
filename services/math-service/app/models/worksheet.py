@@ -16,6 +16,7 @@ class WorksheetStatus(str, enum.Enum):
 class Worksheet(Base):
     """문제지 모델 - 10개 또는 20개 문제를 포함하는 세트"""
     __tablename__ = "worksheets"
+    __table_args__ = {"schema": "math_service"}
     
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)  # 문제지 제목

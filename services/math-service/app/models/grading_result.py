@@ -7,9 +7,10 @@ from ..database import Base
 class GradingSession(Base):
     """채점 세션 테이블 - 한 번의 채점 작업을 나타냄"""
     __tablename__ = "grading_sessions"
+    __table_args__ = {"schema": "math_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("worksheets.id"), nullable=False)
+    worksheet_id = Column(Integer, ForeignKey("math_service.worksheets.id"), nullable=False)
     celery_task_id = Column(String(255), unique=True, index=True)
     
     # 전체 채점 결과
@@ -38,10 +39,11 @@ class GradingSession(Base):
 class ProblemGradingResult(Base):
     """문제별 채점 결과 테이블"""
     __tablename__ = "problem_grading_results"
+    __table_args__ = {"schema": "math_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    grading_session_id = Column(Integer, ForeignKey("grading_sessions.id"), nullable=False)
-    problem_id = Column(Integer, ForeignKey("problems.id"), nullable=False)
+    grading_session_id = Column(Integer, ForeignKey("math_service.grading_sessions.id"), nullable=False)
+    problem_id = Column(Integer, ForeignKey("math_service.problems.id"), nullable=False)
     
     # 답안 정보
     user_answer = Column(Text)  # 학생이 제출한 답안

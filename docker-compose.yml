@@ -4,27 +4,27 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15
-    container_name: education_platform_db
+    container_name: qt_project_db
     environment:
       POSTGRES_USER: ${DB_USER:-root}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
-      POSTGRES_DB: ${DB_NAME:-education_platform}
+      POSTGRES_DB: ${DB_NAME:-qt_project_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./scripts/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
     networks:
-      - education_network
+      - qt_project_network
 
   # Redis for Math Service (Celery)
   redis:
     image: redis:7-alpine
-    container_name: education_platform_redis
+    container_name: qt_project_redis
     ports:
       - "6379:6379"
     networks:
-      - education_network
+      - qt_project_network
 
   # Math Service
   math-service:
@@ -33,7 +33,7 @@ services:
       dockerfile: Dockerfile
     container_name: math_service
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-education_platform}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
@@ -46,7 +46,7 @@ services:
     volumes:
       - ./services/math-service:/app
     networks:
-      - education_network
+      - qt_project_network
     restart: unless-stopped
 
   # English Service
@@ -56,7 +56,7 @@ services:
       dockerfile: Dockerfile
     container_name: english_service
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-education_platform}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - PORT=8000
     ports:
@@ -66,7 +66,7 @@ services:
     volumes:
       - ./services/english-service:/app
     networks:
-      - education_network
+      - qt_project_network
     restart: unless-stopped
 
   # Celery Worker for Math Service
@@ -76,7 +76,7 @@ services:
       dockerfile: Dockerfile.celery
     container_name: math_celery_worker
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-education_platform}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
@@ -86,7 +86,7 @@ services:
     volumes:
       - ./services/math-service:/app
     networks:
-      - education_network
+      - qt_project_network
     restart: unless-stopped
 
   # Flower for Celery Monitoring
@@ -103,12 +103,12 @@ services:
     depends_on:
       - redis
     networks:
-      - education_network
+      - qt_project_network
     restart: unless-stopped
 
 volumes:
   postgres_data:
 
 networks:
-  education_network:
+  qt_project_network:
     driver: bridge

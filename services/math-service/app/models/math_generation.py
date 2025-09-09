@@ -7,6 +7,7 @@ from ..database import Base
 class MathProblemGeneration(Base):
     """수학 문제 생성 세션 기록"""
     __tablename__ = "math_problem_generations"
+    __table_args__ = {"schema": "math_service"}
     
     id = Column(Integer, primary_key=True, index=True)
     generation_id = Column(String, unique=True, nullable=False, index=True)
