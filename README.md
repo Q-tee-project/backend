@@ -27,23 +27,46 @@ unified-education-platform/
 
 ### 1. 환경 변수 설정
 
-`.env.example` 파일을 복사하여 `.env` 파일을 생성하고 각자의 API 키를 설정하세요:
+`.env.example` 파일을 복사하여 `.env` 파일을 생성하고 각자의 설정을 입력하세요:
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. 개별 API 키 설정
+### 2. 개별 설정
 
-각 개발자는 자신만의 API 키를 사용할 수 있습니다:
+각 개발자는 자신만의 설정을 사용할 수 있습니다:
 
+**API 키:**
 - `MATH_GEMINI_API_KEY`: 수학 서비스용 API 키
 - `ENGLISH_GEMINI_API_KEY`: 영어 서비스용 API 키
 - `GEMINI_API_KEY`: 공통 API 키 (개별 키가 없을 때 사용)
 
-### 3. 데이터베이스 설정
+**데이터베이스 설정:**
+- `DB_USER`: 데이터베이스 사용자명 (예: postgres, root)
+- `DB_PASSWORD`: 데이터베이스 비밀번호 (예: 1234, mypassword123)
+- `DB_NAME`: 데이터베이스 이름 (기본: education_platform)
 
-각 서비스는 독립적인 데이터베이스를 사용하거나 공통 데이터베이스의 다른 스키마를 사용할 수 있습니다.
+### 3. Docker로 전체 환경 실행
+
+```bash
+# 모든 서비스 시작 (데이터베이스, Redis, 두 서비스, Celery)
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 서비스 중지
+docker-compose down
+```
+
+**Docker로 실행되는 서비스:**
+- **PostgreSQL**: 포트 5432 (데이터베이스)
+- **Redis**: 포트 6379 (Celery용)
+- **Math Service**: 포트 8001 (수학 문제 생성/채점)
+- **English Service**: 포트 8002 (영어 문제 생성)
+- **Celery Worker**: 백그라운드 작업 처리
+- **Flower**: 포트 5555 (Celery 모니터링)
 
 ## 서비스 실행
 
