@@ -19,7 +19,7 @@ class AIService:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     async def grade_subjective_question(self, question_text: str, correct_answer: str, student_answer: str, passage_content: str = None, example_content: str = None) -> Dict[str, Any]:
         """
