@@ -340,8 +340,8 @@ class MathGenerationService:
         for i in range(count):
             problems.append({
                 "question": f"[{curriculum_data.get('chapter_name', '수학')}] 기본 문제 {i+1}번",
-                "choices": ["선택지 1", "선택지 2", "선택지 3", "선택지 4"],
-                "correct_answer": "선택지 1",
+                "choices": ["A", "B", "C", "D"],
+                "correct_answer": "A",
                 "explanation": f"{curriculum_data.get('chapter_name', '수학')} 관련 기본 해설",
                 "problem_type": "multiple_choice",
                 "difficulty": "B"
