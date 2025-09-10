@@ -53,8 +53,12 @@ class GradingService:
         ).all()
         
         if not answer_questions:
-            print(f"DEBUG: 답안 데이터를 찾을 수 없습니다. worksheet.id={worksheet.id}")
-            raise ValueError("답안 데이터를 찾을 수 없습니다.")
+            print(f"WARNING: 답안 데이터를 찾을 수 없습니다. worksheet.id={worksheet.id}")
+            print("INFO: 답안 데이터가 없는 상태로 채점을 시도합니다. 모든 문제가 '검수 필요' 상태가 됩니다.")
+            
+            # 답안 데이터 없이 채점 진행 (기본값 사용)
+            empty_answer_questions = []
+            answer_questions = empty_answer_questions
         
         print(f"DEBUG: 답안 데이터 조회 성공. questions: {len(answer_questions)}, passages: {len(answer_passages)}, examples: {len(answer_examples)}")
         
@@ -86,14 +90,91 @@ class GradingService:
             question_results, db
         )
         
+        # 지문/예문별로 관련 문제와 함께 그룹핑 (백엔드에서 미리 정제)
+        passage_groups = []
+        example_groups = []
+        standalone_questions = []
+        
+        # 지문별로 그룹핑
+        passages_dict = {}
+        for answer_passage in answer_passages:
+            passages_dict[answer_passage.passage_id] = {
+                "passage_id": answer_passage.passage_id,
+                "original_content": answer_passage.original_content,
+                "text_type": getattr(answer_passage, 'text_type', None)
+            }
+        
+        # 예문별로 그룹핑  
+        examples_dict = {}
+        for answer_example in answer_examples:
+            examples_dict[answer_example.example_id] = {
+                "example_id": answer_example.example_id,
+                "original_content": answer_example.original_content
+            }
+        
+        # 문제들을 지문/예문별로 분류
+        processed_questions = set()
+        
+        # 지문별 문제 그룹핑 (related_questions 기준)
+        for answer_passage in answer_passages:
+            if answer_passage.related_questions:
+                related_questions = []
+                for question_id in answer_passage.related_questions:
+                    matching_question = next((q for q in question_results if q["question_id"] == str(question_id)), None)
+                    if matching_question:
+                        related_questions.append(matching_question)
+                        processed_questions.add(matching_question["question_id"])
+                
+                if related_questions:
+                    passage_groups.append({
+                        "passage": {
+                            "passage_id": answer_passage.passage_id,
+                            "original_content": answer_passage.original_content,
+                            "text_type": getattr(answer_passage, 'text_type', None)
+                        },
+                        "questions": related_questions
+                    })
+        
+        # 예문별 문제 그룹핑 (지문에 속하지 않은 것만)
+        for answer_example in answer_examples:
+            if answer_example.related_questions:
+                related_questions = []
+                
+                # related_questions가 문자열인 경우 리스트로 변환
+                if isinstance(answer_example.related_questions, str):
+                    question_ids = [answer_example.related_questions]
+                else:
+                    question_ids = answer_example.related_questions
+                    
+                for question_id in question_ids:
+                    if str(question_id) not in processed_questions:
+                        matching_question = next((q for q in question_results if q["question_id"] == str(question_id)), None)
+                        if matching_question:
+                            related_questions.append(matching_question)
+                            processed_questions.add(matching_question["question_id"])
+                
+                if related_questions:
+                    example_groups.append({
+                        "example": {
+                            "example_id": answer_example.example_id,
+                            "original_content": answer_example.original_content
+                        },
+                        "questions": related_questions
+                    })
+        
+        # 지문/예문에 속하지 않은 독립 문제들
+        standalone_questions = [q for q in question_results if q["question_id"] not in processed_questions]
+        
         return {
             "grading_result_id": grading_result.id,
             "result_id": grading_result.result_id,
             "total_score": total_score,
             "max_score": max_score,
             "percentage": percentage,
-            "question_results": question_results,
-            "needs_review": needs_review
+            "needs_review": needs_review,
+            "passage_groups": passage_groups,      # 지문별 그룹 (지문 + 관련 문제들)
+            "example_groups": example_groups,      # 예문별 그룹 (예문 + 관련 문제들)  
+            "standalone_questions": standalone_questions  # 독립 문제들
         }
     
     async def _grade_single_question(
@@ -159,7 +240,9 @@ class GradingService:
                 "is_correct": False,
                 "grading_method": "unknown",
                 "ai_feedback": "알 수 없는 문제 유형입니다.",
-                "needs_review": True
+                "needs_review": True,
+                "passage_id": question.passage_id if hasattr(question, 'passage_id') else None,  # 연관된 지문 ID
+                "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
             }
     
     def _find_correct_answer(self, question_id: str, answer_questions: List[AnswerQuestion]) -> Dict[str, Any]:
@@ -177,8 +260,14 @@ class GradingService:
                 print(f"DEBUG: 정답 찾음: {result}")
                 return result
         
-        print(f"DEBUG: 정답을 찾을 수 없음. question_id={question_id}, 총 답안 수={len(answer_questions)}")
-        return {}
+        # 정답을 찾지 못한 경우 기본값 반환
+        default_result = {
+            "correct_answer": "정답 정보 없음",
+            "explanation": "답안 데이터가 없어 정답을 확인할 수 없습니다.",
+            "learning_point": "검수가 필요합니다."
+        }
+        print(f"DEBUG: 정답을 찾을 수 없음. question_id={question_id}, 총 답안 수={len(answer_questions)} - 기본값 반환")
+        return default_result
     
     async def _grade_multiple_choice(
         self, 
@@ -190,9 +279,16 @@ class GradingService:
         """객관식 문제 채점 (DB 기반)"""
         correct_answer = correct_answer_info.get("correct_answer", "")
         
-        # 대소문자 구분 없이 비교
-        is_correct = student_answer.upper() == correct_answer.upper()
-        score = max_score if is_correct else 0
+        # 정답 정보가 없는 경우 처리
+        if correct_answer == "정답 정보 없음" or not correct_answer:
+            is_correct = False
+            score = 0
+            needs_review = True
+        else:
+            # 대소문자 구분 없이 비교
+            is_correct = student_answer.upper() == correct_answer.upper()
+            score = max_score if is_correct else 0
+            needs_review = False
         
         # question_type 안전 처리
         safe_question_type = question.question_type
@@ -213,8 +309,10 @@ class GradingService:
             "max_score": max_score,
             "is_correct": is_correct,
             "grading_method": "db",
-            "ai_feedback": "",
-            "needs_review": False
+            "ai_feedback": correct_answer_info.get("explanation", "") if correct_answer != "정답 정보 없음" else "답안 데이터가 없어 해설을 제공할 수 없습니다.",
+            "needs_review": needs_review,
+            "passage_id": question.passage_id if hasattr(question, 'passage_id') else None,  # 연관된 지문 ID
+            "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
         }
     
     async def _grade_subjective(
@@ -228,11 +326,21 @@ class GradingService:
     ) -> Dict[str, Any]:
         """주관식 문제 채점 (AI 기반)"""
         
+        # question_id 안전 처리 (빈 답안용)
+        safe_question_id = question.question_id
+        if isinstance(safe_question_id, list):
+            safe_question_id = safe_question_id[0] if safe_question_id else "1"
+        
+        # question_type 안전 처리 (빈 답안용) 
+        safe_question_type = question.question_type
+        if isinstance(safe_question_type, list):
+            safe_question_type = safe_question_type[0] if safe_question_type else "주관식"
+        
         # 빈 답안 처리
         if not student_answer.strip():
             return {
-                "question_id": question.question_id,
-                "question_type": question.question_type,
+                "question_id": safe_question_id,
+                "question_type": safe_question_type,
                 "student_answer": student_answer,
                 "correct_answer": correct_answer_info.get("correct_answer", ""),
                 "score": 0,
@@ -241,6 +349,24 @@ class GradingService:
                 "grading_method": "ai",
                 "ai_feedback": "답안이 작성되지 않았습니다.",
                 "needs_review": False
+            }
+        
+        # 정답 정보가 없는 경우 처리
+        correct_answer = correct_answer_info.get("correct_answer", "")
+        if correct_answer == "정답 정보 없음" or not correct_answer:
+            return {
+                "question_id": safe_question_id,
+                "question_type": safe_question_type,
+                "student_answer": student_answer,
+                "correct_answer": "정답 정보 없음",
+                "score": 0,
+                "max_score": max_score,
+                "is_correct": False,  # 이미 Boolean
+                "grading_method": "no_answer_data",
+                "ai_feedback": "답안 데이터가 없어 AI 채점을 수행할 수 없습니다. 수동 검수가 필요합니다.",
+                "needs_review": True,
+                "passage_id": question.passage_id if hasattr(question, 'passage_id') else None,  # 연관된 지문 ID
+                "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
             }
         
         # AI 채점을 위한 컨텍스트 구성
@@ -255,22 +381,19 @@ class GradingService:
             max_score
         )
         
-        # question_type 안전 처리
-        safe_question_type = question.question_type
-        if isinstance(safe_question_type, list):
-            safe_question_type = safe_question_type[0] if safe_question_type else "주관식"
-        
         return {
-            "question_id": question.question_id,
+            "question_id": safe_question_id,
             "question_type": safe_question_type,
             "student_answer": student_answer,
             "correct_answer": correct_answer_info.get("correct_answer", ""),
             "score": ai_result["score"],
             "max_score": max_score,
-            "is_correct": ai_result["is_correct"],
+            "is_correct": bool(ai_result["is_correct"]),  # 확실히 Boolean으로 변환
             "grading_method": "ai",
             "ai_feedback": ai_result["feedback"],
-            "needs_review": True  # AI 채점은 항상 검수 필요
+            "needs_review": True,  # AI 채점은 항상 검수 필요
+            "passage_id": question.passage_id if hasattr(question, 'passage_id') else None,  # 연관된 지문 ID
+            "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
         }
     
     def _build_grading_context(self, question: Question, answer_passages: List[AnswerPassage], answer_examples: List[AnswerExample]) -> Dict[str, str]:
@@ -331,7 +454,13 @@ class GradingService:
                 raw_score = 0
             
             score = max(0, min(int(raw_score), max_score))
-            is_correct = ai_result.get("is_correct", False) or score == max_score
+            
+            # AI 서비스에서 이미 타입 검증을 완료했으므로 안전하게 사용
+            is_correct = ai_result.get("is_correct", False)
+            
+            # 점수가 만점이면 정답으로 처리
+            is_correct = bool(is_correct) or score == max_score
+            
             feedback = ai_result.get("feedback", "AI 채점이 완료되었습니다.")
             
             return {
