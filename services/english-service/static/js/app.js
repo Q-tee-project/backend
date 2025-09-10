@@ -5,8 +5,7 @@ let categories = {};
 // 페이지 로드 시 카테고리 데이터 가져오기
 async function loadCategories() {
     try {
-        const response = await fetch('/categories');
-        categories = await response.json();
+        categories = await apiService.loadCategories();
         console.log('카테고리 로드됨:', categories);
     } catch (error) {
         console.error('카테고리 로드 실패:', error);
@@ -474,15 +473,7 @@ async function generateExam(event) {
         console.log('문제지 생성 요청 데이터:', formData);
 
         // API 호출
-        const response = await fetch('/question-options', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        });
-
-        const result = await response.json();
+        const result = await apiService.generateQuestionOptions(formData);
         
         // 응답 데이터를 콘솔에 출력 (개발자 도구에서 확인 가능)
         console.log('='.repeat(80));
@@ -666,7 +657,7 @@ function displayInputResult(result) {
                         ⚠️ 제미나이 응답 (JSON 파싱 실패)
                         <button onclick="copyResponse()" style="margin-left: auto; padding: 8px 15px; background: #ffc107; color: #856404; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📋 복사</button>
                     </h3>
-                    <div id="responseContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; font-family: 'Courier New', monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4; max-height: 800px; overflow-y: auto; border: 1px solid #dee2e6;">${llmResponse}</div>
+                    <div id="responseContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; font-family: 'Courier New', monospace;  font-size: 13px; line-height: 1.4; max-height: 800px; overflow-y: auto; border: 1px solid #dee2e6;">${llmResponse}</div>
                     <div style="margin-top: 10px; font-size: 12px; color: #856404;">
                         ⚠️ JSON 형식이 올바르지 않아 원본 텍스트로 표시됩니다.
                     </div>
@@ -696,25 +687,70 @@ function displayInputResult(result) {
             console.log('📋 파싱된 답안지 데이터:');
             console.log(answerData);
             
+            // 답안지 데이터 구조 검증 및 변환
+            let processedAnswerData = answerData;
+            
+            // answer_sheet 래퍼가 있는 경우 내부 데이터 추출
+            if (answerData.answer_sheet) {
+                processedAnswerData = answerData.answer_sheet;
+                console.log('📋 answer_sheet 래퍼에서 데이터 추출:', processedAnswerData);
+            }
+            
             // 전역 변수에 답안지 데이터 저장
-            currentAnswerData = answerData;
+            currentAnswerData = processedAnswerData;
+            console.log('✅ currentAnswerData 설정 완료:', currentAnswerData);
             
             // 답안지 렌더링
-            html += renderAnswerSheet(answerData);
+            html += renderAnswerSheet(processedAnswerData);
             
         } catch (parseError) {
             console.error('❌ 답안지 JSON 파싱 실패:', parseError);
+            console.error('원본 답안지 데이터:', answerSheet);
+            
+            // 파싱 실패해도 기본 구조로 currentAnswerData 설정
+            currentAnswerData = {
+                questions: [],
+                passages: [],
+                examples: []
+            };
+            console.error('⚠️ 답안지 JSON 파싱 실패로 빈 구조 설정됨');
+            
+            // 사용자에게 경고 표시
+            if (typeof showErrorNotification === 'function') {
+                showErrorNotification('답안지 파싱 실패', '답안 데이터를 해석할 수 없어 빈 구조로 저장됩니다.');
+            }
             
             // 파싱 실패시 원본 텍스트 표시
             html += `
                 <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #17a2b8;">
                     <h3 style="color: #0c5460; margin-bottom: 15px;">📋 답안지 (JSON 파싱 실패)</h3>
-                    <div style="background: #d1ecf1; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8; font-family: 'Courier New', monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4; max-height: 600px; overflow-y: auto; border: 1px solid #bee5eb;">${result.answer_sheet}</div>
-                    <div style="margin-top: 10px; font-size: 12px; color: #0c5460;">
-                        ⚠️ JSON 형식이 올바르지 않아 원본 텍스트로 표시됩니다.
+                    <div style="background: #d1ecf1; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8; font-family: 'Courier New', monospace;  font-size: 13px; line-height: 1.4; max-height: 600px; overflow-y: auto; border: 1px solid #bee5eb;">${result.answer_sheet}</div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #0c5460; background: #fff3cd; padding: 10px; border-radius: 5px; border-left: 3px solid #ffc107;">
+                        ⚠️ <strong>답안지 파싱 실패:</strong> JSON 형식이 올바르지 않습니다.<br>
+                        📌 <strong>저장 시 주의:</strong> 답안 테이블에는 빈 데이터만 저장됩니다.
                     </div>
                 </div>`;
         }
+    } else {
+        console.warn('⚠️ 답안지 데이터가 없음. 기본 구조 설정');
+        // 답안지가 없어도 저장 가능하도록 기본 구조 설정
+        currentAnswerData = {
+            questions: [],
+            passages: [],
+            examples: []
+        };
+        
+        // 사용자에게 답안지 없음 경고 표시
+        html += `
+            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #ffc107;">
+                <h3 style="color: #856404; margin-bottom: 15px;">⚠️ 답안지 없음</h3>
+                <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; color: #856404;">
+                    AI가 답안지를 생성하지 못했거나 응답에 포함되지 않았습니다.
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #856404; background: #fff3cd; padding: 10px; border-radius: 5px; border-left: 3px solid #ffc107;">
+                    📌 <strong>저장 시 주의:</strong> 답안 테이블에는 빈 데이터만 저장됩니다.
+                </div>
+            </div>`;
     }
     
     // LLM 오류 표시
@@ -777,7 +813,7 @@ function displayInputResult(result) {
                     🚀 생성된 프롬프트
                     <button onclick="copyPrompt()" style="margin-left: auto; padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📋 복사</button>
                 </h3>
-                <div id="promptContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #007bff; font-family: 'Courier New', monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4; max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">${prompt}</div>
+                <div id="promptContent" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #007bff; font-family: 'Courier New', monospace;  font-size: 13px; line-height: 1.4; max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">${prompt}</div>
                 <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
                     💡 이 프롬프트를 복사해서 ChatGPT, Claude, 또는 다른 AI 모델에 붙여넣어 사용하세요!
                 </div>
@@ -838,7 +874,7 @@ function displayInputResult(result) {
         html += `
             <div style="background: white; padding: 15px; border-radius: 5px;">
                 <h4 style="color: #007bff;">📝 추가 요구사항</h4>
-                <p style="background: #f8f9fa; padding: 10px; border-radius: 4px; border-left: 4px solid #007bff; white-space: pre-wrap;">${requestData.additional_requirements}</p>
+                <p style="background: #f8f9fa; padding: 10px; border-radius: 4px; border-left: 4px solid #007bff; ">${requestData.additional_requirements}</p>
             </div>`;
     }
     
@@ -948,7 +984,7 @@ function renderExamPaper(examData) {
                 if (example) {
                     html += `
                         <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                            <div style="font-family: 'Courier New', monospace; white-space: pre-wrap; line-height: 1.5;">${example.example_content}</div>
+                            <div style="font-family: 'Courier New', monospace; line-height: 1.5;">${example.example_content}</div>
                         </div>`;
                     renderedExamples.add(question.question_example_id);
                 }
@@ -1161,12 +1197,30 @@ async function saveWorksheet() {
     const saveResult = document.getElementById('saveResult');
     const worksheetNameInput = document.getElementById('worksheetNameInput');
     
-    if (!currentWorksheetData || !currentAnswerData) {
+    if (!currentWorksheetData) {
         saveResult.innerHTML = `
-            <div style="color: #dc3545; font-weight: bold;">❌ 저장할 데이터가 없습니다.</div>
+            <div style="color: #dc3545; font-weight: bold;">❌ 문제지 데이터가 없습니다.</div>
         `;
         saveResult.style.display = 'block';
         return;
+    }
+    
+    // 답안 데이터가 없으면 기본 구조 설정
+    if (!currentAnswerData) {
+        console.warn('⚠️ 저장 시 답안 데이터가 없음. 기본 구조 설정');
+        currentAnswerData = {
+            questions: [],
+            passages: [],
+            examples: []
+        };
+        
+        saveResult.innerHTML = `
+            <div style="color: #ffc107;">⚠️ 답안 데이터가 없습니다. 빈 구조로 저장됩니다.</div>
+        `;
+        saveResult.style.display = 'block';
+        
+        // 3초 후 저장 진행
+        await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
     // 문제지 이름 검증
@@ -1198,25 +1252,41 @@ async function saveWorksheet() {
         `;
         saveResult.style.display = 'block';
         
+        console.log('💾 저장 시작...');
+        console.log('📄 문제지 데이터:', updatedWorksheetData);
+        console.log('📋 답안 데이터:', currentAnswerData);
+        
+        // 답안 데이터 상태 확인
+        const hasAnswerQuestions = currentAnswerData.questions && currentAnswerData.questions.length > 0;
+        const hasAnswerPassages = currentAnswerData.passages && currentAnswerData.passages.length > 0; 
+        const hasAnswerExamples = currentAnswerData.examples && currentAnswerData.examples.length > 0;
+        
+        if (!hasAnswerQuestions && !hasAnswerPassages && !hasAnswerExamples) {
+            console.warn('⚠️ 모든 답안 데이터가 비어있습니다. answer_* 테이블에는 빈 레코드만 저장됩니다.');
+        } else {
+            console.log(`📊 답안 데이터 현황: 문제 ${currentAnswerData.questions?.length || 0}개, 지문 ${currentAnswerData.passages?.length || 0}개, 예문 ${currentAnswerData.examples?.length || 0}개`);
+        }
+        
         // API 호출
-        const response = await fetch('/worksheets', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                worksheet_data: updatedWorksheetData,
-                answer_data: currentAnswerData
-            })
+        const result = await apiService.createWorksheet({
+            worksheet_data: updatedWorksheetData,
+            answer_data: currentAnswerData
         });
         
-        const result = await response.json();
-        
-        if (response.ok && result.status === 'success') {
+        if (result.status === 'success') {
+            // 답안 데이터 저장 상태 메시지 생성
+            let answerStatusMsg = '';
+            if (!hasAnswerQuestions && !hasAnswerPassages && !hasAnswerExamples) {
+                answerStatusMsg = '<br><small style="color: #ffc107;">⚠️ 답안 테이블: 빈 데이터로 저장됨</small>';
+            } else {
+                answerStatusMsg = `<br><small style="color: #28a745;">✅ 답안 테이블: 문제 ${currentAnswerData.questions?.length || 0}개, 지문 ${currentAnswerData.passages?.length || 0}개, 예문 ${currentAnswerData.examples?.length || 0}개 저장됨</small>`;
+            }
+            
             saveResult.innerHTML = `
                 <div style="color: #28a745; font-weight: bold;">
                     ✅ ${result.message}<br>
                     <small style="color: #6c757d;">문제지 ID: ${result.worksheet_id}</small>
+                    ${answerStatusMsg}
                 </div>
             `;
             
@@ -1257,12 +1327,7 @@ async function loadWorksheetsList() {
         listElement.innerHTML = '';
         
         // API 호출
-        const response = await fetch('/worksheets');
-        const worksheets = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(worksheets.detail || '문제지 목록을 불러올 수 없습니다.');
-        }
+        const worksheets = await apiService.getWorksheets();
         
         // 문제지 목록 렌더링
         renderWorksheetsList(worksheets);
@@ -1344,28 +1409,70 @@ function renderWorksheetsList(worksheets) {
     listElement.innerHTML = html;
 }
 
+// 문제지 편집 관련 전역 변수
+let currentEditingWorksheet = null;
+let isEditMode = false;
+
 // 문제지 보기 함수
 async function viewWorksheet(worksheetId) {
     try {
-        const response = await fetch(`/worksheets/${worksheetId}`);
-        const worksheetData = await response.json();
+        console.log(`🔍 문제지 ${worksheetId} 조회 시작...`);
         
-        if (!response.ok) {
-            throw new Error(worksheetData.detail || '문제지를 불러올 수 없습니다.');
+        // 먼저 워크시트 목록을 가져와서 실제 ID 확인
+        try {
+            const worksheetList = await apiService.getWorksheets();
+            console.log('📋 사용 가능한 워크시트 목록:', worksheetList);
+            
+            if (worksheetList.length === 0) {
+                alert('저장된 문제지가 없습니다. 먼저 문제지를 생성해주세요.');
+                return;
+            }
+            
+            // 실제 워크시트 ID 사용 (첫 번째 워크시트)
+            const actualWorksheetId = worksheetList[0].worksheet_id;
+            console.log(`🎯 실제 사용할 워크시트 ID: ${actualWorksheetId}`);
+            
+            // 편집용 엔드포인트로 시도 (정답/해설 포함)
+            let worksheetData;
+            try {
+                console.log('🔄 편집용 엔드포인트로 시도...');
+                const editData = await apiService.getWorksheetForEditing(actualWorksheetId);
+                worksheetData = editData.worksheet_data;
+                console.log('📊 워크시트 데이터 (편집용):', worksheetData);
+            } catch (editError) {
+                console.log('❌ 편집용 실패, solve 엔드포인트로 시도...');
+                try {
+                    const solveData = await apiService.getWorksheetForSolving(actualWorksheetId);
+                    worksheetData = solveData.worksheet_data;
+                    console.log('📊 워크시트 데이터 (solve):', worksheetData);
+                } catch (solveError) {
+                    console.log('❌ solve도 실패, 일반 엔드포인트 시도...');
+                    worksheetData = await apiService.getWorksheet(actualWorksheetId);
+                    console.log('📊 워크시트 데이터 (일반):', worksheetData);
+                }
+            }
+            
+            currentEditingWorksheet = worksheetData;
+            isEditMode = false; // 기본은 보기 모드
+            
+            // 현재 탭 유지하고 결과 표시
+            // showTab('generate-tab'); // 탭 이동 제거
+            
+            // 문제목록 탭에 편집기 표시
+            const worksheetsList = document.getElementById('worksheets-list');
+            if (worksheetsList) {
+                worksheetsList.innerHTML = renderWorksheetEditor(worksheetData);
+            } else {
+                alert('문제지 목록 영역을 찾을 수 없습니다.');
+            }
+            
+        } catch (listError) {
+            console.error('워크시트 목록 조회 오류:', listError);
+            alert(`워크시트 목록을 가져올 수 없습니다: ${listError.message}`);
         }
         
-        // 문제 생성 탭으로 이동하고 결과 표시
-        showTab('generate-tab');
-        
-        // 결과 섹션에 문제지 표시
-        const examContent = document.getElementById('examContent');
-        examContent.innerHTML = renderExamPaper(worksheetData);
-        document.getElementById('examResult').style.display = 'block';
-        
-        // 결과 섹션으로 스크롤
-        document.getElementById('examResult').scrollIntoView({ behavior: 'smooth' });
-        
     } catch (error) {
+        console.error('문제지 조회 오류:', error);
         alert(`문제지 보기 오류: ${error.message}`);
     }
 }
@@ -1385,12 +1492,7 @@ async function solveWorksheet(worksheetId) {
         document.getElementById('solve-content').innerHTML = '';
         
         // API 호출하여 문제지 로드
-        const response = await fetch(`/worksheets/${worksheetId}/solve`);
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.detail || '문제지를 불러올 수 없습니다.');
-        }
+        const data = await apiService.getWorksheetForSolving(worksheetId);
         
         // 문제 풀이 시작
         startSolvingWorksheet(data.worksheet_data);
@@ -1557,7 +1659,7 @@ function renderSolvingWorksheet(worksheetData) {
                 if (example) {
                     html += `
                         <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                            <div style="font-family: 'Courier New', monospace; white-space: pre-wrap; line-height: 1.5;">${example.example_content}</div>
+                            <div style="font-family: 'Courier New', monospace; line-height: 1.5;">${example.example_content}</div>
                         </div>`;
                     renderedExamples.add(question.question_example_id);
                 }
@@ -1594,7 +1696,7 @@ function renderAnswerInput(question) {
         
         question.question_choices.forEach((choice, choiceIndex) => {
             const choiceLabel = String.fromCharCode(9312 + choiceIndex); // ① ② ③ ④ ⑤
-            const choiceValue = String.fromCharCode(65 + choiceIndex); // A B C D E
+            const choiceValue = (choiceIndex + 1).toString(); // 1 2 3 4 5 (숫자로 통일)
             
             html += `
                 <div style="margin: 8px 0;">
@@ -1624,8 +1726,7 @@ function renderAnswerInput(question) {
                 <h4 style="color: #28a745; margin-bottom: 10px;">📝 답안 작성</h4>
                 <textarea id="answer_${questionId}" placeholder="답안을 자세히 작성하세요" 
                           onchange="saveAnswer('${questionId}', this.value)"
-                          style="width: 100%; min-height: 120px; padding: 12px; border: 2px solid #dee2e6; border-radius: 6px; font-size: 14px; resize: vertical;">
-                </textarea>
+                          style="width: 100%; min-height: 120px; padding: 12px; border: 2px solid #dee2e6; border-radius: 6px; font-size: 14px; resize: vertical;"></textarea>
             </div>`;
     }
     
@@ -1634,6 +1735,19 @@ function renderAnswerInput(question) {
 
 // 답안 저장 함수
 function saveAnswer(questionId, answer) {
+    // 🧹 텍스트 정리 (불필요한 공백/줄바꿈 제거)
+    if (typeof answer === 'string' && answer.trim()) {
+        // 1. 앞뒤 공백 제거
+        answer = answer.trim();
+        // 2. 연속된 공백을 하나로 변환
+        answer = answer.replace(/\s+/g, ' ');
+        // 3. 불필요한 줄바꿈 제거 후 문장 사이 공백 정리
+        answer = answer.replace(/\n\s*\n/g, ' ');
+        answer = answer.replace(/\n+/g, ' ');
+        // 4. 최종 공백 정리
+        answer = answer.trim();
+    }
+    
     studentAnswers[questionId] = answer;
     updateSolveProgress();
     
@@ -1688,22 +1802,34 @@ async function submitAnswers() {
             completion_time: completionTime
         };
         
-        console.log('답안 제출 데이터:', submissionData);
+        console.log('='.repeat(80));
+        console.log('📤 답안 제출 시작');
+        console.log('='.repeat(80));
+        console.log('🎯 요청 URL:', `/worksheets/${currentSolvingWorksheet.worksheet_id}/submit`);
+        console.log('📋 제출 데이터:', submissionData);
+        console.log('='.repeat(80));
         
         // API 호출하여 답안 제출 및 채점
-        const response = await fetch(`/worksheets/${currentSolvingWorksheet.worksheet_id}/submit`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(submissionData)
-        });
+        const result = await apiService.submitAnswers(currentSolvingWorksheet.worksheet_id, submissionData);
         
-        const result = await response.json();
+        console.log('📡 채점 결과:', result);
+        // apiService에서 이미 에러 처리가 완료됨
         
-        if (!response.ok) {
-            throw new Error(result.detail || '답안 제출 중 오류가 발생했습니다.');
+        // 성공 로그 출력
+        console.log('='.repeat(80));
+        console.log('✅ 답안 제출 및 채점 완료');
+        console.log('='.repeat(80));
+        console.log('📊 채점 결과:', result.grading_result);
+        console.log('📄 지문 그룹 개수:', result.grading_result.passage_groups?.length || 0);
+        console.log('📝 예문 그룹 개수:', result.grading_result.example_groups?.length || 0);
+        console.log('🔍 독립 문제 개수:', result.grading_result.standalone_questions?.length || 0);
+        if (result.grading_result.passage_groups?.length > 0) {
+            console.log('📄 지문 그룹:', result.grading_result.passage_groups);
         }
+        if (result.grading_result.example_groups?.length > 0) {
+            console.log('📝 예문 그룹:', result.grading_result.example_groups);
+        }
+        console.log('='.repeat(80));
         
         // 성공 메시지 표시
         alert(`답안이 제출되고 채점이 완료되었습니다!\n\n학생: ${result.grading_result.student_name}\n점수: ${result.grading_result.total_score}/${result.grading_result.max_score}점 (${result.grading_result.percentage}%)\n\n채점 결과는 '🎯 채점 결과' 탭에서 확인하실 수 있습니다.`);
@@ -1717,12 +1843,344 @@ async function submitAnswers() {
         showTab('worksheets-tab');
         
     } catch (error) {
-        console.error('답안 제출 오류:', error);
-        alert(`답안 제출 중 오류가 발생했습니다: ${error.message}`);
+        console.error('='.repeat(80));
+        console.error('❌ 답안 제출 오류 발생');
+        console.error('='.repeat(80));
+        console.error('🔍 오류 정보:', error);
+        console.error('🔍 오류 메시지:', error.message);
+        console.error('🔍 오류 스택:', error.stack);
+        
+        if (error.name) console.error('🔍 오류 타입:', error.name);
+        
+        // 제출 데이터도 다시 출력 (디버깅용)
+        console.error('📤 제출했던 데이터:');
+        console.error('  - student_name:', studentName);
+        console.error('  - worksheet_id:', currentSolvingWorksheet?.worksheet_id);
+        console.error('  - answers 개수:', Object.keys(studentAnswers).length);
+        console.error('  - answers 내용:', studentAnswers);
+        console.error('  - completion_time:', completionTime);
+        console.error('='.repeat(80));
+        
+        alert(`답안 제출 중 오류가 발생했습니다: ${error.message}\n\n개발자 도구(F12) 콘솔을 확인해주세요.`);
     } finally {
         const submitBtn = document.getElementById('submit-answers-btn');
         submitBtn.disabled = false;
         submitBtn.innerHTML = '📤 답안 제출하기';
+    }
+}
+
+// 문제 결과 HTML 생성 공통 함수
+function generateQuestionResultHTML(result, finalScore, finalFeedback, isCorrect, borderColor, bgColor, iconColor, canReview, isReviewed) {
+    return `
+        <div style="border: 2px solid ${borderColor}; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: ${bgColor};" id="question-result-${result.question_id}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; flex: 1;">
+                    <span style="font-size: 1.2rem; margin-right: 10px;">${iconColor}</span>
+                    <div>
+                        <strong>${result.question_id}번 (${result.question_type})</strong>
+                        <div style="margin-top: 5px;">
+                            <span style="background: ${isCorrect ? '#28a745' : '#dc3545'}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                                <span id="score-${result.question_id}">${finalScore}</span>/${result.max_score}점
+                            </span>
+                            <span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin-left: 5px;">
+                                ${result.grading_method === 'ai' ? 'AI 채점' : 'DB 채점'}
+                            </span>
+                            ${result.is_reviewed ? '<span style="background: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin-left: 5px;">검수 완료</span>' : ''}
+                            ${result.needs_review && !result.is_reviewed ? '<span style="background: #ffc107; color: #000; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin-left: 5px;">검수 필요</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+                ${canReview ? `
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="editScore('${result.question_id}')" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;">
+                        ✏️ 점수 수정
+                    </button>
+                </div>` : ''}
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div style="padding: 10px; background: rgba(255,255,255,0.5); border-radius: 8px;">
+                    <strong style="color: #495057;">학생 답안:</strong>
+                    <div style="margin-top: 5px; font-family: monospace; background: white; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
+                        ${result.student_answer || '(답안 없음)'}
+                    </div>
+                </div>
+                <div style="padding: 10px; background: rgba(255,255,255,0.5); border-radius: 8px;">
+                    <strong style="color: #495057;">정답:</strong>
+                    <div style="margin-top: 5px; font-family: monospace; background: white; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
+                        ${result.correct_answer || '정답 없음'}
+                    </div>
+                </div>
+            </div>
+            
+            ${finalFeedback ? `
+                <div style="background: rgba(255,255,255,0.5); padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <strong style="color: #495057; display: block; margin-bottom: 8px;">해설/피드백:</strong>
+                    <div style="line-height: 1.5;" id="feedback-${result.question_id}">
+                        ${finalFeedback}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${canReview ? `
+                <div id="edit-section-${result.question_id}" style="display: none; background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; margin-top: 15px; border: 2px dashed #007bff;">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #495057;">점수 수정:</label>
+                            <input type="number" id="new-score-${result.question_id}" min="0" max="${result.max_score}" value="${finalScore}" 
+                                style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #495057;">검수 의견:</label>
+                            <textarea id="new-feedback-${result.question_id}" placeholder="검수 의견을 입력하세요..." 
+                                style="width: 100%; height: 80px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical;">${result.reviewed_feedback || ''}</textarea>
+                        </div>
+                    </div>
+                    <div style="text-align: right; margin-top: 15px;">
+                        <button onclick="cancelEdit('${result.question_id}')" class="btn btn-secondary" style="margin-right: 10px;">
+                            취소
+                        </button>
+                        <button onclick="saveEdit('${result.question_id}')" class="btn btn-success">
+                            저장
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
+        </div>`;
+}
+
+// 새로운 그룹핑된 채점 결과 상세보기 표시 함수
+function displayGradingResultDetailNew(gradingResult) {
+    const content = document.getElementById('result-detail-content');
+    
+    const timeMinutes = Math.floor(gradingResult.completion_time / 60);
+    const timeSeconds = gradingResult.completion_time % 60;
+    
+    let html = `
+        <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
+            <!-- 결과 헤더 -->
+            <div style="text-align: center; margin-bottom: 30px; padding: 25px; background: linear-gradient(135deg, #dc3545, #c82333); color: white; border-radius: 12px;">
+                <h1 style="margin: 0; font-size: 2rem;">🎯 채점 결과 상세</h1>
+                <div style="margin-top: 15px; font-size: 1.1rem;">
+                    <div><strong>학생:</strong> ${gradingResult.student_name}</div>
+                    <div style="margin-top: 8px;"><strong>소요 시간:</strong> ${timeMinutes}분 ${timeSeconds}초</div>
+                    <div style="margin-top: 8px;"><strong>결과 ID:</strong> ${gradingResult.result_id}</div>
+                </div>
+            </div>
+            
+            <!-- 점수 요약 -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid #28a745;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #28a745;" id="total-score">${gradingResult.total_score}</div>
+                    <div style="color: #6c757d;">총 점수</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid #007bff;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #007bff;">${gradingResult.max_score}</div>
+                    <div style="color: #6c757d;">만점</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid #6f42c1;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #6f42c1;" id="percentage">${gradingResult.percentage}%</div>
+                    <div style="color: #6c757d;">정답률</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid ${gradingResult.is_reviewed ? '#28a745' : (gradingResult.needs_review ? '#ffc107' : '#6c757d')};">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: ${gradingResult.is_reviewed ? '#28a745' : (gradingResult.needs_review ? '#ffc107' : '#6c757d')};">
+                        ${gradingResult.is_reviewed ? '✅' : (gradingResult.needs_review ? '⚠️' : '🤖')}
+                    </div>
+                    <div style="color: #6c757d;">${gradingResult.is_reviewed ? '검수 완료' : (gradingResult.needs_review ? '검수 필요' : '자동 채점')}</div>
+                </div>
+            </div>`;
+    
+    // 검수 필요 알림
+    if (gradingResult.needs_review && !gradingResult.is_reviewed) {
+        html += `
+            <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 20px; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; color: #856404;">
+                    <span style="font-size: 1.5rem; margin-right: 10px;">⚠️</span>
+                    <div>
+                        <strong>검수 필요</strong><br>
+                        <small>AI가 채점한 주관식 문제가 있어 교사의 검수가 필요합니다. 아래에서 점수를 수정할 수 있습니다.</small>
+                    </div>
+                </div>
+            </div>`;
+    }
+    
+    // 디버깅: 데이터 구조 확인
+    console.log('🔍 gradingResult 구조:', gradingResult);
+    console.log('📄 passage_groups:', gradingResult.passage_groups);
+    console.log('📝 example_groups:', gradingResult.example_groups);
+    console.log('📋 standalone_questions:', gradingResult.standalone_questions);
+    console.log('🔍 question_results:', gradingResult.question_results);
+    console.log('🔍 question_results 개수:', gradingResult.question_results ? gradingResult.question_results.length : 'undefined');
+    
+    // 새로운 그룹핑된 문제 표시
+    html += `
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #495057; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px;">📝 문제별 채점 결과</h3>`;
+    
+    // 지문 그룹 표시
+    if (gradingResult.passage_groups && gradingResult.passage_groups.length > 0) {
+        gradingResult.passage_groups.forEach(group => {
+            const passage = group.passage;
+            const questions = group.questions;
+            
+            html += `
+                <div style="border: 2px solid #007bff; border-radius: 12px; margin-bottom: 25px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(0,123,255,0.1);">
+                    <!-- 지문 섹션 -->
+                    <div style="background: linear-gradient(135deg, #007bff, #0056b3); color: white; padding: 20px;">
+                        <h4 style="margin: 0; font-size: 1.3rem;">📄 지문 ${passage.passage_id}${passage.text_type ? ` (${passage.text_type})` : ''}</h4>
+                    </div>
+                    <div style="padding: 20px; background: #f8f9ff;">
+                        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;">
+                            <div style="line-height: 1.8; font-size: 15px;">
+                                ${passage.original_content}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 관련 문제들 -->
+                    <div style="padding: 0 20px 20px 20px; background: #f8f9ff;">
+                        <h5 style="color: #007bff; margin-bottom: 15px; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">🔗 관련 문제 (${questions.length}개)</h5>`;
+            
+            questions.forEach(result => {
+                const finalScore = result.reviewed_score !== null ? result.reviewed_score : result.score;
+                const finalFeedback = result.reviewed_feedback || result.ai_feedback;
+                const isCorrect = finalScore === result.max_score;
+                const borderColor = isCorrect ? '#28a745' : '#dc3545';
+                const bgColor = isCorrect ? '#d4edda' : '#f8d7da';
+                const iconColor = isCorrect ? '✅' : '❌';
+                const canReview = !gradingResult.is_reviewed && (result.grading_method === 'ai' || result.needs_review);
+                
+                html += generateQuestionResultHTML(result, finalScore, finalFeedback, isCorrect, borderColor, bgColor, iconColor, canReview, gradingResult.is_reviewed);
+            });
+            
+            html += `
+                    </div>
+                </div>`;
+        });
+    }
+    
+    // 예문 그룹 표시  
+    if (gradingResult.example_groups && gradingResult.example_groups.length > 0) {
+        gradingResult.example_groups.forEach(group => {
+            const example = group.example;
+            const questions = group.questions;
+            
+            html += `
+                <div style="border: 2px solid #28a745; border-radius: 12px; margin-bottom: 25px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(40,167,69,0.1);">
+                    <!-- 예문 섹션 -->
+                    <div style="background: linear-gradient(135deg, #28a745, #1e7e34); color: white; padding: 20px;">
+                        <h4 style="margin: 0; font-size: 1.3rem;">📝 예문 ${example.example_id}</h4>
+                    </div>
+                    <div style="padding: 20px; background: #f8fff8;">
+                        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #28a745;">
+                            <div style="line-height: 1.8; font-size: 15px;">
+                                ${example.original_content}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 관련 문제들 -->
+                    <div style="padding: 0 20px 20px 20px; background: #f8fff8;">
+                        <h5 style="color: #28a745; margin-bottom: 15px; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">🔗 관련 문제 (${questions.length}개)</h5>`;
+            
+            questions.forEach(result => {
+                const finalScore = result.reviewed_score !== null ? result.reviewed_score : result.score;
+                const finalFeedback = result.reviewed_feedback || result.ai_feedback;
+                const isCorrect = finalScore === result.max_score;
+                const borderColor = isCorrect ? '#28a745' : '#dc3545';
+                const bgColor = isCorrect ? '#d4edda' : '#f8d7da';
+                const iconColor = isCorrect ? '✅' : '❌';
+                const canReview = !gradingResult.is_reviewed && (result.grading_method === 'ai' || result.needs_review);
+                
+                html += generateQuestionResultHTML(result, finalScore, finalFeedback, isCorrect, borderColor, bgColor, iconColor, canReview, gradingResult.is_reviewed);
+            });
+            
+            html += `
+                    </div>
+                </div>`;
+        });
+    }
+    
+    // 독립 문제들 표시
+    if (gradingResult.standalone_questions && gradingResult.standalone_questions.length > 0) {
+        html += `
+            <div style="border: 2px solid #6c757d; border-radius: 12px; margin-bottom: 25px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(108,117,125,0.1);">
+                <div style="background: linear-gradient(135deg, #6c757d, #495057); color: white; padding: 20px;">
+                    <h4 style="margin: 0; font-size: 1.3rem;">📋 독립 문제 (${gradingResult.standalone_questions.length}개)</h4>
+                </div>
+                <div style="padding: 20px; background: #f8f9fa;">`;
+        
+        gradingResult.standalone_questions.forEach(result => {
+            const finalScore = result.reviewed_score !== null ? result.reviewed_score : result.score;
+            const finalFeedback = result.reviewed_feedback || result.ai_feedback;
+            const isCorrect = finalScore === result.max_score;
+            const borderColor = isCorrect ? '#28a745' : '#dc3545';
+            const bgColor = isCorrect ? '#d4edda' : '#f8d7da';
+            const iconColor = isCorrect ? '✅' : '❌';
+            const canReview = !gradingResult.is_reviewed && (result.grading_method === 'ai' || result.needs_review);
+            
+            html += generateQuestionResultHTML(result, finalScore, finalFeedback, isCorrect, borderColor, bgColor, iconColor, canReview, gradingResult.is_reviewed);
+        });
+        
+        html += `
+                </div>
+            </div>`;
+    }
+    
+    // Fallback: 그룹 데이터가 없으면 기존 방식으로 표시
+    const hasGroupData = (gradingResult.passage_groups && gradingResult.passage_groups.length > 0) ||
+                        (gradingResult.example_groups && gradingResult.example_groups.length > 0) ||
+                        (gradingResult.standalone_questions && gradingResult.standalone_questions.length > 0);
+    
+    if (!hasGroupData && gradingResult.question_results && gradingResult.question_results.length > 0) {
+        console.log('⚠️ 그룹 데이터가 없습니다. 기존 방식으로 표시합니다.');
+        
+        html += `
+            <div style="border: 2px solid #6c757d; border-radius: 12px; margin-bottom: 25px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(108,117,125,0.1);">
+                <div style="background: linear-gradient(135deg, #6c757d, #495057); color: white; padding: 20px;">
+                    <h4 style="margin: 0; font-size: 1.3rem;">📋 전체 문제 결과 (${gradingResult.question_results.length}개)</h4>
+                </div>
+                <div style="padding: 20px; background: #f8f9fa;">`;
+        
+        gradingResult.question_results.forEach(result => {
+            const finalScore = result.reviewed_score !== null ? result.reviewed_score : result.score;
+            const finalFeedback = result.reviewed_feedback || result.ai_feedback;
+            const isCorrect = finalScore === result.max_score;
+            const borderColor = isCorrect ? '#28a745' : '#dc3545';
+            const bgColor = isCorrect ? '#d4edda' : '#f8d7da';
+            const iconColor = isCorrect ? '✅' : '❌';
+            const canReview = !gradingResult.is_reviewed && (result.grading_method === 'ai' || result.needs_review);
+            
+            html += generateQuestionResultHTML(result, finalScore, finalFeedback, isCorrect, borderColor, bgColor, iconColor, canReview, gradingResult.is_reviewed);
+        });
+        
+        html += `
+                </div>
+            </div>`;
+    }
+    
+    html += `
+            </div>
+            
+            <!-- 하단 액션 버튼 -->
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+                <button onclick="showResultList()" class="btn btn-secondary" style="margin-right: 15px;">
+                    ← 목록으로 돌아가기
+                </button>
+                ${gradingResult.needs_review && !gradingResult.is_reviewed ? `
+                    <button onclick="completeReview()" class="btn btn-success">
+                        ✅ 검수 완료
+                    </button>
+                ` : ''}
+            </div>
+        </div>`;
+    
+    content.innerHTML = html;
+    
+    // 검수 완료 버튼 섹션 표시 여부 결정
+    const reviewSection = document.getElementById('review-complete-section');
+    if (reviewSection) {
+        reviewSection.style.display = gradingResult.needs_review && !gradingResult.is_reviewed ? 'block' : 'none';
     }
 }
 
@@ -1779,6 +2237,61 @@ function displayGradingResultDetail(gradingResult) {
                     </div>
                 </div>
             </div>`;
+    }
+    
+    // 지문 및 예문 표시
+    if ((gradingResult.passages && gradingResult.passages.length > 0) || (gradingResult.examples && gradingResult.examples.length > 0)) {
+        html += `
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #495057; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px;">📖 참고 자료</h3>`;
+        
+        // 지문 표시
+        if (gradingResult.passages && gradingResult.passages.length > 0) {
+            gradingResult.passages.forEach(passage => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.passage_id === passage.passage_id);
+                
+                html += `
+                    <div style="border: 2px solid #007bff; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8f9ff;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📄 지문 ${passage.passage_id}${passage.text_type ? ` (${passage.text_type})` : ''}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${passage.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        // 예문 표시
+        if (gradingResult.examples && gradingResult.examples.length > 0) {
+            gradingResult.examples.forEach(example => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.example_id === example.example_id);
+                
+                html += `
+                    <div style="border: 2px solid #28a745; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8fff8;">
+                        <h4 style="color: #28a745; margin-bottom: 15px;">📝 예문 ${example.example_id}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${example.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        html += `</div>`;
     }
     
     // 문제별 결과 (검수 가능)
@@ -1922,6 +2435,61 @@ function displayGradingResultInTab(gradingResult) {
             </div>`;
     }
     
+    // 지문 및 예문 표시
+    if ((gradingResult.passages && gradingResult.passages.length > 0) || (gradingResult.examples && gradingResult.examples.length > 0)) {
+        html += `
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #495057; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px;">📖 참고 자료</h3>`;
+        
+        // 지문 표시
+        if (gradingResult.passages && gradingResult.passages.length > 0) {
+            gradingResult.passages.forEach(passage => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.passage_id === passage.passage_id);
+                
+                html += `
+                    <div style="border: 2px solid #007bff; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8f9ff;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📄 지문 ${passage.passage_id}${passage.text_type ? ` (${passage.text_type})` : ''}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${passage.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        // 예문 표시
+        if (gradingResult.examples && gradingResult.examples.length > 0) {
+            gradingResult.examples.forEach(example => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.example_id === example.example_id);
+                
+                html += `
+                    <div style="border: 2px solid #28a745; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8fff8;">
+                        <h4 style="color: #28a745; margin-bottom: 15px;">📝 예문 ${example.example_id}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${example.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        html += `</div>`;
+    }
+    
     // 문제별 결과 (검수 가능)
     html += `
             <div style="margin-bottom: 30px;">
@@ -2055,6 +2623,61 @@ function displayGradingResult(gradingResult) {
                     </div>
                 </div>
             </div>`;
+    }
+    
+    // 지문 및 예문 표시
+    if ((gradingResult.passages && gradingResult.passages.length > 0) || (gradingResult.examples && gradingResult.examples.length > 0)) {
+        html += `
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #495057; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px;">📖 참고 자료</h3>`;
+        
+        // 지문 표시
+        if (gradingResult.passages && gradingResult.passages.length > 0) {
+            gradingResult.passages.forEach(passage => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.passage_id === passage.passage_id);
+                
+                html += `
+                    <div style="border: 2px solid #007bff; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8f9ff;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📄 지문 ${passage.passage_id}${passage.text_type ? ` (${passage.text_type})` : ''}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${passage.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        // 예문 표시
+        if (gradingResult.examples && gradingResult.examples.length > 0) {
+            gradingResult.examples.forEach(example => {
+                const relatedQuestions = gradingResult.question_results.filter(q => q.example_id === example.example_id);
+                
+                html += `
+                    <div style="border: 2px solid #28a745; border-radius: 10px; padding: 20px; margin-bottom: 15px; background: #f8fff8;">
+                        <h4 style="color: #28a745; margin-bottom: 15px;">📝 예문 ${example.example_id}</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6;">
+                            ${example.original_content}
+                        </div>`;
+                        
+                if (relatedQuestions.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <small style="color: #6c757d;">🔗 관련 문제: ${relatedQuestions.map(q => q.question_id + '번').join(', ')}</small>
+                        </div>`;
+                }
+                        
+                html += `</div>`;
+            });
+        }
+        
+        html += `</div>`;
     }
     
     // 문제별 결과
@@ -2258,12 +2881,7 @@ async function loadGradingResults() {
         document.getElementById('result-loading').style.display = 'block';
         document.getElementById('result-error').style.display = 'none';
         
-        const response = await fetch('/grading-results');
-        const results = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(results.detail || '채점 결과를 불러올 수 없습니다.');
-        }
+        const results = await apiService.getGradingResults();
         
         renderGradingResultsList(results);
         
@@ -2364,12 +2982,7 @@ async function viewGradingResult(resultId) {
     try {
         document.getElementById('result-loading').style.display = 'block';
         
-        const response = await fetch(`/grading-results/${resultId}`);
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.detail || '채점 결과를 불러올 수 없습니다.');
-        }
+        const result = await apiService.getGradingResult(resultId);
         
         currentGradingResult = result;
         currentResultId = resultId;
@@ -2379,8 +2992,8 @@ async function viewGradingResult(resultId) {
         document.getElementById('result-list').style.display = 'none';
         document.getElementById('result-detail').style.display = 'block';
         
-        // 상세 내용 렌더링
-        displayGradingResultDetail(result);
+        // 상세 내용 렌더링 (새로운 그룹핑된 버전)
+        displayGradingResultDetailNew(result);
         
     } catch (error) {
         console.error('채점 결과 상세보기 오류:', error);
@@ -2479,19 +3092,7 @@ async function saveReviewedResults() {
         };
         
         // API 호출하여 검수 결과 저장
-        const response = await fetch(`/grading-results/${currentResultId}/review`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(reviewData)
-        });
-        
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.detail || '검수 결과 저장 중 오류가 발생했습니다.');
-        }
+        const result = await apiService.saveReviewedResult(currentResultId, reviewData);
         
         alert(`검수가 완료되었습니다!\n\n최종 점수: ${result.result.total_score}/${result.result.max_score}점 (${result.result.percentage}%)\n\n결과가 데이터베이스에 저장되었습니다.`);
         

@@ -267,6 +267,17 @@ class QuestionResultResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# 지문 원문 정보 스키마 (채점 결과용)
+class PassageInfo(BaseModel):
+    passage_id: str
+    original_content: str
+    text_type: Optional[str] = None
+
+# 예문 원문 정보 스키마 (채점 결과용)  
+class ExampleInfo(BaseModel):
+    example_id: str
+    original_content: str
+
 # 채점 결과 전체 스키마
 class GradingResultResponse(BaseModel):
     id: int
@@ -283,6 +294,11 @@ class GradingResultResponse(BaseModel):
     reviewed_by: Optional[str]
     created_at: datetime
     question_results: List[QuestionResultResponse]
+    passages: List[PassageInfo] = []  # 지문 원문 정보 (호환성)
+    examples: List[ExampleInfo] = []  # 예문 원문 정보 (호환성)
+    passage_groups: List[Dict[str, Any]] = []  # 지문별 그룹 데이터
+    example_groups: List[Dict[str, Any]] = []   # 예문별 그룹 데이터
+    standalone_questions: List[QuestionResultResponse] = []  # 독립 문제들
     
     class Config:
         from_attributes = True
