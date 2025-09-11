@@ -188,6 +188,7 @@ class AnswerPassage(Base):
     passage_id = Column(String(10), nullable=False)  # "1", "2" 등
     text_type = Column(String(50), nullable=True)  # 글의 종류
     original_content = Column(Text, nullable=False)  # 원본 지문 내용
+    korean_translation = Column(Text, nullable=True)  # 한글 번역
     related_questions = Column(JSON, nullable=True)  # 관련 문제 ID 리스트
     created_at = Column(DateTime, nullable=False)
     
@@ -203,6 +204,7 @@ class AnswerExample(Base):
     worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
     example_id = Column(String(10), nullable=False)  # "1", "2" 등
     original_content = Column(Text, nullable=False)  # 원본 예문 내용
+    korean_translation = Column(Text, nullable=True)  # 한글 번역
     related_questions = Column(JSON, nullable=True)  # 관련 문제 ID 리스트
     created_at = Column(DateTime, nullable=False)
     

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
 import json
+import uuid
 
 from app.database import get_db
 from app.core.config import get_settings
@@ -187,14 +188,63 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
         print("\n✅ 프롬프트 생성 완료!")
         print("="*80)
         
+        # JSON 파싱 처리
+        parsed_llm_response = None
+        parsed_answer_sheet = None
+        
+        if llm_response:
+            try:
+                # llm_response JSON 파싱
+                clean_llm_response = llm_response.strip()
+                if clean_llm_response.startswith('```json'):
+                    clean_llm_response = clean_llm_response.replace('```json', '').replace('```', '').strip()
+                elif clean_llm_response.startswith('```'):
+                    clean_llm_response = clean_llm_response.replace('```', '').strip()
+                parsed_llm_response = json.loads(clean_llm_response)
+                print("✅ 문제지 JSON 파싱 완료!")
+            except json.JSONDecodeError as e:
+                print(f"⚠️ 문제지 JSON 파싱 실패: {e}")
+                parsed_llm_response = None
+        
+        if answer_sheet:
+            try:
+                # answer_sheet JSON 파싱
+                clean_answer_sheet = answer_sheet.strip()
+                if clean_answer_sheet.startswith('```json'):
+                    clean_answer_sheet = clean_answer_sheet.replace('```json', '').replace('```', '').strip()
+                elif clean_answer_sheet.startswith('```'):
+                    clean_answer_sheet = clean_answer_sheet.replace('```', '').strip()
+                parsed_answer_sheet = json.loads(clean_answer_sheet)
+                print("✅ 답안지 JSON 파싱 완료!")
+            except json.JSONDecodeError as e:
+                print(f"⚠️ 답안지 JSON 파싱 실패: {e}")
+                parsed_answer_sheet = None
+        
+        # 백엔드에서 결과 출력
+        print("=" * 80)
+        print("🎉 문제지 및 답안지 생성 완료!")
+        print("=" * 80)
+        if parsed_llm_response:
+            print(f"📄 문제지 ID: {parsed_llm_response.get('worksheet_id', 'N/A')}")
+            print(f"📝 문제지 제목: {parsed_llm_response.get('worksheet_name', 'N/A')}")
+            print(f"📊 총 문제 수: {parsed_llm_response.get('total_questions', 'N/A')}개")
+        if parsed_answer_sheet:
+            passages_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("passages", []))
+            examples_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("examples", []))
+            questions_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("questions", []))
+            print(f"📖 지문 수: {passages_count}개 (한글 번역 포함)")
+            print(f"📝 예문 수: {examples_count}개 (한글 번역 포함)")
+            print(f"🔍 정답 및 해설: {questions_count}개")
+        print("=" * 80)
+
         return {
             "message": "문제지와 답안지 생성이 완료되었습니다!" if llm_response else "프롬프트가 생성되었습니다!",
             "status": "success",
             "request_data": request.dict(),
             "distribution_summary": distribution_summary,
             "prompt": prompt,
-            "llm_response": llm_response,
-            "answer_sheet": answer_sheet,
+            "llm_response": parsed_llm_response,  # 파싱된 객체 전달
+            "answer_sheet": parsed_answer_sheet,  # 파싱된 객체 전달
             "llm_error": llm_error,
             "subject_types_validation": {
                 "reading_types": subject_details.get('reading_types', []),
@@ -219,7 +269,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         answer_data = request.answer_data
         
         # 문제지 메타데이터 추출
-        worksheet_id = worksheet_data.get('worksheet_id')
+        worksheet_id = str(uuid.uuid4())  # UUID로 자동 생성
         worksheet_name = worksheet_data.get('worksheet_name')
         school_level = worksheet_data.get('worksheet_level')
         grade = str(worksheet_data.get('worksheet_grade'))
@@ -227,10 +277,14 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         total_questions = worksheet_data.get('total_questions')
         duration = worksheet_data.get('worksheet_duration')
         
-        # 중복 확인
+        print(f"🆔 생성된 워크시트 UUID: {worksheet_id}")
+        
+        # 중복 확인 (UUID는 거의 중복될 가능성이 없지만 안전장치로 유지)
         existing = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
         if existing:
-            raise HTTPException(status_code=400, detail=f"이미 존재하는 문제지 ID입니다: {worksheet_id}")
+            # 만약 UUID가 중복되면 새로 생성
+            worksheet_id = str(uuid.uuid4())
+            print(f"🔄 UUID 중복으로 재생성: {worksheet_id}")
         
         # 1. Worksheet 생성
         db_worksheet = Worksheet(
@@ -312,6 +366,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
                     passage_id=passage_data.get("passage_id"),
                     text_type=passage_data.get("text_type"),
                     original_content=passage_data.get("original_content"),
+                    korean_translation=passage_data.get("korean_translation"),  # 한글 번역 추가
                     related_questions=passage_data.get("related_questions"),
                     created_at=datetime.now()
                 )
@@ -324,6 +379,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
                     worksheet_id=db_worksheet.id,
                     example_id=example_data.get("example_id"),
                     original_content=example_data.get("original_content"),
+                    korean_translation=example_data.get("korean_translation"),  # 한글 번역 추가
                     related_questions=example_data.get("related_questions"),
                     created_at=datetime.now()
                 )

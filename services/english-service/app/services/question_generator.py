@@ -134,6 +134,10 @@ class PromptGenerator:
    - 흩어진 선택지들을 올바른 순서로 재배열하여 완전한 형태로 구성
    - 문법적으로 정확하고 의미가 통하는 자연스러운 영어 표현으로 완성
 
+3. **정답**:
+   - 객관식은 정답 번호, 주관식이나 서술형은 정답
+   - 정답에는 정답만 작성, 정답에 대한 이유나 해설은 작성하지 않음
+
 3. **해설 작성**:
    - 각 문제의 정답 근거를 명확히 설명
    - 문제 유형별 핵심 학습 포인트 제시 (문법/어휘/독해 기법/대화 표현 등)
@@ -148,6 +152,7 @@ class PromptGenerator:
         "passage_id": "1",
         "text_type": "글의 종류 (예: 일기, 편지, 안내문, 대화 등)",
         "original_content": "빈칸과 번호가 모두 제거된 완전하고 자연스러운 영어 지문",
+        "korean_translation": "영어 지문의 자연스러운 한글 번역 (의역 포함, 읽기 쉽게)",
         "related_questions": ["1", "2", "3"]
       }}
     ],
@@ -155,13 +160,14 @@ class PromptGenerator:
       {{
         "example_id": "1", 
         "original_content": "선택지가 올바른 순서로 배열된 완전한 대화/문장",
+        "korean_translation": "예문의 자연스러운 한글 번역",
         "related_questions": "4"
       }}
     ],
     "questions": [
       {{
         "question_id": "1",
-        "correct_answer": "정답 번호 또는 내용",
+        "correct_answer": "정답 번호 또는 정답",
         "explanation": "정답 근거와 해설 (한국어)",
         "learning_point": "학습 포인트 (문법/어휘/독해 기법 등)"
       }}
@@ -174,6 +180,12 @@ class PromptGenerator:
 - 지문과 예문의 original_content는 **완전히 자연스러운 영어**로 작성
 - 빈칸, 번호, 선택지 표시 등은 모두 제거
 - 문맥상 자연스럽게 연결되는 완성된 텍스트 제공
+
+**번역 지침**:
+- korean_translation은 **자연스럽고 읽기 쉬운 한국어**로 번역
+- 직역보다는 의역을 통해 한국어답게 표현
+- 학습자가 이해하기 쉽도록 명확하고 친근한 문체 사용
+- 문화적 맥락을 고려한 적절한 번역
 """
 
     def generate_prompt(self, request_data: Dict[str, Any], db: Session = None) -> str:
@@ -182,14 +194,14 @@ class PromptGenerator:
         # DB에서 텍스트 유형 형식 가져오기 (내부에서 직접 처리)
         json_formats_text = ""
         try:
-            from database import SessionLocal
-            from models import TextType
+            from app.database import SessionLocal
+            from app.models.models import TextType
             db = SessionLocal()
             text_types = db.query(TextType).all()
             
             if text_types:
                 for text_type in text_types:
-                    json_formats_text += f"\n{text_type.type_name} ({text_type.display_name}) : {text_type.json_format}"
+                    json_formats_text += f"\n{text_type.type_name} ({text_type.description}) : {text_type.json_format}"
             else:
                 # DB에 데이터가 없는 경우 기본값 사용
                 json_formats_text = """
@@ -326,12 +338,14 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
 - 예문은 40단어 이하의 짧은 글을 의미(1~3줄)
 - 지문은 반드시 유형 별 json형식을 참고하여 생성
 - 예문의 소재는 글의 소재를 참고하여 생성
-- 지문 글의 유형은 글의 소재, 출제 유형 결합하여 자유롭게 선정해서 사용
+- 지문 글의 유형은 글의 소재, 영역 별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
 
 # **중요: 문제 질문과 예문 분리 규칙**
 - **문제의 질문(question_text)에는 영어 문장이나 긴 예시를 직접 포함하지 마세요**
 - **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
 - **문제 질문은 순수한 한국어 질문만 포함하고, 예문 ID로 참조하세요**
+- **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
+- **지문이 있는 문제에 예문이 필요할 경우 둘 다 생성하세요.**
 
 ## 분리 예시:
 **잘못된 방식:**
@@ -381,6 +395,7 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 
 **중요: 반드시 유효한 JSON 형식으로만 응답해주세요. 다른 텍스트나 설명 없이 순수한 JSON만 반환해야 합니다.**
 **정답 생성 금지: 정답, 해설, 답안, answer 등 어떤 형태의 정답도 포함하지 마세요.**
+
 
 응답 형식 :
 {{
@@ -436,6 +451,7 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 
 **다시 한번 강조: 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요. 추가 설명이나 텍스트는 절대 포함하지 마세요.**
 **절대 정답을 생성하지 마세요: answer, correct_answer, solution, 정답, 해답 등 어떤 정답 관련 필드도 포함하지 마세요.**
+**절대 추가적인 항목을 만들지 마세요.**
 
 **문제 배치 및 순서 규칙**
 - 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
@@ -445,9 +461,9 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 2. 문제 번호와 related_questions 배열이 정확히 일치해야 함
 
 **배치 검증:**
-- 각 지문의 related_questions는 연속된 숫자여야 함 ✅
-- 문제 총 개수와 questions 배열 길이가 일치해야 함 ✅
-- 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 ✅
+- 각 지문의 related_questions는 연속된 숫자여야 함 
+- 문제 총 개수와 questions 배열 길이가 일치해야 함 
+- 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 
 
 **절대 엄수: 문제 질문에서 ID 언급 금지**
 - question_text에서 지문이나 예문의 ID(P1, E1, 지문1, 예문1 등)를 절대 언급하지 마세요.
@@ -455,16 +471,16 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 - 예문 참조 시: "다음 예문", "위 예문", "다음 문장" 등으로만 표현
 
 **잘못된 예시들 (절대 사용 금지):**
-❌ "지문 P1의 빈칸에 들어갈 말은?"
-❌ "예문 E1에서 빈칸에 들어갈 말은?"  
-❌ "지문 1의 내용에 따르면?"
-❌ "예문 1을 보고 답하시오"
+- "지문 P1의 빈칸에 들어갈 말은?"
+- "예문 E1에서 빈칸에 들어갈 말은?"  
+- "지문 1의 내용에 따르면?"
+- "예문 1을 보고 답하시오"
 
 **올바른 예시들 (반드시 이렇게 작성):**
-✅ "위 글의 빈칸에 들어갈 말은?"
-✅ "다음 예문에서 빈칸에 들어갈 말은?"
-✅ "위 글의 내용에 따르면?"
-✅ "다음을 보고 답하시오"
+- "위 글의 빈칸에 들어갈 말은?"
+- "다음 예문에서 빈칸에 들어갈 말은?"
+- "위 글의 내용에 따르면?"
+- "다음을 보고 답하시오"
 
 **ID 형식 규칙:**
 - 지문 ID: "1", "2", "3" (단순한 숫자)
