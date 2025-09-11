@@ -271,12 +271,14 @@ class QuestionResultResponse(BaseModel):
 class PassageInfo(BaseModel):
     passage_id: str
     original_content: str
+    korean_translation: Optional[str] = None
     text_type: Optional[str] = None
 
 # 예문 원문 정보 스키마 (채점 결과용)  
 class ExampleInfo(BaseModel):
     example_id: str
     original_content: str
+    korean_translation: Optional[str] = None
 
 # 채점 결과 전체 스키마
 class GradingResultResponse(BaseModel):

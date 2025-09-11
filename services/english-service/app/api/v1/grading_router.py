@@ -149,6 +149,7 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                         "passage": {
                             "passage_id": answer_passage.passage_id,
                             "original_content": answer_passage.original_content,
+                            "korean_translation": answer_passage.korean_translation,
                             "text_type": getattr(answer_passage, 'text_type', None)
                         },
                         "questions": related_questions
@@ -176,7 +177,8 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                     example_groups.append({
                         "example": {
                             "example_id": answer_example.example_id,
-                            "original_content": answer_example.original_content
+                            "original_content": answer_example.original_content,
+                            "korean_translation": answer_example.korean_translation
                         },
                         "questions": related_questions
                     })
