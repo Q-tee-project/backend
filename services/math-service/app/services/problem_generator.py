@@ -151,8 +151,9 @@ class ProblemGenerator:
             raise Exception(error_msg)
     
     def _clean_and_parse_json(self, json_str: str):
-        """JSON 문자열 정리 및 파싱"""
+        """JSON 문자열 정리 및 파싱 - 개선된 버전"""
         import re
+        import json
         
         try:
             # 1차 시도: 원본 그대로 파싱
@@ -161,52 +162,106 @@ class ProblemGenerator:
             print(f"1차 JSON 파싱 실패: {str(e)}")
             
             try:
-                # 2차 시도: 기본적인 정리
-                cleaned = json_str.strip()
-                
-                # 제어 문자 제거
-                cleaned = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', cleaned)
-                
-                # 백슬래시 문제 해결 (LaTeX 명령어 보호)
-                # LaTeX 명령어들을 임시로 보호
-                latex_commands = ['\\frac', '\\sqrt', '\\sin', '\\cos', '\\tan', '\\log', '\\pi', '\\alpha', '\\beta', '\\theta', '\\leq', '\\geq', '\\neq', '\\approx']
-                latex_placeholders = {}
-                placeholder_counter = 0
-                
-                # LaTeX 명령어를 임시 플레이스홀더로 교체
-                for cmd in latex_commands:
-                    while cmd in cleaned:
-                        placeholder = f"__LATEX_CMD_{placeholder_counter}__"
-                        latex_placeholders[placeholder] = cmd
-                        cleaned = cleaned.replace(cmd, placeholder, 1)
-                        placeholder_counter += 1
-                
-                # 일반적인 백슬래시 처리
-                cleaned = cleaned.replace('\\\\', '\\')
-                cleaned = cleaned.replace('\\"', '"')
-                cleaned = cleaned.replace('\\n', '\\n')
-                cleaned = cleaned.replace('\\t', '\\t')
-                
-                # LaTeX 명령어 복원
-                for placeholder, original_cmd in latex_placeholders.items():
-                    cleaned = cleaned.replace(placeholder, original_cmd)
-                
+                # 2차 시도: 고급 전처리
+                cleaned = self._preprocess_json_string(json_str)
                 return json.loads(cleaned)
             except json.JSONDecodeError as e2:
                 print(f"2차 JSON 파싱 실패: {str(e2)}")
                 
                 try:
-                    # 3차 시도: JSON 배열 패턴 찾기
+                    # 3차 시도: JSON 배열 패턴 찾기 및 추가 정리
                     array_match = re.search(r'\[.*\]', cleaned, re.DOTALL)
                     if array_match:
                         array_part = array_match.group(0)
-                        return json.loads(array_part)
+                        array_cleaned = self._preprocess_json_string(array_part)
+                        return json.loads(array_cleaned)
                     else:
                         raise e2
                 except (json.JSONDecodeError, Exception) as e3:
                     print(f"3차 JSON 파싱 실패: {str(e3)}")
-                    print(f"문제가 있는 JSON 앞부분: {json_str[:200]}...")
+                    print(f"문제가 있는 JSON 앞부분: {json_str[:300]}...")
                     raise Exception(f"JSON 파싱 완전 실패: {str(e3)}")
+    
+    def _preprocess_json_string(self, json_str: str) -> str:
+        """JSON 문자열 전처리 - LaTeX 및 특수문자 처리"""
+        import re
+        
+        # 기본 정리
+        cleaned = json_str.strip()
+        
+        # 1. 제어 문자 제거 (탭, 캐리지 리턴, 기타 제어문자)
+        cleaned = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', cleaned)
+        
+        # 2. 잘못된 줄바꿈 처리
+        cleaned = re.sub(r'\n\s*"', ' "', cleaned)  # 줄바꿈 후 따옴표
+        cleaned = re.sub(r',\s*\n\s*}', '}', cleaned)  # 끝부분 쉼표+줄바꿈
+        cleaned = re.sub(r',\s*\n\s*]', ']', cleaned)  # 배열 끝부분 처리
+        
+        # 3. LaTeX 수학 표기법 안전하게 처리
+        # $..$ 형태의 LaTeX를 찾아서 이스케이프 처리
+        def escape_latex_math(match):
+            content = match.group(1)
+            # 백슬래시를 두 배로 만들어 JSON에서 안전하게 처리
+            escaped = content.replace('\\', '\\\\')
+            return f"${escaped}$"
+        
+        # $...$ 패턴 처리
+        cleaned = re.sub(r'\$([^$]+)\$', escape_latex_math, cleaned)
+        
+        # 4. 일반적인 이스케이프 문자 처리
+        # JSON 문자열 내부의 백슬래시 처리 (LaTeX 제외)
+        def fix_escape_in_strings(match):
+            quote = match.group(1)  # 시작 따옴표
+            content = match.group(2)  # 문자열 내용
+            end_quote = match.group(3)  # 끝 따옴표
+            
+            # LaTeX 수학 표기법이 아닌 경우만 처리
+            if '$' not in content:
+                # 잘못된 이스케이프 시퀀스 수정
+                content = re.sub(r'\\(?!["\\/bfnrt])', r'\\\\', content)
+            
+            return f'{quote}{content}{end_quote}'
+        
+        # JSON 문자열 내부 처리
+        cleaned = re.sub(r'(")([^"]*)(")(?=\s*[,}\]])', fix_escape_in_strings, cleaned)
+        
+        # 5. 특수 LaTeX 명령어들 보호
+        latex_protections = [
+            (r'\\frac\{', '__FRAC_START__'),
+            (r'\\sqrt\{', '__SQRT_START__'),
+            (r'\\sin\(', '__SIN_START__'),
+            (r'\\cos\(', '__COS_START__'),
+            (r'\\tan\(', '__TAN_START__'),
+            (r'\\log\(', '__LOG_START__'),
+            (r'\\pi\b', '__PI__'),
+            (r'\\alpha\b', '__ALPHA__'),
+            (r'\\beta\b', '__BETA__'),
+            (r'\\theta\b', '__THETA__'),
+            (r'\\leq\b', '__LEQ__'),
+            (r'\\geq\b', '__GEQ__'),
+            (r'\\neq\b', '__NEQ__'),
+            (r'\\approx\b', '__APPROX__'),
+        ]
+        
+        # 보호 적용
+        protection_map = {}
+        for pattern, placeholder in latex_protections:
+            matches = re.findall(pattern, cleaned)
+            for match in matches:
+                if match not in protection_map:
+                    protection_map[match] = placeholder
+                cleaned = cleaned.replace(match, placeholder)
+        
+        # 6. 마지막 정리
+        cleaned = re.sub(r',\s*}', '}', cleaned)  # 객체 끝 쉼표 제거
+        cleaned = re.sub(r',\s*]', ']', cleaned)  # 배열 끝 쉼표 제거
+        cleaned = re.sub(r'\s+', ' ', cleaned)    # 다중 공백 정리
+        
+        # 7. LaTeX 명령어 복원
+        for original, placeholder in protection_map.items():
+            cleaned = cleaned.replace(placeholder, original)
+        
+        return cleaned
     
     def _validate_and_fix_latex(self, problem: Dict) -> Dict:
         """LaTeX 구문 검증 및 수정"""
