@@ -151,32 +151,6 @@
             </div>
         </div>
 
-        <!-- 문제지 목록 탭 -->
-        <div id="worksheets-tab" class="tab-content">
-            <h2 style="color: #007bff; margin-bottom: 20px;">저장된 문제지 목록</h2>
-            
-            <!-- 새로고침 버튼 -->
-            <div style="text-align: right; margin-bottom: 20px;">
-                <button onclick="loadWorksheetsList()" class="submit-btn" style="padding: 10px 20px; font-size: 14px;">
-                    🔄 새로고침
-                </button>
-            </div>
-            
-            <!-- 로딩 -->
-            <div id="worksheets-loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>문제지 목록을 불러오고 있습니다...</p>
-            </div>
-            
-            <!-- 문제지 목록 -->
-            <div id="worksheets-list"></div>
-            
-            <!-- 오류 표시 -->
-            <div id="worksheets-error" class="error-section" style="display: none;">
-                <h3>❌ 오류 발생</h3>
-                <p id="worksheets-error-data"></p>
-            </div>
-        </div>
 
         <!-- 문제 풀기 탭 -->
         <div id="solve-tab" class="tab-content">
@@ -240,19 +214,52 @@
             </div>
         </div>
 
+        <!-- 문제지 목록 탭 -->
+        <div id="worksheets-tab" class="tab-content">
+            <div id="worksheets-header" class="worksheets-header">
+                <h2 style="color: #007bff; margin: 0;">📋 문제지 목록</h2>
+                <div class="worksheets-actions">
+                    <button onclick="loadWorksheets()" class="btn btn-primary" style="margin-right: 10px;">
+                        🔄 새로고침
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 문제지 목록 -->
+            <div id="worksheets-content" class="worksheets-content">
+                <div style="text-align: center; color: #666; margin: 40px 0;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">📚</div>
+                    <h3>문제지 목록</h3>
+                    <p>저장된 문제지들을 확인하고 관리할 수 있습니다.</p>
+                </div>
+            </div>
+            
+            <!-- 로딩 -->
+            <div id="worksheets-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>문제지 목록을 불러오고 있습니다...</p>
+            </div>
+            
+            <!-- 오류 표시 -->
+            <div id="worksheets-error" class="error-section" style="display: none;">
+                <h3>❌ 오류 발생</h3>
+                <p id="worksheets-error-data"></p>
+            </div>
+        </div>
+
         <!-- 채점 결과 탭 -->
         <div id="result-tab" class="tab-content">
             <div id="result-header" class="result-header">
                 <h2 style="color: #dc3545; margin: 0;">🎯 채점 결과 관리</h2>
                 <div class="result-actions">
-                    <button onclick="loadGradingResults()" class="btn btn-primary" style="margin-right: 10px;">
+                    <button onclick="displayGradingResults()" class="btn btn-primary" style="margin-right: 10px;">
                         🔄 새로고침
                     </button>
                 </div>
             </div>
             
             <!-- 채점 결과 목록 -->
-            <div id="result-list" class="result-list">
+            <div id="result-content" class="result-list">
                 <div style="text-align: center; color: #666; margin: 40px 0;">
                     <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
                     <h3>채점 결과 목록</h3>

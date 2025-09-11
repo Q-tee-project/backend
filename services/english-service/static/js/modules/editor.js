@@ -139,10 +139,25 @@ async function saveWorksheet() {
 // 문제지 목록 로드
 async function loadWorksheets() {
     try {
+        console.log('📋 문제지 목록 로드 시작...');
+        
         const worksheets = await apiService.getWorksheets();
+        console.log('📋 API 응답:', worksheets);
+        console.log('📋 API 응답 길이:', worksheets.length);
+        
         const content = document.getElementById('worksheets-content');
+        console.log('📋 컨텐츠 요소:', content);
+        console.log('📋 현재 탭:', document.querySelector('.tab.active')?.textContent);
+        console.log('📋 worksheets-tab 요소:', document.getElementById('worksheets-tab'));
+        console.log('📋 worksheets-tab 클래스:', document.getElementById('worksheets-tab')?.classList.toString());
+        
+        if (!content) {
+            console.error('❌ worksheets-content 요소를 찾을 수 없습니다!');
+            return;
+        }
         
         if (!worksheets || worksheets.length === 0) {
+            console.log('📋 저장된 문제지가 없음');
             content.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #6c757d;">
                     <h3>📋 저장된 문제지가 없습니다</h3>
@@ -152,12 +167,15 @@ async function loadWorksheets() {
             return;
         }
         
+        console.log('📋 문제지 목록 렌더링 시작...');
+        
         let html = `
             <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
                 <h2 style="color: #495057; margin-bottom: 30px; text-align: center;">📚 저장된 문제지 목록</h2>
                 <div style="display: grid; gap: 20px;">`;
         
-        worksheets.forEach(worksheet => {
+        worksheets.forEach((worksheet, index) => {
+            console.log(`📋 문제지 ${index + 1} 렌더링:`, worksheet.worksheet_name);
             const createdDate = new Date(worksheet.created_at).toLocaleDateString();
             
             html += `
@@ -196,8 +214,16 @@ async function loadWorksheets() {
         content.innerHTML = html;
         
     } catch (error) {
-        console.error('문제지 목록 조회 오류:', error);
-        document.getElementById('worksheets-content').innerHTML = `
+        console.error('❌ 문제지 목록 조회 오류:', error);
+        const content = document.getElementById('worksheets-content');
+        
+        if (!content) {
+            console.error('❌ worksheets-content 요소를 찾을 수 없어서 오류 메시지를 표시할 수 없습니다!');
+            alert('문제지 목록을 불러오는 중 오류가 발생했습니다: ' + error.message);
+            return;
+        }
+        
+        content.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #dc3545;">
                 <h3>❌ 오류 발생</h3>
                 <p>문제지 목록을 불러오는 중 오류가 발생했습니다.</p>
@@ -494,10 +520,111 @@ async function submitAnswers() {
     }
 }
 
+// 채점 결과 표시 함수
+async function displayGradingResults() {
+    try {
+        const results = await apiService.getGradingResults();
+        const content = document.getElementById('result-content');
+        
+        if (!results || results.length === 0) {
+            content.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <h3>📊 채점 결과가 없습니다</h3>
+                    <p>아직 제출된 답안이 없습니다. 문제지를 풀어보세요!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = `
+            <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
+                <h2 style="color: #495057; margin-bottom: 30px; text-align: center;">📊 채점 결과 목록</h2>
+                <div style="display: grid; gap: 20px;">`;
+        
+        results.forEach(result => {
+            const createdDate = new Date(result.created_at).toLocaleDateString();
+            const scoreColor = result.percentage >= 80 ? '#28a745' : result.percentage >= 60 ? '#ffc107' : '#dc3545';
+            
+            html += `
+                <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 20px; background: #f8f9fa; transition: all 0.3s ease;" 
+                     onmouseover="this.style.borderColor='#007bff'; this.style.boxShadow='0 4px 15px rgba(0,123,255,0.2)'" 
+                     onmouseout="this.style.borderColor='#e9ecef'; this.style.boxShadow='none'">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div>
+                            <h3 style="margin: 0; color: #495057;">${result.student_name}</h3>
+                            <p style="margin: 5px 0 0 0; color: #6c757d; font-size: 14px;">${result.worksheet_name || '문제지'}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 24px; font-weight: bold; color: ${scoreColor};">
+                                ${result.percentage}%
+                            </div>
+                            <div style="font-size: 14px; color: #6c757d;">
+                                ${result.total_score}/${result.max_score}점
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div style="display: flex; gap: 15px; font-size: 14px; color: #6c757d;">
+                            <span>⏱️ ${Math.floor(result.completion_time / 60)}분 ${result.completion_time % 60}초</span>
+                            <span>📅 ${createdDate}</span>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            ${result.needs_review ? '<span style="background: #ffc107; color: #856404; padding: 4px 8px; border-radius: 4px; font-size: 12px;">검수 필요</span>' : ''}
+                            ${result.is_reviewed ? '<span style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">검수 완료</span>' : ''}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="viewGradingResult('${result.result_id}')" 
+                                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                            📋 상세 보기
+                        </button>
+                        <button onclick="solveWorksheet('${result.worksheet_id}')" 
+                                style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                            🔄 다시 풀기
+                        </button>
+                    </div>
+                </div>`;
+        });
+        
+        html += `
+                </div>
+            </div>`;
+        
+        content.innerHTML = html;
+        
+    } catch (error) {
+        console.error('채점 결과 로드 오류:', error);
+        const content = document.getElementById('result-content');
+        content.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #dc3545;">
+                <h3>❌ 오류 발생</h3>
+                <p>채점 결과를 불러오는 중 오류가 발생했습니다.</p>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// 채점 결과 상세 보기 함수
+async function viewGradingResult(resultId) {
+    try {
+        const result = await apiService.getGradingResult(resultId);
+        // 상세 결과 표시 로직 (모달 또는 새 페이지)
+        alert(`채점 결과 상세:\n\n학생: ${result.student_name}\n점수: ${result.total_score}/${result.max_score}점 (${result.percentage}%)\n소요시간: ${Math.floor(result.completion_time / 60)}분 ${result.completion_time % 60}초`);
+    } catch (error) {
+        console.error('채점 결과 상세 조회 오류:', error);
+        alert('채점 결과를 불러오는 중 오류가 발생했습니다.');
+    }
+}
+
 // 전역 함수로 노출
 window.saveWorksheet = saveWorksheet;
 window.loadWorksheets = loadWorksheets;
 window.editWorksheet = editWorksheet;
+window.displayGradingResults = displayGradingResults;
+window.viewGradingResult = viewGradingResult;
 window.deleteWorksheet = deleteWorksheet;
 window.solveWorksheet = solveWorksheet;
 window.renderSolveWorksheet = renderSolveWorksheet;
