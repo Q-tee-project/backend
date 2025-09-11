@@ -134,7 +134,15 @@ class ProblemGenerator:
             
             # JSON 정리 및 파싱
             problems_array = self._clean_and_parse_json(json_str)
-            return problems_array if isinstance(problems_array, list) else [problems_array]
+            problems_list = problems_array if isinstance(problems_array, list) else [problems_array]
+            
+            # LaTeX 검증 및 수정
+            validated_problems = []
+            for problem in problems_list:
+                validated_problem = self._validate_and_fix_latex(problem)
+                validated_problems.append(validated_problem)
+            
+            return validated_problems
             
         except Exception as e:
             import traceback
@@ -159,11 +167,29 @@ class ProblemGenerator:
                 # 제어 문자 제거
                 cleaned = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', cleaned)
                 
-                # 백슬래시 문제 해결
+                # 백슬래시 문제 해결 (LaTeX 명령어 보호)
+                # LaTeX 명령어들을 임시로 보호
+                latex_commands = ['\\frac', '\\sqrt', '\\sin', '\\cos', '\\tan', '\\log', '\\pi', '\\alpha', '\\beta', '\\theta', '\\leq', '\\geq', '\\neq', '\\approx']
+                latex_placeholders = {}
+                placeholder_counter = 0
+                
+                # LaTeX 명령어를 임시 플레이스홀더로 교체
+                for cmd in latex_commands:
+                    while cmd in cleaned:
+                        placeholder = f"__LATEX_CMD_{placeholder_counter}__"
+                        latex_placeholders[placeholder] = cmd
+                        cleaned = cleaned.replace(cmd, placeholder, 1)
+                        placeholder_counter += 1
+                
+                # 일반적인 백슬래시 처리
                 cleaned = cleaned.replace('\\\\', '\\')
                 cleaned = cleaned.replace('\\"', '"')
                 cleaned = cleaned.replace('\\n', '\\n')
                 cleaned = cleaned.replace('\\t', '\\t')
+                
+                # LaTeX 명령어 복원
+                for placeholder, original_cmd in latex_placeholders.items():
+                    cleaned = cleaned.replace(placeholder, original_cmd)
                 
                 return json.loads(cleaned)
             except json.JSONDecodeError as e2:
@@ -181,3 +207,58 @@ class ProblemGenerator:
                     print(f"3차 JSON 파싱 실패: {str(e3)}")
                     print(f"문제가 있는 JSON 앞부분: {json_str[:200]}...")
                     raise Exception(f"JSON 파싱 완전 실패: {str(e3)}")
+    
+    def _validate_and_fix_latex(self, problem: Dict) -> Dict:
+        """LaTeX 구문 검증 및 수정"""
+        import re
+        
+        # 잘못된 LaTeX 패턴들과 올바른 형태로의 매핑
+        latex_fixes = [
+            (r'rac\{([^}]+)\}\{([^}]+)\}', r'\\frac{\1}{\2}'),  # rac{} -> \frac{}{}
+            (r'qrt\{([^}]+)\}', r'\\sqrt{\1}'),                # qrt{} -> \sqrt{}
+            (r'in\(([^)]+)\)', r'\\sin(\1)'),                  # in() -> \sin()
+            (r'os\(([^)]+)\)', r'\\cos(\1)'),                  # os() -> \cos()
+            (r'an\(([^)]+)\)', r'\\tan(\1)'),                  # an() -> \tan()
+            (r'og\(([^)]+)\)', r'\\log(\1)'),                  # og() -> \log()
+            (r'lpha', r'\\alpha'),                             # lpha -> \alpha
+            (r'eta', r'\\beta'),                               # eta -> \beta
+            (r'heta', r'\\theta'),                             # heta -> \theta
+            (r'i([^a-zA-Z])', r'\\pi\1'),                      # pi -> \pi (단독으로 나오는 경우)
+            (r'eq([^a-zA-Z])', r'\\leq\1'),                    # leq -> \leq
+            (r'eq([^a-zA-Z])', r'\\geq\1'),                    # geq -> \geq
+            (r'eq([^a-zA-Z])', r'\\neq\1'),                    # neq -> \neq
+        ]
+        
+        # 검사할 필드들
+        text_fields = ['question', 'correct_answer', 'explanation']
+        
+        # 각 텍스트 필드에서 LaTeX 오류 수정
+        for field in text_fields:
+            if field in problem and isinstance(problem[field], str):
+                original_text = problem[field]
+                fixed_text = self._fix_latex_text(original_text, latex_fixes)
+                if original_text != fixed_text:
+                    print(f"LaTeX 수정 ({field}): {original_text} -> {fixed_text}")
+                    problem[field] = fixed_text
+        
+        # choices 배열 처리
+        if 'choices' in problem and isinstance(problem['choices'], list):
+            for i, choice in enumerate(problem['choices']):
+                if isinstance(choice, str):
+                    original_choice = choice
+                    fixed_choice = self._fix_latex_text(original_choice, latex_fixes)
+                    if original_choice != fixed_choice:
+                        print(f"LaTeX 수정 (choices[{i}]): {original_choice} -> {fixed_choice}")
+                        problem['choices'][i] = fixed_choice
+        
+        return problem
+    
+    def _fix_latex_text(self, text: str, latex_fixes: List) -> str:
+        """텍스트에서 LaTeX 오류 수정"""
+        import re
+        
+        fixed_text = text
+        for pattern, replacement in latex_fixes:
+            fixed_text = re.sub(pattern, replacement, fixed_text)
+        
+        return fixed_text
