@@ -191,127 +191,52 @@ class PromptGenerator:
     def generate_prompt(self, request_data: Dict[str, Any], db: Session = None) -> str:
         """입력 데이터를 기반으로 문제 생성 프롬프트를 만듭니다."""
         
-        # DB에서 텍스트 유형 형식 가져오기 (내부에서 직접 처리)
-        json_formats_text = ""
-        try:
-            from app.database import SessionLocal
-            from app.models.models import TextType
-            db = SessionLocal()
-            text_types = db.query(TextType).all()
-            
-            if text_types:
-                for text_type in text_types:
-                    json_formats_text += f"\n{text_type.type_name} ({text_type.description}) : {text_type.json_format}"
-            else:
-                # DB에 데이터가 없는 경우 기본값 사용
-                json_formats_text = """
-article (일반 글) : content: title, paragraph로 구성된 배열
-correspondence (서신/소통) : metadata: sender, recipient, subject, date 등, content: paragraph
-dialogue (대화문) : metadata: participants 배열, content: { speaker: '이름', line: '대사' } 객체의 배열
-informational (정보성 양식) : content: title, paragraph, list, 그리고 key_value 쌍 (예: { key: '장소', value: '시청 앞' })
-review (리뷰/후기) : metadata: rating (별점), product_name 등"""
-            
-            db.close()
-        except Exception as e:
-            print(f"DB에서 텍스트 유형 조회 오류: {e}")
-            # 기본값 사용
-            json_formats_text = """
-article (일반 글) : content: title, paragraph로 구성된 배열
-correspondence (서신/소통) : metadata: sender, recipient, subject, date 등, content: paragraph
-dialogue (대화문) : metadata: participants 배열, content: { speaker: '이름', line: '대사' } 객체의 배열
-informational (정보성 양식) : content: title, paragraph, list, 그리고 key_value 쌍 (예: { key: '장소', value: '시청 앞' })
-review (리뷰/후기) : metadata: rating (별점), product_name 등"""
+        # DB에서 텍스트 유형 형식 가져오기
+        json_formats_text = self._get_text_type_formats(db)
         
-        # 1. 기본 정보 추출
+        # 기본 정보 추출 및 분배 계산
         school_level = request_data.get('school_level', '중학교')
         grade = request_data.get('grade', 1)
         total_questions = request_data.get('total_questions', 10)
-        
-        # 2. 영역별 문제 수 계산
-        subject_ratios = request_data.get('subject_ratios', [])
-        subject_distribution = self.calculator.calculate_distribution(total_questions, subject_ratios)
-        
-        # 3. 형식별 문제 수 계산
-        format_ratios = request_data.get('format_ratios', [])
-        format_distribution = self.calculator.calculate_distribution(total_questions, format_ratios)
-        
-        # 4. 난이도별 문제 수 계산
-        difficulty_ratios = request_data.get('difficulty_distribution', [])
-        difficulty_distribution = self.calculator.calculate_distribution(total_questions, difficulty_ratios)
-        
-        # 5. 세부 영역 정보 추출
         subject_details = request_data.get('subject_details', {})
-        
-        # 6. 추가 요구사항 추출
         additional_requirements = request_data.get('additional_requirements', '')
         
-        # 형식별 문제 수 문자열 생성
-        format_lines = []
-        for fmt in format_distribution:
-            format_lines.append(f"{fmt['format']} : {fmt['count']}문제")
+        # 분배 계산
+        subject_distribution = self.calculator.calculate_distribution(
+            total_questions, request_data.get('subject_ratios', [])
+        )
+        format_distribution = self.calculator.calculate_distribution(
+            total_questions, request_data.get('format_ratios', [])
+        )
+        difficulty_distribution = self.calculator.calculate_distribution(
+            total_questions, request_data.get('difficulty_distribution', [])
+        )
         
-        # 난이도별 문제 수 문자열 생성
-        difficulty_lines = []
-        for diff in difficulty_distribution:
-            difficulty_lines.append(f"난이도 {diff['difficulty']} 문제 : {diff['count']}문제")
+        # 동적 내용 생성
+        format_lines = [f"{fmt['format']} : {fmt['count']}문제" for fmt in format_distribution]
+        difficulty_lines = [f"난이도 {diff['difficulty']} 문제 : {diff['count']}문제" for diff in difficulty_distribution]
+        subject_lines = [f"{subj['subject']} 문제 : {subj['count']}문제" for subj in subject_distribution]
+        subject_types_lines = self._generate_subject_types_lines(subject_distribution, subject_details)
+        vocabulary_list = self._get_vocabulary_list(db, difficulty_distribution)
         
-        # 영역별 문제 수 문자열 생성
-        subject_lines = []
-        for subj in subject_distribution:
-            subject_lines.append(f"{subj['subject']} 문제 : {subj['count']}문제")
-        
-        # 영역별 출제 유형 문자열 생성
-        subject_types_lines = []
-        for subj in subject_distribution:
-            subject_name = subj['subject']
-            types = []
-            
-            if subject_name == '독해':
-                types = subject_details.get('reading_types', [])
-            elif subject_name == '문법':
-                # 문법 카테고리와 토픽을 합쳐서 사용
-                categories = subject_details.get('grammar_categories', [])
-                topics = subject_details.get('grammar_topics', [])
-                types = categories + topics
-            elif subject_name == '어휘':
-                types = subject_details.get('vocabulary_categories', [])
-            
-            types_str = str(types) if types else "[]"
-            subject_types_lines.append(f"{subject_name} : {types_str}")
-        
-        # 단어목록 동적 생성
-        vocabulary_list = ""
-        if db is not None:
-            try:
-                vocabulary_list = self.extract_vocabulary_by_difficulty(
-                    db, 
-                    difficulty_distribution, 
-                    total_words=50
-                )
-            except Exception as e:
-                print(f"단어 추출 실패, 기본 메시지 사용: {str(e)}")
-                vocabulary_list = "-- 단어목록 : 중학교 1학년 수준에 맞는 기본 및 중급 영어 단어들을 활용하여 문제를 생성하세요."
-        else:
-            vocabulary_list = "-- 단어목록 : 중학교 1학년 수준에 맞는 기본 및 중급 영어 단어들을 활용하여 문제를 생성하세요."
-        
-        # 프롬프트 첫 번째 부분
-        prompt_part1 = f"""당신은 영어 교육 전문가이자 숙련된 문제 출제자입니다. 
+        # 프롬프트 구성
+        prompt = f"""당신은 영어 교육 전문가이자 숙련된 문제 출제자입니다. 
 주어진 조건에 따라 학습자의 수준에 맞는 고품질의 영어 문제를 출제해야 합니다.
 
 다음 조건에 따라 {school_level} {grade}학년 영어 시험 문제를 출제해주세요:
 
-#총 문제 수 : {total_questions}
+# 총 문제 수: {total_questions}
 
-#답변 형식
+# 답변 형식
 {chr(10).join(format_lines)}
 
-#문제 난이도
+# 문제 난이도
 {chr(10).join(difficulty_lines)}
 
-#영역 별 문제 
+# 영역별 문제 
 {chr(10).join(subject_lines)}
 
-#영역 별 문제 출제 유형
+# 영역별 문제 출제 유형
 {chr(10).join(subject_types_lines)}
 
 # 어휘 수준
@@ -327,20 +252,26 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
 - **응답은 반드시 유효한 JSON 형태로만 응답 (다른 텍스트, 설명, 주석 등 일체 포함 금지)**
 - **정답이나 해설은 절대 포함하지 마세요. 오직 문제만 생성하세요.**
 - 문제 유형에 따라 필요한 경우 지문이나 예문을 수정
-- 지문 및 예문은 문제id를 갖도록 (ex, "지문" : "[문제id, 문제id, 문제id]", 예문: "문제id")""" + (f"""
+- 지문 및 예문은 문제id를 갖도록 (ex, "지문" : "[문제id, 문제id, 문제id]", 예문: "문제id")"""
+
+        # 추가 요구사항
+        if additional_requirements:
+            prompt += f"""
 
 # 추가 요구사항
-{additional_requirements}""" if additional_requirements else "") + f"""
+{additional_requirements}"""
 
-# 문제에 사용 될 지문과 예문의 정의
+        prompt += f"""
+
+# 문제에 사용될 지문과 예문의 정의
 - 지문은 120~150단어 이상의 긴 글을 의미
 - 지문에는 2개 이상 3개 이하의 문제를 연계하여 출제
 - 예문은 40단어 이하의 짧은 글을 의미(1~3줄)
-- 지문은 반드시 유형 별 json형식을 참고하여 생성
+- 지문은 반드시 유형별 json형식을 참고하여 생성
 - 예문의 소재는 글의 소재를 참고하여 생성
-- 지문 글의 유형은 글의 소재, 영역 별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
+- 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
 
-# **중요: 문제 질문과 예문 분리 규칙**
+# 문제 질문과 예문 분리 규칙
 - **문제의 질문(question_text)에는 영어 문장이나 긴 예시를 직접 포함하지 마세요**
 - **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
 - **문제 질문은 순수한 한국어 질문만 포함하고, 예문 ID로 참조하세요**
@@ -380,7 +311,7 @@ question_example_id: "3"
 - 문화 관련: 세대/성별 간 문화 차이, 다른 문화권의 관습 및 가치 등
 - 민주시민 관련: 공중도덕, 인권, 양성평등, 사회 현안 등
 
-- 지문 글의 유형
+# 지문 글의 유형
 article (일반 글) : 설명문, 논설문, 기사, 연구 보고서, 블로그 포스트, 책의 한 부분 등 (가장 기본적인 '만능' 유형)
 correspondence (서신/소통) : 이메일, 편지, 메모, 사내 공지 등
 dialogue (대화문) : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
@@ -388,16 +319,10 @@ informational (정보성 양식) : 광고, 안내문, 포스터, 일정표, 메�
 review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
 social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트 등
 
-유형 별 json형식"""
-        
-        # 프롬프트 합치기
-        prompt = prompt_part1 + json_formats_text + f"""
+# 유형별 JSON 형식
+{json_formats_text}
 
-**중요: 반드시 유효한 JSON 형식으로만 응답해주세요. 다른 텍스트나 설명 없이 순수한 JSON만 반환해야 합니다.**
-**정답 생성 금지: 정답, 해설, 답안, answer 등 어떤 형태의 정답도 포함하지 마세요.**
-
-
-응답 형식 :
+# 응답 형식
 {{
     "worksheet_id": "1",
     "worksheet_name": "any_name", 
@@ -436,36 +361,28 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
             "question_subject": "독해|문법|어휘", 
             "question_difficulty": "상|중|하",
             "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
-            "question_passage_id": "1" // 지문 참조시,
-            "question_example_id": "1" // 예문 참조시,
+            "question_passage_id": "1",
+            "question_example_id": "1",
             "question_choices": [
                 "1",
                 "2", 
                 "3",
                 "4",
-                "5" // 단답형, 서술형일 시 빈칸
+                "5"
             ]
         }}
     ]
 }}
 
-**다시 한번 강조: 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요. 추가 설명이나 텍스트는 절대 포함하지 마세요.**
-**절대 정답을 생성하지 마세요: answer, correct_answer, solution, 정답, 해답 등 어떤 정답 관련 필드도 포함하지 마세요.**
-**절대 추가적인 항목을 만들지 마세요.**
-
-**문제 배치 및 순서 규칙**
+# 문제 배치 및 순서 규칙
 - 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
-
-**중요한 배치 원칙:**
-1. 같은 지문을 사용하는 문제들은 반드시 연속 번호로 배치
-2. 문제 번호와 related_questions 배열이 정확히 일치해야 함
-
-**배치 검증:**
+- 같은 지문을 사용하는 문제들은 반드시 연속 번호로 배치
+- 문제 번호와 related_questions 배열이 정확히 일치해야 함
 - 각 지문의 related_questions는 연속된 숫자여야 함 
 - 문제 총 개수와 questions 배열 길이가 일치해야 함 
 - 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 
 
-**절대 엄수: 문제 질문에서 ID 언급 금지**
+# ID 참조 규칙
 - question_text에서 지문이나 예문의 ID(P1, E1, 지문1, 예문1 등)를 절대 언급하지 마세요.
 - 지문 참조 시: "위 글", "위 지문", "다음 글" 등으로만 표현
 - 예문 참조 시: "다음 예문", "위 예문", "다음 문장" 등으로만 표현
@@ -486,9 +403,89 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 - 지문 ID: "1", "2", "3" (단순한 숫자)
 - 예문 ID: "1", "2", "3" (단순한 숫자)
 
-**다시 한번 강조: question_text에는 어떤 형태의 ID도 포함하지 마세요!**"""
+**최종 강조사항:**
+- 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요
+- 추가 설명이나 텍스트는 절대 포함하지 마세요
+- answer, correct_answer, solution, 정답, 해답 등 어떤 정답 관련 필드도 포함하지 마세요
+- 추가적인 항목을 만들지 마세요
+- question_text에는 어떤 형태의 ID도 포함하지 마세요!"""
+        
+        # 생성된 프롬프트 로그 출력
+        print("\n" + "="*80)
+        print("📝 생성된 프롬프트 (원문 그대로)")
+        print("="*80)
+        print(prompt)
+        print("="*80)
+        print(f"📊 프롬프트 길이: {len(prompt)} 문자")
+        print("="*80 + "\n")
         
         return prompt
+    
+    def _get_text_type_formats(self, db: Session) -> str:
+        """DB에서 텍스트 유형 형식을 가져옵니다."""
+        try:
+            from app.database import SessionLocal
+            from app.models.models import TextType
+            if db is None:
+                db = SessionLocal()
+            text_types = db.query(TextType).all()
+            
+            if text_types:
+                formats = []
+                for text_type in text_types:
+                    formats.append(f"{text_type.type_name} ({text_type.description}) : {text_type.json_format}")
+                return "\n".join(formats)
+            else:
+                return self._get_default_text_formats()
+        except Exception as e:
+            print(f"DB에서 텍스트 유형 조회 오류: {e}")
+            return self._get_default_text_formats()
+        finally:
+            if db is None and 'db' in locals():
+                db.close()
+    
+    def _get_default_text_formats(self) -> str:
+        """기본 텍스트 형식을 반환합니다."""
+        return """article (일반 글) : content: title, paragraph로 구성된 배열
+correspondence (서신/소통) : metadata: sender, recipient, subject, date 등, content: paragraph
+dialogue (대화문) : metadata: participants 배열, content: { speaker: '이름', line: '대사' } 객체의 배열
+informational (정보성 양식) : content: title, paragraph, list, 그리고 key_value 쌍 (예: { key: '장소', value: '시청 앞' })
+review (리뷰/후기) : metadata: rating (별점), product_name 등"""
+    
+    def _generate_subject_types_lines(self, subject_distribution: List[Dict], subject_details: Dict) -> List[str]:
+        """영역별 출제 유형 문자열을 생성합니다."""
+        subject_types_lines = []
+        for subj in subject_distribution:
+            subject_name = subj['subject']
+            types = []
+            
+            if subject_name == '독해':
+                types = subject_details.get('reading_types', [])
+            elif subject_name == '문법':
+                categories = subject_details.get('grammar_categories', [])
+                topics = subject_details.get('grammar_topics', [])
+                types = categories + topics
+            elif subject_name == '어휘':
+                types = subject_details.get('vocabulary_categories', [])
+            
+            types_str = str(types) if types else "[]"
+            subject_types_lines.append(f"{subject_name} : {types_str}")
+        
+        return subject_types_lines
+    
+    def _get_vocabulary_list(self, db: Session, difficulty_distribution: List[Dict]) -> str:
+        """어휘 목록을 생성합니다."""
+        if db is not None:
+            try:
+                return self.extract_vocabulary_by_difficulty(
+                    db, 
+                    difficulty_distribution, 
+                    total_words=50
+                )
+            except Exception as e:
+                print(f"단어 추출 실패, 기본 메시지 사용: {str(e)}")
+        
+        return "-- 단어목록 : 중학교 1학년 수준에 맞는 기본 및 중급 영어 단어들을 활용하여 문제를 생성하세요."
     
     
     def get_distribution_summary(self, request_data: Dict[str, Any]) -> Dict[str, Any]:

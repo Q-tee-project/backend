@@ -400,6 +400,13 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         raise
     except Exception as e:
         db.rollback()
+        print(f"❌ 문제지 저장 오류 상세:")
+        print(f"   오류 타입: {type(e).__name__}")
+        print(f"   오류 메시지: {str(e)}")
+        print(f"   오류 위치: {e.__traceback__.tb_frame.f_code.co_filename}:{e.__traceback__.tb_lineno}")
+        import traceback
+        print(f"   전체 스택 트레이스:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"문제지 저장 중 오류: {str(e)}")
 
 @router.get("/worksheets", response_model=List[WorksheetSummary])

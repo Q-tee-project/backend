@@ -63,6 +63,16 @@ class ApiService {
         });
     }
 
+    /**
+     * 문제지 저장 (문제지 + 답안지)
+     */
+    async saveWorksheet(saveData) {
+        return await this._request('/worksheets', {
+            method: 'POST',
+            body: JSON.stringify(saveData)
+        });
+    }
+
     // =============== 문제지 관리 ===============
     /**
      * 저장된 문제지 목록 조회
@@ -96,8 +106,8 @@ class ApiService {
     /**
      * 답안 제출 및 자동 채점 요청
      */
-    async submitAnswers(worksheetId, answerData) {
-        return await this._request(`/worksheets/${worksheetId}/submit`, {
+    async submitAnswers(answerData) {
+        return await this._request('/submit-answers', {
             method: 'POST',
             body: JSON.stringify(answerData)
         });
