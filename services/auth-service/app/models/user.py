@@ -15,6 +15,7 @@ class Grade(int, Enum):
 
 class Teacher(Base):
     __tablename__ = "teachers"
+    __table_args__ = {"schema": "auth_service"}
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
@@ -30,6 +31,7 @@ class Teacher(Base):
 
 class Student(Base):
     __tablename__ = "students"
+    __table_args__ = {"schema": "auth_service"}
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
@@ -48,12 +50,13 @@ class Student(Base):
 
 class ClassRoom(Base):
     __tablename__ = "classrooms"
+    __table_args__ = {"schema": "auth_service"}
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     school_level = Column(SQLEnum(SchoolLevel), nullable=False)
     grade = Column(Integer, nullable=False)
-    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
+    teacher_id = Column(Integer, ForeignKey("auth_service.teachers.id"), nullable=False)
     class_code = Column(String, unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -64,10 +67,11 @@ class ClassRoom(Base):
 
 class StudentJoinRequest(Base):
     __tablename__ = "student_join_requests"
+    __table_args__ = {"schema": "auth_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("auth_service.students.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("auth_service.classrooms.id"), nullable=False)
     status = Column(String, default="pending")  # pending, approved, rejected
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
     processed_at = Column(DateTime(timezone=True), nullable=True)

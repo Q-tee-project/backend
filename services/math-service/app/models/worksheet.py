@@ -52,7 +52,7 @@ class Worksheet(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)  # 완료 시간
     
     # 메타데이터
-    teacher_id = Column(Integer, ForeignKey("public.teachers.id"), nullable=False, index=True)
+    teacher_id = Column(Integer, nullable=False, index=True)  # 스키마 간 참조를 위해 외래 키 제약 조건 제거
     created_by = Column(Integer)  # 호환성을 위해 유지
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
