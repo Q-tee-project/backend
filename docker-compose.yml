@@ -69,6 +69,28 @@ services:
       - qt_project_network
     restart: unless-stopped
 
+  # Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${AUTH_SECRET_KEY:-your-secret-key-change-in-production}
+      - PORT=8000
+    ports:
+      - "8003:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
   # Celery Worker for Math Service
   celery-worker:
     build:

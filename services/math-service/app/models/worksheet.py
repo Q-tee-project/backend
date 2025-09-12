@@ -52,12 +52,14 @@ class Worksheet(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)  # 완료 시간
     
     # 메타데이터
-    created_by = Column(Integer)
+    teacher_id = Column(Integer, ForeignKey("public.teachers.id"), nullable=False, index=True)
+    created_by = Column(Integer)  # 호환성을 위해 유지
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # 관계
     problems = relationship("Problem", back_populates="worksheet", order_by="Problem.sequence_order")
+    # teacher = relationship("Teacher")  # 다른 스키마의 테이블이므로 직접 관계 설정하지 않음
 
 
 # WorksheetProblem 모델 제거됨 - Problem 모델로 통합

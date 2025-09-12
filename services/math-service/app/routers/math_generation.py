@@ -323,13 +323,14 @@ async def stream_task_status(task_id: str):
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     try:
         from ..models.worksheet import Worksheet
         
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.created_by == 1)\
+            .filter(Worksheet.teacher_id == user_id)\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -367,6 +368,7 @@ async def get_worksheets(
 @router.get("/worksheets/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     try:
@@ -374,7 +376,7 @@ async def get_worksheet_detail(
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -605,7 +607,7 @@ async def update_worksheet(
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -977,7 +979,7 @@ async def delete_worksheet(
         
         # 워크시트 조회
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -1044,7 +1046,7 @@ async def delete_problem(
         
         # 워크시트 조회 (권한 확인)
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == problem.worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
