@@ -113,81 +113,6 @@ class PromptGenerator:
             # 오류 시 기본 메시지 반환
             return "-- 단어목록 : 데이터베이스에서 적절한 수준의 영어 단어들을 활용하여 문제를 생성하세요."
     
-    def generate_answer_sheet_prompt(self, worksheet_json: dict) -> str:
-        """
-        문제지 JSON을 받아 답안지 생성용 프롬프트를 만듭니다.
-        변형된 지문/예문을 원본 상태로 복원하여 자연스러운 완성된 텍스트로 제공합니다.
-        """
-        return f"""
-다음 영어 문제지의 답안지와 해설을 생성하세요:
-
-{json.dumps(worksheet_json, ensure_ascii=False, indent=2)}
-
-**답안지 생성 규칙**:
-
-1. **지문 복원**: 
-   - 모든 빈칸을 적절한 정답으로 채워 완전한 문장으로 만들기
-   - 문단 순서 표시나 선택지 기호를 모두 제거하여 자연스러운 흐름으로 연결
-   - 원래 지문이 가진 의미와 논리적 구조를 그대로 유지
-
-2. **예문 복원**:
-   - 흩어진 선택지들을 올바른 순서로 재배열하여 완전한 형태로 구성
-   - 문법적으로 정확하고 의미가 통하는 자연스러운 영어 표현으로 완성
-
-3. **정답**:
-   - 객관식은 정답 번호, 주관식이나 서술형은 정답
-   - 정답에는 정답만 작성, 정답에 대한 이유나 해설은 작성하지 않음
-
-3. **해설 작성**:
-   - 각 문제의 정답 근거를 명확히 설명
-   - 문제 유형별 핵심 학습 포인트 제시 (문법/어휘/독해 기법/대화 표현 등)
-   - 학습자가 이해하기 쉬운 한국어로 설명
-
-**JSON 응답 형식**:
-```json
-{{
-  "answer_sheet": {{
-    "passages": [
-      {{
-        "passage_id": "1",
-        "text_type": "글의 종류 (예: 일기, 편지, 안내문, 대화 등)",
-        "original_content": "빈칸과 번호가 모두 제거된 완전하고 자연스러운 영어 지문",
-        "korean_translation": "영어 지문의 자연스러운 한글 번역 (의역 포함, 읽기 쉽게)",
-        "related_questions": ["1", "2", "3"]
-      }}
-    ],
-    "examples": [
-      {{
-        "example_id": "1", 
-        "original_content": "선택지가 올바른 순서로 배열된 완전한 대화/문장",
-        "korean_translation": "예문의 자연스러운 한글 번역",
-        "related_questions": "4"
-      }}
-    ],
-    "questions": [
-      {{
-        "question_id": "1",
-        "correct_answer": "정답 번호 또는 정답",
-        "explanation": "정답 근거와 해설 (한국어)",
-        "learning_point": "학습 포인트 (문법/어휘/독해 기법 등)"
-      }}
-    ]
-  }}
-}}
-```
-
-**중요**: 
-- 지문과 예문의 original_content는 **완전히 자연스러운 영어**로 작성
-- 빈칸, 번호, 선택지 표시 등은 모두 제거
-- 문맥상 자연스럽게 연결되는 완성된 텍스트 제공
-
-**번역 지침**:
-- korean_translation은 **자연스럽고 읽기 쉬운 한국어**로 번역
-- 직역보다는 의역을 통해 한국어답게 표현
-- 학습자가 이해하기 쉽도록 명확하고 친근한 문체 사용
-- 문화적 맥락을 고려한 적절한 번역
-"""
-
     def generate_prompt(self, request_data: Dict[str, Any], db: Session = None) -> str:
         """입력 데이터를 기반으로 문제 생성 프롬프트를 만듭니다."""
         
@@ -246,13 +171,30 @@ class PromptGenerator:
 # 난이도별 문제 요구사항
 **하 단계 (쉬움)**: basic 레벨 단어, 기본 문장구조 
 **중 단계 (보통)**: middle 레벨 단어, 적당한 추론 필요 
-**상 단계 (어려움)**: middle 레벨 고급 단어, 종합적 사고 필요 
+**상 단계 (어려움)**: middle 레벨 고급 단어, 종합적 사고 필요
 
 # 필수 조건
-- **응답은 반드시 유효한 JSON 형태로만 응답 (다른 텍스트, 설명, 주석 등 일체 포함 금지)**
-- **정답이나 해설은 절대 포함하지 마세요. 오직 문제만 생성하세요.**
+- **응답은 반드시 아래에 명시된 통합 JSON 형식에 맞춰 유효한 JSON 객체 하나만 생성해야 합니다. (다른 텍스트, 설명, 주석 등 일체 포함 금지)**
+- **문제(questions), 지문(passages), 예문(examples) 객체 안에 학생용 정보와 답안용 정보를 모두 포함하여 한 번에 생성해야 합니다.**
+- `passage_content`와 `example_content`에는 학생에게 보여질 내용(빈칸, 순서 배열용 보기 등)을 포함하세요.
+- `original_content`에는 빈칸이 채워지고 순서가 배열된 완전한 원본 텍스트를 포함하세요.
+- `korean_translation`에는 `original_content`의 자연스러운 한글 번역을 포함하세요.
+- `questions` 객체 안에는 문제 텍스트, 선택지뿐만 아니라 `correct_answer`, `explanation`, `learning_point`를 반드시 포함해야 합니다.
+
+# 답안 및 해설 생성 규칙:
+- **지문 복원**: 
+   - 모든 빈칸을 적절한 정답으로 채워 완전한 문장으로 만들고, 문단 순서 표시나 선택지 기호를 모두 제거하여 자연스러운 흐름으로 연결하세요.
+   - 원래 지문이 가진 의미와 논리적 구조를 그대로 유지하세요.
+- **예문 복원**:
+   - 흩어진 선택지들을 올바른 순서로 재배열하여 완전한 형태로 구성하고, 문법적으로 정확하고 의미가 통하는 자연스러운 영어 표현으로 완성하세요.
+- **정답(correct_answer)**: 객관식은 정답 번호(문자열), 주관식/서술형은 정답 텍스트를 명확하게 기입하세요.
+- **해설(explanation)**: 정답 근거를 명확히 설명하고, 오답의 이유도 간략히 언급하세요. 학습자가 이해하기 쉬운 한국어로 작성하세요.
+- **학습 포인트(learning_point)**: 각 문제의 정답 근거를 명확히 설명하고, 문제 유형별 핵심 학습 포인트(문법/어휘/독해 기법/대화 표현 등)를 제시하세요.
+- **번역 지침**: `korean_translation`은 자연스럽고 읽기 쉬운 한국어로 번역하고, 직역보다는 의역을 통해 한국어답게 표현하세요. 학습자가 이해하기 쉽도록 명확하고 친근한 문체 사용하고, 문화적 맥락을 고려한 적절한 번역을 제공하세요.
+
 - 문제 유형에 따라 필요한 경우 지문이나 예문을 수정
-- 지문 및 예문은 문제id를 갖도록 (ex, "지문" : "[문제id, 문제id, 문제id]", 예문: "문제id")"""
+- 지문 및 예문은 문제id를 갖도록 (ex, "지문" : "[문제id, 문제id, 문제id]", 예문: "문제id")
+"""
 
         # 추가 요구사항
         if additional_requirements:
@@ -336,21 +278,20 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
     "passages": [
         {{
             "passage_id": "1",
-            "passage_type": "article|correspondence|dialogue|informational|review",
-            "passage_content": 유형별_json형식에_따른_구조,
+            "passage_type": "article",
+            "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+            "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
+            "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
             "related_questions": ["1", "2"]
         }}
     ],
     "examples": [
         {{
             "example_id": "1",
-            "example_content": "They ___ good friends.",
-            "related_questions": ["1", "2"]
-        }},
-        {{
-            "example_id": "2", 
-            "example_content": "(A) Sounds great! What time should we meet?\\n(B) Hey, do you want to go see a movie?\\n(C) Let's meet at 2 p.m.\\n(D) Not really. Any plans?",
-            "related_questions": ["3"]
+            "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+            "original_content": "완전한 형태의 원본 예문",
+            "korean_translation": "원본 예문의 자연스러운 한글 번역",
+            "related_questions": 1,
         }}
     ],
     "questions": [
@@ -358,18 +299,19 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
             "question_id": "1",
             "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
             "question_type": "객관식|단답형|서술형",
-            "question_subject": "독해|문법|어휘", 
+            "question_subject": "독해|문법|어휘",
             "question_difficulty": "상|중|하",
             "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
             "question_passage_id": "1",
             "question_example_id": "1",
             "question_choices": [
-                "1",
-                "2", 
-                "3",
-                "4",
-                "5"
-            ]
+                "선택지 1",
+                "선택지 2", 
+                "선택지 3"
+            ],
+            "correct_answer": "정답 (객관식은 번호, 주관식은 텍스트)",
+            "explanation": "정답에 대한 상세한 해설 (한국어)",
+            "learning_point": "문제와 관련된 핵심 학습 포인트"
         }}
     ]
 }}
@@ -406,7 +348,6 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 **최종 강조사항:**
 - 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요
 - 추가 설명이나 텍스트는 절대 포함하지 마세요
-- answer, correct_answer, solution, 정답, 해답 등 어떤 정답 관련 필드도 포함하지 마세요
 - 추가적인 항목을 만들지 마세요
 - question_text에는 어떤 형태의 ID도 포함하지 마세요!"""
         

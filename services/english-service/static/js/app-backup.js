@@ -1218,12 +1218,11 @@ async function saveWorksheet() {
         
         console.log('💾 저장 시작...');
         console.log('📄 문제지 데이터:', updatedWorksheetData);
-        console.log('📋 답안 데이터:', currentAnswerData);
         
         // 답안 데이터 상태 확인
-        const hasAnswerQuestions = currentAnswerData.questions && currentAnswerData.questions.length > 0;
-        const hasAnswerPassages = currentAnswerData.passages && currentAnswerData.passages.length > 0; 
-        const hasAnswerExamples = currentAnswerData.examples && currentAnswerData.examples.length > 0;
+        const hasAnswerQuestions = currentAnswerData.questions > 0;
+        const hasAnswerPassages = currentAnswerData.passages > 0; 
+        const hasAnswerExamples = currentAnswerData.examples > 0;
         
         if (!hasAnswerQuestions && !hasAnswerPassages && !hasAnswerExamples) {
             console.warn('⚠️ 모든 답안 데이터가 비어있습니다. answer_* 테이블에는 빈 레코드만 저장됩니다.');

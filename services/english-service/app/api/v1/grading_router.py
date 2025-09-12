@@ -9,8 +9,7 @@ from app.schemas.schemas import (
     GradingResultSummary, ReviewRequest
 )
 from app.models.models import (
-    Worksheet, GradingResult, QuestionResult,
-    AnswerPassage, AnswerExample
+    Worksheet, GradingResult, QuestionResult, Passage, Example
 )
 from app.services.grading_service import perform_grading
 
@@ -94,14 +93,10 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
         if not result:
             raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
         
-        # 지문과 예문 데이터도 함께 조회
-        answer_passages = db.query(AnswerPassage).filter(
-            AnswerPassage.worksheet_id == result.worksheet_id
-        ).all()
-        
-        answer_examples = db.query(AnswerExample).filter(
-            AnswerExample.worksheet_id == result.worksheet_id
-        ).all()
+        # 원본 문제지에서 지문과 예문 데이터 조회
+        original_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == result.worksheet_id).first()
+        passages = original_worksheet.passages if original_worksheet else []
+        examples = original_worksheet.examples if original_worksheet else []
         
         # 백엔드에서 미리 그룹핑 (grading_service와 동일한 로직)
         passage_groups = []
@@ -135,10 +130,10 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             question_results.append(question_data)
         
         # 지문별 문제 그룹핑 (related_questions 기준)
-        for answer_passage in answer_passages:
-            if answer_passage.related_questions:
+        for passage in passages:
+            if passage.related_questions:
                 related_questions = []
-                for question_id in answer_passage.related_questions:
+                for question_id in passage.related_questions:
                     matching_question = next((q for q in question_results if q["question_id"] == str(question_id)), None)
                     if matching_question:
                         related_questions.append(matching_question)
@@ -147,24 +142,24 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 if related_questions:
                     passage_groups.append({
                         "passage": {
-                            "passage_id": answer_passage.passage_id,
-                            "original_content": answer_passage.original_content,
-                            "korean_translation": answer_passage.korean_translation,
-                            "text_type": getattr(answer_passage, 'text_type', None)
+                            "passage_id": passage.passage_id,
+                            "original_content": passage.original_content,
+                            "korean_translation": passage.korean_translation,
+                            "text_type": getattr(passage, 'passage_type', None)
                         },
                         "questions": related_questions
                     })
         
         # 예문별 문제 그룹핑 (지문에 속하지 않은 것만)
-        for answer_example in answer_examples:
-            if answer_example.related_questions:
+        for example in examples:
+            if example.related_questions:
                 related_questions = []
                 
                 # related_questions가 문자열인 경우 리스트로 변환
-                if isinstance(answer_example.related_questions, str):
-                    question_ids = [answer_example.related_questions]
+                if isinstance(example.related_questions, str):
+                    question_ids = [example.related_questions]
                 else:
-                    question_ids = answer_example.related_questions
+                    question_ids = example.related_questions
                     
                 for question_id in question_ids:
                     if str(question_id) not in processed_questions:
@@ -176,9 +171,9 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 if related_questions:
                     example_groups.append({
                         "example": {
-                            "example_id": answer_example.example_id,
-                            "original_content": answer_example.original_content,
-                            "korean_translation": answer_example.korean_translation
+                            "example_id": example.example_id,
+                            "original_content": example.original_content,
+                            "korean_translation": example.korean_translation
                         },
                         "questions": related_questions
                     })
@@ -191,8 +186,8 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
         print(f"📄 passage_groups 개수: {len(passage_groups)}")
         print(f"📝 example_groups 개수: {len(example_groups)}")
         print(f"📋 standalone_questions 개수: {len(standalone_questions)}")
-        print(f"🗂️ answer_passages 개수: {len(answer_passages)}")
-        print(f"🗂️ answer_examples 개수: {len(answer_examples)}")
+        print(f"🗂️ passages 개수: {len(passages)}")
+        print(f"🗂️ examples 개수: {len(examples)}")
         
         # 결과 객체 구성
         result_dict = {

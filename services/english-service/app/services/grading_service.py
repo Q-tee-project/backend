@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
 
-from ..models.models import Worksheet, Question, AnswerQuestion, AnswerPassage, AnswerExample, GradingResult, QuestionResult, Passage, Example
+from ..models.models import Worksheet, Question, GradingResult, QuestionResult, Passage, Example
 from .ai_service import AIService
 
 
@@ -40,16 +40,16 @@ class GradingService:
         needs_review = False
         
         # 정규화된 답안 데이터 조회
-        answer_questions = db.query(AnswerQuestion).filter(
-            AnswerQuestion.worksheet_id == worksheet.id
+        answer_questions = db.query(Question).filter(
+            Question.worksheet_id == worksheet.id
         ).all()
         
-        answer_passages = db.query(AnswerPassage).filter(
-            AnswerPassage.worksheet_id == worksheet.id
+        answer_passages = db.query(Passage).filter(
+            Passage.worksheet_id == worksheet.id
         ).all()
         
-        answer_examples = db.query(AnswerExample).filter(
-            AnswerExample.worksheet_id == worksheet.id
+        answer_examples = db.query(Example).filter(
+            Example.worksheet_id == worksheet.id
         ).all()
         
         if not answer_questions:
@@ -181,9 +181,9 @@ class GradingService:
         self, 
         question: Question, 
         student_answer: str, 
-        answer_questions: List[AnswerQuestion],
-        answer_passages: List[AnswerPassage],
-        answer_examples: List[AnswerExample],
+        answer_questions: List[Question],
+        answer_passages: List[Passage],
+        answer_examples: List[Example],
         worksheet: Worksheet, 
         db: Session
     ) -> Dict[str, Any]:
@@ -245,7 +245,7 @@ class GradingService:
                 "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
             }
     
-    def _find_correct_answer(self, question_id: str, answer_questions: List[AnswerQuestion]) -> Dict[str, Any]:
+    def _find_correct_answer(self, question_id: str, answer_questions: List[Question]) -> Dict[str, Any]:
         """정규화된 답안 테이블에서 특정 문제의 정답 정보를 찾습니다."""
         print(f"DEBUG: 정답 찾기 - question_id={question_id} (타입: {type(question_id)})")
         
@@ -320,8 +320,8 @@ class GradingService:
         question: Question, 
         student_answer: str, 
         correct_answer_info: Dict, 
-        answer_passages: List[AnswerPassage],
-        answer_examples: List[AnswerExample],
+        answer_passages: List[Passage],
+        answer_examples: List[Example],
         max_score: int
     ) -> Dict[str, Any]:
         """주관식 문제 채점 (AI 기반)"""
@@ -396,7 +396,7 @@ class GradingService:
             "example_id": question.example_id if hasattr(question, 'example_id') else None   # 연관된 예문 ID
         }
     
-    def _build_grading_context(self, question: Question, answer_passages: List[AnswerPassage], answer_examples: List[AnswerExample]) -> Dict[str, str]:
+    def _build_grading_context(self, question: Question, answer_passages: List[Passage], answer_examples: List[Example]) -> Dict[str, str]:
         """AI 채점을 위한 컨텍스트 구성"""
         context = {
             "passage_content": None,

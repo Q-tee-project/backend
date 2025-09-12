@@ -90,8 +90,7 @@ class Worksheet(Base):
     __tablename__ = "worksheets"
     __table_args__ = {"schema": "english_service"}
     
-    id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(String(50), nullable=False, unique=True)  # M1-ENG-2401 같은 고유 ID
+    worksheet_id = Column(String(50), primary_key=True, index=True)
     worksheet_name = Column(String(200), nullable=False)  # 문제지 제목
     school_level = Column(String(20), nullable=False)  # 중학교, 고등학교 등
     grade = Column(String(10), nullable=False)  # 1, 2, 3 등
@@ -104,11 +103,6 @@ class Worksheet(Base):
     passages = relationship("Passage", back_populates="worksheet", cascade="all, delete-orphan")
     examples = relationship("Example", back_populates="worksheet", cascade="all, delete-orphan") 
     questions = relationship("Question", back_populates="worksheet", cascade="all, delete-orphan")
-    
-    # 새로운 정규화된 답안 테이블들
-    answer_questions = relationship("AnswerQuestion", back_populates="worksheet", cascade="all, delete-orphan")
-    answer_passages = relationship("AnswerPassage", back_populates="worksheet", cascade="all, delete-orphan")
-    answer_examples = relationship("AnswerExample", back_populates="worksheet", cascade="all, delete-orphan")
 
 # Passages 테이블 모델 (지문)
 class Passage(Base):
@@ -116,10 +110,12 @@ class Passage(Base):
     __table_args__ = {"schema": "english_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
+    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     passage_id = Column(String(10), nullable=False)  # "1", "2" 등
     passage_type = Column(String(50), nullable=False)  # article, dialogue 등
     passage_content = Column(JSON, nullable=False)  # 지문 내용 (JSON 형태)
+    original_content = Column(Text, nullable=True)
+    korean_translation = Column(Text, nullable=True)
     related_questions = Column(JSON, nullable=False)  # 연관 문제 ID 배열
     created_at = Column(DateTime, nullable=False)
     
@@ -132,9 +128,11 @@ class Example(Base):
     __table_args__ = {"schema": "english_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
+    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     example_id = Column(String(10), nullable=False)  # "1", "2" 등
     example_content = Column(Text, nullable=False)  # 예문 내용
+    original_content = Column(Text, nullable=True)
+    korean_translation = Column(Text, nullable=True)
     related_questions = Column(JSON, nullable=False)  # 연관 문제 ID 배열
     created_at = Column(DateTime, nullable=False)
     
@@ -147,7 +145,7 @@ class Question(Base):
     __table_args__ = {"schema": "english_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
+    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     question_id = Column(String(10), nullable=False)  # "1", "2" 등
     question_text = Column(Text, nullable=False)  # 문제 질문
     question_type = Column(String(20), nullable=False)  # 객관식, 주관식, 서술형
@@ -157,59 +155,13 @@ class Question(Base):
     question_choices = Column(JSON, nullable=True)  # 선택지 (객관식인 경우)
     passage_id = Column(String(10), nullable=True)  # 연관 지문 ID
     example_id = Column(String(10), nullable=True)  # 연관 예문 ID
+    correct_answer = Column(Text, nullable=True)
+    explanation = Column(Text, nullable=True)
+    learning_point = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False)
     
     # 관계 설정
     worksheet = relationship("Worksheet", back_populates="questions")
-
-# Answer Questions 테이블 모델 (문제별 정답 정보)
-class AnswerQuestion(Base):
-    __tablename__ = "answer_questions"
-    __table_args__ = {"schema": "english_service"}
-    
-    id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
-    question_id = Column(String(10), nullable=False)  # "1", "2", "3" 등
-    correct_answer = Column(Text, nullable=False)  # 정답
-    explanation = Column(Text, nullable=True)  # 해설
-    learning_point = Column(Text, nullable=True)  # 학습 포인트
-    created_at = Column(DateTime, nullable=False)
-    
-    # 관계 설정
-    worksheet = relationship("Worksheet", back_populates="answer_questions")
-
-# Answer Passages 테이블 모델 (지문 원본 정보)
-class AnswerPassage(Base):
-    __tablename__ = "answer_passages"
-    __table_args__ = {"schema": "english_service"}
-    
-    id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
-    passage_id = Column(String(10), nullable=False)  # "1", "2" 등
-    text_type = Column(String(50), nullable=True)  # 글의 종류
-    original_content = Column(Text, nullable=False)  # 원본 지문 내용
-    korean_translation = Column(Text, nullable=True)  # 한글 번역
-    related_questions = Column(JSON, nullable=True)  # 관련 문제 ID 리스트
-    created_at = Column(DateTime, nullable=False)
-    
-    # 관계 설정
-    worksheet = relationship("Worksheet", back_populates="answer_passages")
-
-# Answer Examples 테이블 모델 (예문 원본 정보)
-class AnswerExample(Base):
-    __tablename__ = "answer_examples"
-    __table_args__ = {"schema": "english_service"}
-    
-    id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
-    example_id = Column(String(10), nullable=False)  # "1", "2" 등
-    original_content = Column(Text, nullable=False)  # 원본 예문 내용
-    korean_translation = Column(Text, nullable=True)  # 한글 번역
-    related_questions = Column(JSON, nullable=True)  # 관련 문제 ID 리스트
-    created_at = Column(DateTime, nullable=False)
-    
-    # 관계 설정
-    worksheet = relationship("Worksheet", back_populates="answer_examples")
 
 # Grading Results 테이블 모델 (채점 결과)
 class GradingResult(Base):
@@ -218,7 +170,7 @@ class GradingResult(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     result_id = Column(String(50), unique=True, nullable=False, index=True)  # 고유 결과 ID
-    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.id"), nullable=False)
+    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     student_name = Column(String(100), nullable=False)
     completion_time = Column(Integer, nullable=False)  # 소요 시간 (초)
     total_score = Column(Integer, nullable=False)

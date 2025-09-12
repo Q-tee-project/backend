@@ -9,8 +9,7 @@ from app.schemas.schemas import (
 )
 from app.models.models import (
     GrammarCategory, GrammarTopic, VocabularyCategory, ReadingType, TextType,
-    Worksheet, Passage, Example, Question, AnswerQuestion, AnswerPassage, AnswerExample, 
-    GradingResult, QuestionResult
+    Worksheet, Passage, Example, Question, GradingResult, QuestionResult
 )
 from sqlalchemy import text
 from typing import List, Dict, Any
@@ -451,7 +450,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
             # 5-1. Answer Questions 저장
             questions_data = answer_data.get("questions", [])
             for question_data in questions_data:
-                db_answer_question = AnswerQuestion(
+                db_answer_question = Question(
                     worksheet_id=db_worksheet.id,
                     question_id=question_data.get("question_id"),
                     correct_answer=question_data.get("correct_answer"),
@@ -464,7 +463,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
             # 5-2. Answer Passages 저장
             passages_data = answer_data.get("passages", [])
             for passage_data in passages_data:
-                db_answer_passage = AnswerPassage(
+                db_answer_passage = Passage(
                     worksheet_id=db_worksheet.id,
                     passage_id=passage_data.get("passage_id"),
                     text_type=passage_data.get("text_type"),
@@ -477,7 +476,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
             # 5-3. Answer Examples 저장
             examples_data = answer_data.get("examples", [])
             for example_data in examples_data:
-                db_answer_example = AnswerExample(
+                db_answer_example = Example(
                     worksheet_id=db_worksheet.id,
                     example_id=example_data.get("example_id"),
                     original_content=example_data.get("original_content"),
@@ -691,12 +690,12 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
         
         # 지문과 예문 데이터도 함께 조회
-        answer_passages = db.query(AnswerPassage).filter(
-            AnswerPassage.worksheet_id == result.worksheet_id
+        answer_passages = db.query(Passage).filter(
+            Passage.worksheet_id == result.worksheet_id
         ).all()
         
-        answer_examples = db.query(AnswerExample).filter(
-            AnswerExample.worksheet_id == result.worksheet_id
+        answer_examples = db.query(Example).filter(
+            Example.worksheet_id == result.worksheet_id
         ).all()
         
         # 백엔드에서 미리 그룹핑 (grading_service와 동일한 로직)

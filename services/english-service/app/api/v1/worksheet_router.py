@@ -12,8 +12,7 @@ from app.schemas.schemas import (
     WorksheetResponse, WorksheetSummary
 )
 from app.models.models import (
-    Worksheet, Passage, Example, Question, 
-    AnswerQuestion, AnswerPassage, AnswerExample
+    GradingResult, QuestionResult, Worksheet, Passage, Example, Question
 )
 from app.services.question_generator import PromptGenerator
 
@@ -266,7 +265,6 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
     """생성된 문제지와 답안지를 데이터베이스에 저장합니다."""
     try:
         worksheet_data = request.worksheet_data
-        answer_data = request.answer_data
         
         # 문제지 메타데이터 추출
         worksheet_id = str(uuid.uuid4())  # UUID로 자동 생성
@@ -304,7 +302,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         passages_data = worksheet_data.get('passages', [])
         for passage_data in passages_data:
             db_passage = Passage(
-                worksheet_id=db_worksheet.id,
+                worksheet_id=db_worksheet.worksheet_id,
                 passage_id=passage_data.get('passage_id'),
                 passage_type=passage_data.get('passage_type'),
                 passage_content=passage_data.get('passage_content'),
@@ -317,7 +315,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         examples_data = worksheet_data.get('examples', [])
         for example_data in examples_data:
             db_example = Example(
-                worksheet_id=db_worksheet.id,
+                worksheet_id=db_worksheet.worksheet_id,
                 example_id=example_data.get('example_id'),
                 example_content=example_data.get('example_content'),
                 related_questions=example_data.get('related_questions', []),
@@ -329,7 +327,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         questions_data = worksheet_data.get('questions', [])
         for question_data in questions_data:
             db_question = Question(
-                worksheet_id=db_worksheet.id,
+                worksheet_id=db_worksheet.worksheet_id,
                 question_id=question_data.get('question_id'),
                 question_text=question_data.get('question_text'),
                 question_type=question_data.get('question_type'),
@@ -339,51 +337,12 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
                 question_choices=question_data.get('question_choices'),
                 passage_id=question_data.get('question_passage_id'),
                 example_id=question_data.get('question_example_id'),
-                created_at=datetime.now()
+                correct_answer=question_data.get('correct_answer'),
+                explanation=question_data.get('explanation'),
+                learning_point=question_data.get('learning_point'),
+                created_at=datetime.now() # created_at은 Question 모델에 없으므로 제거해야 합니다.
             )
             db.add(db_question)
-        
-        # 5. Answer Data 정규화해서 저장
-        if answer_data:
-            # 5-1. Answer Questions 저장
-            questions_data = answer_data.get("questions", [])
-            for question_data in questions_data:
-                db_answer_question = AnswerQuestion(
-                    worksheet_id=db_worksheet.id,
-                    question_id=question_data.get("question_id"),
-                    correct_answer=question_data.get("correct_answer"),
-                    explanation=question_data.get("explanation"),
-                    learning_point=question_data.get("learning_point"),
-                    created_at=datetime.now()
-                )
-                db.add(db_answer_question)
-            
-            # 5-2. Answer Passages 저장
-            passages_data = answer_data.get("passages", [])
-            for passage_data in passages_data:
-                db_answer_passage = AnswerPassage(
-                    worksheet_id=db_worksheet.id,
-                    passage_id=passage_data.get("passage_id"),
-                    text_type=passage_data.get("text_type"),
-                    original_content=passage_data.get("original_content"),
-                    korean_translation=passage_data.get("korean_translation"),  # 한글 번역 추가
-                    related_questions=passage_data.get("related_questions"),
-                    created_at=datetime.now()
-                )
-                db.add(db_answer_passage)
-            
-            # 5-3. Answer Examples 저장
-            examples_data = answer_data.get("examples", [])
-            for example_data in examples_data:
-                db_answer_example = AnswerExample(
-                    worksheet_id=db_worksheet.id,
-                    example_id=example_data.get("example_id"),
-                    original_content=example_data.get("original_content"),
-                    korean_translation=example_data.get("korean_translation"),  # 한글 번역 추가
-                    related_questions=example_data.get("related_questions"),
-                    created_at=datetime.now()
-                )
-                db.add(db_answer_example)
         
         # 커밋
         db.commit()
@@ -392,7 +351,6 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         return {
             "message": "문제지가 성공적으로 저장되었습니다.",
             "worksheet_id": worksheet_id,
-            "database_id": db_worksheet.id,
             "status": "success"
         }
         
@@ -432,10 +390,10 @@ async def get_worksheets(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"문제지 목록 조회 중 오류: {str(e)}")
 
 @router.get("/worksheets/{worksheet_id}", response_model=WorksheetResponse)
-async def get_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
+async def get_worksheet(worksheet_id: int, db: Session = Depends(get_db)):
     """특정 문제지의 상세 정보를 조회합니다."""
     try:
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         return worksheet
@@ -445,10 +403,10 @@ async def get_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"문제지 조회 중 오류: {str(e)}")
 
 @router.get("/worksheets/{worksheet_id}/edit")
-async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get_db)):
+async def get_worksheet_for_editing(worksheet_id: int, db: Session = Depends(get_db)):
     """문제지 편집용 워크시트를 조회합니다 (정답 및 해설 포함)."""
     try:
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
@@ -472,16 +430,10 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
                 "passage_id": passage.passage_id,
                 "passage_type": passage.passage_type,
                 "passage_content": passage.passage_content,
+                "original_content": passage.original_content,
+                "korean_translation": passage.korean_translation,
                 "related_questions": passage.related_questions
             }
-            
-            # 원본 지문 내용 추가 (답안 데이터에서)
-            for answer_passage in worksheet.answer_passages:
-                if answer_passage.passage_id == passage.passage_id:
-                    passage_data["original_content"] = answer_passage.original_content
-                    passage_data["text_type"] = answer_passage.text_type
-                    break
-            
             worksheet_data["passages"].append(passage_data)
         
         # 예문 데이터 + 원본 내용 추가
@@ -489,15 +441,10 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
             example_data = {
                 "example_id": example.example_id,
                 "example_content": example.example_content,
+                "original_content": example.original_content,
+                "korean_translation": example.korean_translation,
                 "related_questions": example.related_questions
             }
-            
-            # 원본 예문 내용 추가 (답안 데이터에서)
-            for answer_example in worksheet.answer_examples:
-                if answer_example.example_id == example.example_id:
-                    example_data["original_content"] = answer_example.original_content
-                    break
-            
             worksheet_data["examples"].append(example_data)
         
         # 문제 데이터 + 정답/해설 추가
@@ -511,29 +458,11 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
                 "question_detail_type": question.question_detail_type,
                 "question_choices": question.question_choices,
                 "question_passage_id": question.passage_id,
-                "question_example_id": question.example_id
+                "question_example_id": question.example_id,
+                "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
+                "learning_point": question.learning_point
             }
-            
-            # 정답/해설 데이터 추가
-            answer_question = None
-            for answer in worksheet.answer_questions:
-                if answer.question_id == question.question_id:
-                    answer_question = answer
-                    break
-            
-            if answer_question:
-                question_data.update({
-                    "correct_answer": answer_question.correct_answer,
-                    "explanation": answer_question.explanation,
-                    "learning_point": answer_question.learning_point
-                })
-            else:
-                question_data.update({
-                    "correct_answer": "정답 정보 없음",
-                    "explanation": None,
-                    "learning_point": None
-                })
-            
             worksheet_data["questions"].append(question_data)
         
         return {
@@ -547,11 +476,11 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"편집용 문제지 조회 중 오류: {str(e)}")
 
-@router.get("/worksheets/{worksheet_id}/solve")
-async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get_db)):
+@router.get("/worksheets/{worksheet_id}/solve", response_model=Dict[str, Any])
+async def get_worksheet_for_solving(worksheet_id: int, db: Session = Depends(get_db)):
     """문제 풀이용 문제지를 조회합니다 (답안 제외)."""
     try:
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
@@ -610,3 +539,47 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"문제지 조회 중 오류: {str(e)}")
+
+@router.delete("/worksheets/{worksheet_id}")
+async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
+    """문제지와 관련된 모든 데이터를 삭제합니다."""
+    try:
+        # 문제지 존재 확인
+        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        if not worksheet:
+            raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
+        
+        worksheet_name = worksheet.worksheet_name
+        
+        # 관련된 채점 결과 삭제
+        grading_results = db.query(GradingResult).filter(GradingResult.worksheet_id == worksheet_id).all()
+        for result in grading_results:
+            db.query(QuestionResult).filter(QuestionResult.grading_result_id == result.id).delete()
+            db.delete(result)
+        
+        # 2. 문제 삭제
+        db.query(Question).filter(Question.worksheet_id == db_worksheet.worksheet_id).delete()
+        
+        # 3. 지문 삭제
+        db.query(Passage).filter(Passage.worksheet_id == db_worksheet.worksheet_id).delete()
+        
+        # 4. 예문 삭제
+        db.query(Example).filter(Example.worksheet_id == db_worksheet.worksheet_id).delete()
+        
+        # 5. 문제지 삭제
+        db.delete(worksheet)
+        
+        # 변경사항 커밋
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"문제지 '{worksheet_name}'이 성공적으로 삭제되었습니다.",
+            "deleted_worksheet_id": worksheet_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"문제지 삭제 중 오류: {str(e)}")
