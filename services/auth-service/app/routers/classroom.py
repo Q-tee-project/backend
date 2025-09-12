@@ -11,7 +11,8 @@ from app.schemas.auth import StudentResponse
 from app.routers.auth import get_current_teacher, get_current_student
 from app.services.classroom_service import (
     create_classroom_with_code, get_classroom_by_code, create_join_request,
-    get_pending_join_requests_for_teacher, approve_or_reject_join_request
+    get_pending_join_requests_for_teacher, approve_or_reject_join_request,
+    get_student_classrooms
 )
 from app.services.auth_service import get_password_hash
 from datetime import datetime
@@ -39,11 +40,41 @@ async def get_my_classrooms(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher)
 ):
+    """선생님용: 내가 생성한 클래스 목록 조회"""
     classrooms = db.query(ClassRoom).filter(
         ClassRoom.teacher_id == current_teacher.id,
         ClassRoom.is_active == True
     ).all()
     return classrooms
+
+@router.get("/my-classrooms/student", response_model=List[ClassroomResponse])
+async def get_student_classrooms_endpoint(
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student)
+):
+    """학생용: 내가 가입한 클래스 목록 조회"""
+    classrooms = get_student_classrooms(db, current_student.id)
+    return classrooms
+
+@router.get("/{classroom_id}", response_model=ClassroomResponse)
+async def get_classroom(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher)
+):
+    classroom = db.query(ClassRoom).filter(
+        ClassRoom.id == classroom_id,
+        ClassRoom.teacher_id == current_teacher.id,
+        ClassRoom.is_active == True
+    ).first()
+    
+    if not classroom:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Classroom not found"
+        )
+    
+    return classroom
 
 @router.post("/join-request", response_model=StudentJoinRequestResponse)
 async def create_join_request_endpoint(

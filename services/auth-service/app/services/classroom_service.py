@@ -76,3 +76,12 @@ def approve_or_reject_join_request(db: Session, request_id: int, status: str):
     db.refresh(join_request)
     
     return join_request
+
+def get_student_classrooms(db: Session, student_id: int):
+    """학생이 가입한 클래스 목록 조회"""
+    classrooms = db.query(ClassRoom).join(StudentJoinRequest).filter(
+        StudentJoinRequest.student_id == student_id,
+        StudentJoinRequest.status == "approved",
+        ClassRoom.is_active == True
+    ).all()
+    return classrooms
