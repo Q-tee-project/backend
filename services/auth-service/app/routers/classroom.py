@@ -15,6 +15,9 @@ from app.services.classroom_service import (
 )
 from app.services.auth_service import get_password_hash
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -24,11 +27,6 @@ async def create_classroom(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher)
 ):
-    print(f"🔍 Server received classroom_data: {classroom_data}")
-    print(f"🔍 Server classroom_data type: {type(classroom_data)}")
-    print(f"🔍 Server classroom_data dict: {classroom_data.dict()}")
-    print(f"🔍 Current teacher: {current_teacher.id}")
-    
     classroom = create_classroom_with_code(
         db=db,
         classroom_data=classroom_data.dict(),
@@ -99,7 +97,7 @@ async def approve_join_request(
     updated_request = approve_or_reject_join_request(db, request_id, approval_data.status)
     return updated_request
 
-@router.post("/classrooms/{classroom_id}/students/register", response_model=StudentResponse)
+@router.post("/{classroom_id}/students/register", response_model=StudentResponse)
 async def register_student_directly(
     classroom_id: int,
     student_data: StudentDirectRegister,
@@ -166,28 +164,40 @@ async def register_student_directly(
     
     return student
 
-@router.get("/classrooms/{classroom_id}/students", response_model=List[StudentResponse])
+@router.get("/{classroom_id}/students", response_model=List[StudentResponse])
 async def get_classroom_students(
     classroom_id: int,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher)
 ):
-    # Verify classroom belongs to teacher
-    classroom = db.query(ClassRoom).filter(
-        ClassRoom.id == classroom_id,
-        ClassRoom.teacher_id == current_teacher.id
-    ).first()
-    
-    if not classroom:
+    try:
+        # First, let's check if the classroom exists at all
+        classroom_exists = db.query(ClassRoom).filter(ClassRoom.id == classroom_id).first()
+        if not classroom_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Classroom with id {classroom_id} does not exist"
+            )
+        
+        # Check if classroom belongs to teacher
+        if classroom_exists.teacher_id != current_teacher.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Classroom {classroom_id} does not belong to teacher {current_teacher.id}"
+            )
+        
+        # Get approved students in the classroom
+        students = db.query(Student).join(StudentJoinRequest).filter(
+            StudentJoinRequest.classroom_id == classroom_id,
+            StudentJoinRequest.status == "approved"
+        ).all()
+        
+        return students
+        
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Classroom not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal error: {str(e)}"
         )
-    
-    # Get approved students in the classroom
-    students = db.query(Student).join(StudentJoinRequest).filter(
-        StudentJoinRequest.classroom_id == classroom_id,
-        StudentJoinRequest.status == "approved"
-    ).all()
-    
-    return students
