@@ -380,15 +380,26 @@ class MathGenerationService:
             problem_list = []
             for i, problem in enumerate(problems):
                 print(f"  - 문제 {i+1}: ID={problem.id}, 순서={problem.sequence_order}")
+                # choices 필드 처리 - JSON 문자열인 경우 파싱
+                choices_data = problem.choices
+                if isinstance(choices_data, str):
+                    try:
+                        import json
+                        choices_data = json.loads(choices_data)
+                    except (json.JSONDecodeError, TypeError):
+                        choices_data = []
+                elif choices_data is None:
+                    choices_data = []
+                
                 problem_data = {
                     "id": problem.id,
                     "sequence_order": problem.sequence_order,
-                    "question": problem.problem_text,  # 프론트엔드가 기대하는 필드명
+                    "question": problem.question,  # Problem 모델의 실제 필드명
                     "problem_type": problem.problem_type,
                     "difficulty": problem.difficulty,
                     "correct_answer": problem.correct_answer,
-                    "choices": problem.options,  # 프론트엔드가 기대하는 필드명
-                    "solution": problem.solution,
+                    "choices": choices_data,  # 배열로 보장
+                    "solution": problem.explanation,  # Problem 모델의 실제 필드명
                     "created_at": problem.created_at.isoformat() if problem.created_at else None
                 }
                 problem_list.append(problem_data)

@@ -1292,8 +1292,25 @@ async def get_assignment_detail_for_student(
         
         # 워크시트의 문제들 가져오기
         print(f"🔍 문제 조회 시작 - worksheet_id: {assignment.worksheet_id}")
-        worksheet_problems = math_service.get_worksheet_problems(db, assignment.worksheet_id)
-        print(f"🔍 문제 개수: {len(worksheet_problems)}")
+        
+        # 먼저 워크시트가 존재하는지 확인
+        if not worksheet:
+            print(f"❌ 워크시트가 존재하지 않음 - worksheet_id: {assignment.worksheet_id}")
+            worksheet_problems = []
+        else:
+            print(f"✅ 워크시트 존재 확인 - Title: {worksheet.title}")
+            worksheet_problems = math_service.get_worksheet_problems(db, assignment.worksheet_id)
+            print(f"🔍 문제 개수: {len(worksheet_problems)}")
+            
+            # 문제가 없다면 데이터베이스에서 직접 확인
+            if len(worksheet_problems) == 0:
+                from ..models.problem import Problem
+                direct_problems = db.query(Problem).filter(
+                    Problem.worksheet_id == assignment.worksheet_id
+                ).all()
+                print(f"🔍 직접 조회한 문제 수: {len(direct_problems)}")
+                for p in direct_problems:
+                    print(f"  - 문제 ID: {p.id}, 순서: {p.sequence_order}, 텍스트: {p.question[:50]}...")
         
         response_data = {
             "assignment": {
