@@ -482,9 +482,17 @@ async function generateExam(event) {
         const result = await apiService.generateQuestionOptions(formData);
         
         if (result.status === 'success') {
-            // 기존 방식으로 결과 표시 (JSON 파싱 제거만 함)
+            const state = window.getGlobalState();
+            
+            // 통합된 응답(llm_response)을 문제지 데이터와 답안지 데이터로 사용
+            state.currentWorksheetData = result.llm_response;
+            state.currentAnswerData = result.llm_response; // 답안지 렌더링을 위해 동일 데이터 할당
+            window.setGlobalState(state);
+
+            // 결과 표시
             displayInputResult(result);
             document.getElementById('examResult').style.display = 'block';
+
         } else {
             throw new Error(result.message || '서버 오류');
         }

@@ -51,13 +51,7 @@ function displayInputResult(result) {
     if (result.answer_sheet) {
         console.log('📋 파싱된 답안지 데이터:', result.answer_sheet);
         
-        // 답안지 데이터 구조 검증 및 변환
-        let processedAnswerData = result.answer_sheet;
-        
-        // answer_sheet 래퍼가 있는 경우 내부 데이터 추출
-        if (result.answer_sheet.answer_sheet) {
-            processedAnswerData = result.answer_sheet.answer_sheet;
-        }
+        const processedAnswerData = result.answer_sheet;
         
         // 전역 변수에 답안지 데이터 저장
         const state = window.getGlobalState();
@@ -74,8 +68,8 @@ function displayInputResult(result) {
         window.setGlobalState(state);
     }
     
-    // 문제지와 답안지가 모두 있으면 저장 버튼 표시
-    if (llmResponse && result.answer_sheet) {
+    // 문제지가 있으면 저장 버튼 표시
+    if (llmResponse) {
         html += `
             <div style="text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px dashed #28a745;">
                 <h3 style="color: #28a745; margin-bottom: 15px;">💾 문제지 저장</h3>
@@ -141,6 +135,48 @@ function displayInputResult(result) {
     }
     
     examContent.innerHTML = html;
+}
+
+// 컨텐츠 배열을 HTML로 렌더링하는 헬퍼 함수
+function renderContentArray(content) {
+    let html = '';
+    
+    try {
+        // JSON이 문자열로 저장되어 있다면 파싱
+        const parsedContent = typeof content === 'string' ? JSON.parse(content) : content;
+        
+        if (parsedContent && parsedContent.content && Array.isArray(parsedContent.content)) {
+            parsedContent.content.forEach(item => {
+                if (item.type === 'title') {
+                    html += `<h4 style="text-align: center; margin-bottom: 20px; font-weight: bold; color: #007bff; font-size: 1.3rem;">${item.value}</h4>`;
+                } else if (item.type === 'paragraph') {
+                    html += `<p style="line-height: 1.8; margin-bottom: 15px; text-align: justify; text-indent: 20px;">${item.value}</p>`;
+                }
+            });
+        } else if (Array.isArray(parsedContent)) {
+            // 직접 배열인 경우
+            parsedContent.forEach(item => {
+                if (item.type === 'title') {
+                    html += `<h4 style="text-align: center; margin-bottom: 20px; font-weight: bold; color: #007bff; font-size: 1.3rem;">${item.value}</h4>`;
+                } else if (item.type === 'paragraph') {
+                    html += `<p style="line-height: 1.8; margin-bottom: 15px; text-align: justify; text-indent: 20px;">${item.value}</p>`;
+                }
+            });
+        } else {
+            // 단순 문자열인 경우
+            html = parsedContent.toString();
+        }
+    } catch (error) {
+        console.error('컨텐츠 파싱 오류:', error);
+        // 파싱 실패시 원본 내용을 문자열로 변환하여 표시
+        if (typeof content === 'object') {
+            html = JSON.stringify(content, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
+        } else {
+            html = content.toString();
+        }
+    }
+    
+    return html;
 }
 
 // 글의 종류별 지문 렌더링 함수 (실제 AI 생성 구조에 맞춤)
@@ -508,7 +544,9 @@ function renderAnswerSheet(answerData) {
                 
                 // 원문 지문 표시
                 if (relatedPassage.original_content) {
-                    html += `<div style="line-height: 1.8; text-align: justify; padding: 15px; background: white; border-radius: 5px; margin-bottom: 15px;">${relatedPassage.original_content}</div>`;
+                    html += `<div style="line-height: 1.8; text-align: justify; padding: 15px; background: white; border-radius: 5px; margin-bottom: 15px;">`;
+                    html += renderContentArray(relatedPassage.original_content);
+                    html += `</div>`;
                 }
                 
                 // 한글 번역 표시
@@ -516,7 +554,9 @@ function renderAnswerSheet(answerData) {
                     html += `
                         <div style="background: #e8f5e8; border: 1px solid #28a745; border-radius: 5px; padding: 15px;">
                             <h4 style="color: #155724; margin-bottom: 10px;">🇰🇷 한글 번역</h4>
-                            <div style="line-height: 1.8; text-align: justify;">${relatedPassage.korean_translation}</div>
+                            <div style="line-height: 1.8; text-align: justify;">`;
+                    html += renderContentArray(relatedPassage.korean_translation);
+                    html += `</div>
                         </div>`;
                 }
                 
@@ -542,7 +582,9 @@ function renderAnswerSheet(answerData) {
                 
                 // 원문 예문 표시
                 if (relatedExample.original_content) {
-                    html += `<div style="font-family: 'Courier New', monospace; line-height: 1.5; margin-bottom: 10px;">${relatedExample.original_content}</div>`;
+                    html += `<div style="font-family: 'Courier New', monospace; line-height: 1.5; margin-bottom: 10px;">`;
+                    html += renderContentArray(relatedExample.original_content);
+                    html += `</div>`;
                 }
                 
                 // 한글 번역 표시
@@ -550,7 +592,9 @@ function renderAnswerSheet(answerData) {
                     html += `
                         <div style="background: #e8f5e8; border: 1px solid #28a745; border-radius: 5px; padding: 10px;">
                             <div style="font-size: 14px; color: #155724; margin-bottom: 5px;">🇰🇷 한글 번역:</div>
-                            <div style="line-height: 1.5;">${relatedExample.korean_translation}</div>
+                            <div style="line-height: 1.5;">`;
+                    html += renderContentArray(relatedExample.korean_translation);
+                    html += `</div>
                         </div>`;
                 }
                 
@@ -611,6 +655,7 @@ function generateDefaultWorksheetName() {
 
 // 전역 함수로 노출
 window.displayInputResult = displayInputResult;
+window.renderContentArray = renderContentArray;
 window.renderPassageByType = renderPassageByType;
 window.renderExamPaper = renderExamPaper;
 window.renderAnswerSheet = renderAnswerSheet;

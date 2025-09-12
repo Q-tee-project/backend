@@ -135,41 +135,12 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
                 # Gemini 모델 생성
                 model = genai.GenerativeModel(settings.gemini_model)
                 
-                # 1단계: 문제지 생성
-                print("📝 1단계: 문제지 생성 중...")
-                response = model.generate_content(prompt)
+                # 통합 프롬프트로 API 한 번만 호출 (JSON 응답 요청)
+                print("📝 통합 문제지/답안지 생성 중...")
+                response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
                 llm_response = response.text
-                print("✅ 문제지 생성 완료!")
-                
-                # 2단계: 답안지 생성
-                if llm_response:
-                    try:
-                        print("📋 2단계: 답안지 생성 중...")
-                        
-                        # JSON 파싱을 위한 전처리
-                        clean_response = llm_response.strip()
-                        if clean_response.startswith('```json'):
-                            clean_response = clean_response.replace('```json', '').replace('```', '').strip()
-                        elif clean_response.startswith('```'):
-                            clean_response = clean_response.replace('```', '').strip()
-                        
-                        # 문제지 JSON 파싱
-                        worksheet_json = json.loads(clean_response)
-                        
-                        # 답안지 프롬프트 생성
-                        answer_prompt = generator.generate_answer_sheet_prompt(worksheet_json)
-                        
-                        # 답안지 생성 API 호출
-                        answer_response = model.generate_content(answer_prompt)
-                        answer_sheet = answer_response.text
-                        print("✅ 답안지 생성 완료!")
-                        
-                    except json.JSONDecodeError as json_error:
-                        print(f"⚠️ 답안지 생성 실패 - JSON 파싱 오류: {json_error}")
-                        answer_sheet = None
-                    except Exception as answer_error:
-                        print(f"⚠️ 답안지 생성 실패: {answer_error}")
-                        answer_sheet = None
+                answer_sheet = llm_response # 호환성을 위해 동일 데이터 할당
+                print("✅ 통합 생성 완료!")
                 
             except Exception as api_error:
                 print(f"❌ Gemini API 호출 오류: {api_error}")
@@ -193,30 +164,13 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
         
         if llm_response:
             try:
-                # llm_response JSON 파싱
-                clean_llm_response = llm_response.strip()
-                if clean_llm_response.startswith('```json'):
-                    clean_llm_response = clean_llm_response.replace('```json', '').replace('```', '').strip()
-                elif clean_llm_response.startswith('```'):
-                    clean_llm_response = clean_llm_response.replace('```', '').strip()
-                parsed_llm_response = json.loads(clean_llm_response)
-                print("✅ 문제지 JSON 파싱 완료!")
+                # 통합 JSON 파싱
+                parsed_llm_response = json.loads(llm_response)
+                parsed_answer_sheet = parsed_llm_response # 동일 객체 할당
+                print("✅ 통합 JSON 파싱 완료!")
             except json.JSONDecodeError as e:
-                print(f"⚠️ 문제지 JSON 파싱 실패: {e}")
+                print(f"⚠️ 통합 JSON 파싱 실패: {e}")
                 parsed_llm_response = None
-        
-        if answer_sheet:
-            try:
-                # answer_sheet JSON 파싱
-                clean_answer_sheet = answer_sheet.strip()
-                if clean_answer_sheet.startswith('```json'):
-                    clean_answer_sheet = clean_answer_sheet.replace('```json', '').replace('```', '').strip()
-                elif clean_answer_sheet.startswith('```'):
-                    clean_answer_sheet = clean_answer_sheet.replace('```', '').strip()
-                parsed_answer_sheet = json.loads(clean_answer_sheet)
-                print("✅ 답안지 JSON 파싱 완료!")
-            except json.JSONDecodeError as e:
-                print(f"⚠️ 답안지 JSON 파싱 실패: {e}")
                 parsed_answer_sheet = None
         
         # 백엔드에서 결과 출력
@@ -302,12 +256,13 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         passages_data = worksheet_data.get('passages', [])
         for passage_data in passages_data:
             db_passage = Passage(
-                worksheet_id=db_worksheet.worksheet_id,
+                worksheet_id=db_worksheet.id,
                 passage_id=passage_data.get('passage_id'),
                 passage_type=passage_data.get('passage_type'),
                 passage_content=passage_data.get('passage_content'),
-                related_questions=passage_data.get('related_questions', []),
-                created_at=datetime.now()
+                original_content=passage_data.get('original_content'),
+                korean_translation=passage_data.get('korean_translation'),
+                related_questions=passage_data.get('related_questions', [])
             )
             db.add(db_passage)
         
@@ -315,11 +270,12 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         examples_data = worksheet_data.get('examples', [])
         for example_data in examples_data:
             db_example = Example(
-                worksheet_id=db_worksheet.worksheet_id,
+                worksheet_id=db_worksheet.id,
                 example_id=example_data.get('example_id'),
                 example_content=example_data.get('example_content'),
-                related_questions=example_data.get('related_questions', []),
-                created_at=datetime.now()
+                original_content=example_data.get('original_content'),
+                korean_translation=example_data.get('korean_translation'),
+                related_questions=example_data.get('related_questions', [])
             )
             db.add(db_example)
         
@@ -327,7 +283,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         questions_data = worksheet_data.get('questions', [])
         for question_data in questions_data:
             db_question = Question(
-                worksheet_id=db_worksheet.worksheet_id,
+                worksheet_id=db_worksheet.id,
                 question_id=question_data.get('question_id'),
                 question_text=question_data.get('question_text'),
                 question_type=question_data.get('question_type'),
@@ -339,8 +295,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
                 example_id=question_data.get('question_example_id'),
                 correct_answer=question_data.get('correct_answer'),
                 explanation=question_data.get('explanation'),
-                learning_point=question_data.get('learning_point'),
-                created_at=datetime.now() # created_at은 Question 모델에 없으므로 제거해야 합니다.
+                learning_point=question_data.get('learning_point')
             )
             db.add(db_question)
         
@@ -430,10 +385,16 @@ async def get_worksheet_for_editing(worksheet_id: int, db: Session = Depends(get
                 "passage_id": passage.passage_id,
                 "passage_type": passage.passage_type,
                 "passage_content": passage.passage_content,
-                "original_content": passage.original_content,
-                "korean_translation": passage.korean_translation,
                 "related_questions": passage.related_questions
             }
+            
+            # 원본 지문 내용 추가 (답안 데이터에서)
+            for answer_passage in worksheet.answer_passages:
+                if answer_passage.passage_id == passage.passage_id:
+                    passage_data["original_content"] = answer_passage.original_content
+                    passage_data["text_type"] = answer_passage.text_type
+                    break
+            
             worksheet_data["passages"].append(passage_data)
         
         # 예문 데이터 + 원본 내용 추가
@@ -441,10 +402,15 @@ async def get_worksheet_for_editing(worksheet_id: int, db: Session = Depends(get
             example_data = {
                 "example_id": example.example_id,
                 "example_content": example.example_content,
-                "original_content": example.original_content,
-                "korean_translation": example.korean_translation,
                 "related_questions": example.related_questions
             }
+            
+            # 원본 예문 내용 추가 (답안 데이터에서)
+            for answer_example in worksheet.answer_examples:
+                if answer_example.example_id == example.example_id:
+                    example_data["original_content"] = answer_example.original_content
+                    break
+            
             worksheet_data["examples"].append(example_data)
         
         # 문제 데이터 + 정답/해설 추가
@@ -458,11 +424,29 @@ async def get_worksheet_for_editing(worksheet_id: int, db: Session = Depends(get
                 "question_detail_type": question.question_detail_type,
                 "question_choices": question.question_choices,
                 "question_passage_id": question.passage_id,
-                "question_example_id": question.example_id,
-                "correct_answer": question.correct_answer,
-                "explanation": question.explanation,
-                "learning_point": question.learning_point
+                "question_example_id": question.example_id
             }
+            
+            # 정답/해설 데이터 추가
+            answer_question = None
+            for answer in worksheet.answer_questions:
+                if answer.question_id == question.question_id:
+                    answer_question = answer
+                    break
+            
+            if answer_question:
+                question_data.update({
+                    "correct_answer": answer_question.correct_answer,
+                    "explanation": answer_question.explanation,
+                    "learning_point": answer_question.learning_point
+                })
+            else:
+                question_data.update({
+                    "correct_answer": "정답 정보 없음",
+                    "explanation": None,
+                    "learning_point": None
+                })
+            
             worksheet_data["questions"].append(question_data)
         
         return {
@@ -476,7 +460,7 @@ async def get_worksheet_for_editing(worksheet_id: int, db: Session = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"편집용 문제지 조회 중 오류: {str(e)}")
 
-@router.get("/worksheets/{worksheet_id}/solve", response_model=Dict[str, Any])
+@router.get("/worksheets/{worksheet_id}/solve")
 async def get_worksheet_for_solving(worksheet_id: int, db: Session = Depends(get_db)):
     """문제 풀이용 문제지를 조회합니다 (답안 제외)."""
     try:
@@ -540,12 +524,12 @@ async def get_worksheet_for_solving(worksheet_id: int, db: Session = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"문제지 조회 중 오류: {str(e)}")
 
-@router.delete("/worksheets/{worksheet_id}")
-async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
+@router.delete("/worksheets/{worksheet_id}", response_model=Dict[str, Any])
+async def delete_worksheet(worksheet_id: int, db: Session = Depends(get_db)):
     """문제지와 관련된 모든 데이터를 삭제합니다."""
     try:
         # 문제지 존재 확인
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
@@ -557,14 +541,19 @@ async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
             db.query(QuestionResult).filter(QuestionResult.grading_result_id == result.id).delete()
             db.delete(result)
         
+        # 1. 답안 데이터 삭제 (worksheet.id 사용)
+        db.query(AnswerQuestion).filter(AnswerQuestion.worksheet_id == worksheet_id).delete()
+        db.query(AnswerPassage).filter(AnswerPassage.worksheet_id == worksheet_id).delete()
+        db.query(AnswerExample).filter(AnswerExample.worksheet_id == worksheet_id).delete()
+        
         # 2. 문제 삭제
-        db.query(Question).filter(Question.worksheet_id == db_worksheet.worksheet_id).delete()
+        db.query(Question).filter(Question.worksheet_id == worksheet_id).delete()
         
         # 3. 지문 삭제
-        db.query(Passage).filter(Passage.worksheet_id == db_worksheet.worksheet_id).delete()
+        db.query(Passage).filter(Passage.worksheet_id == worksheet_id).delete()
         
         # 4. 예문 삭제
-        db.query(Example).filter(Example.worksheet_id == db_worksheet.worksheet_id).delete()
+        db.query(Example).filter(Example.worksheet_id == worksheet_id).delete()
         
         # 5. 문제지 삭제
         db.delete(worksheet)

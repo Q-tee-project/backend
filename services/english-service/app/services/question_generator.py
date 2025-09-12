@@ -144,6 +144,59 @@ class PromptGenerator:
         subject_types_lines = self._generate_subject_types_lines(subject_distribution, subject_details)
         vocabulary_list = self._get_vocabulary_list(db, difficulty_distribution)
         
+        # JSON 응답 템플릿 정의
+        json_template = """
+    {
+        "worksheet_id": "1",
+        "worksheet_name": "any_name", 
+        "worksheet_date": "2025-01-01",
+        "worksheet_time": "10:00",
+        "worksheet_duration": "60",
+        "worksheet_subject": "영어",
+        "worksheet_level": "{school_level}",
+        "worksheet_grade": {grade},
+        "total_questions": {total_questions},
+        "passages": [
+            {
+                "passage_id": "1",
+                "passage_type": "article",
+                "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+                "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
+                "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
+                "related_questions": ["1", "2"]
+            }
+        ],
+        "examples": [
+            {
+                "example_id": "1",
+                "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+                "original_content": "완전한 형태의 원본 예문",
+                "korean_translation": "원본 예문의 자연스러운 한글 번역",
+                "related_questions": 1,
+            }
+        ],
+        "questions": [
+            {
+                "question_id": "1",
+                "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
+                "question_type": "객관식|단답형|서술형",
+                "question_subject": "독해|문법|어휘",
+                "question_difficulty": "상|중|하",
+                "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
+                "question_passage_id": "1",
+                "question_example_id": "1",
+                "question_choices": [
+                    "선택지 1",
+                    "선택지 2", 
+                    "선택지 3"
+                ],
+                "correct_answer": "정답 (객관식은 번호, 주관식은 텍스트)",
+                "explanation": "정답에 대한 상세한 해설 (한국어)",
+                "learning_point": "문제와 관련된 핵심 학습 포인트"
+            }
+        ]
+    }"""
+        
         # 프롬프트 구성
         prompt = f"""당신은 영어 교육 전문가이자 숙련된 문제 출제자입니다. 
 주어진 조건에 따라 학습자의 수준에 맞는 고품질의 영어 문제를 출제해야 합니다.
@@ -264,57 +317,8 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 # 유형별 JSON 형식
 {json_formats_text}
 
-# 응답 형식
-{{
-    "worksheet_id": "1",
-    "worksheet_name": "any_name", 
-    "worksheet_date": "2025-01-01",
-    "worksheet_time": "10:00",
-    "worksheet_duration": "60",
-    "worksheet_subject": "영어",
-    "worksheet_level": "{school_level}",
-    "worksheet_grade": "{grade}",
-    "total_questions": {total_questions},
-    "passages": [
-        {{
-            "passage_id": "1",
-            "passage_type": "article",
-            "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-            "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
-            "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
-            "related_questions": ["1", "2"]
-        }}
-    ],
-    "examples": [
-        {{
-            "example_id": "1",
-            "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-            "original_content": "완전한 형태의 원본 예문",
-            "korean_translation": "원본 예문의 자연스러운 한글 번역",
-            "related_questions": 1,
-        }}
-    ],
-    "questions": [
-        {{
-            "question_id": "1",
-            "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
-            "question_type": "객관식|단답형|서술형",
-            "question_subject": "독해|문법|어휘",
-            "question_difficulty": "상|중|하",
-            "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
-            "question_passage_id": "1",
-            "question_example_id": "1",
-            "question_choices": [
-                "선택지 1",
-                "선택지 2", 
-                "선택지 3"
-            ],
-            "correct_answer": "정답 (객관식은 번호, 주관식은 텍스트)",
-            "explanation": "정답에 대한 상세한 해설 (한국어)",
-            "learning_point": "문제와 관련된 핵심 학습 포인트"
-        }}
-    ]
-}}
+# 응답 형식 - 절대 준수해야 함
+{json_template}
 
 # 문제 배치 및 순서 규칙
 - 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
