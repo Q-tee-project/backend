@@ -1,0 +1,425 @@
+from typing import Dict, List, Any, Optional
+from sqlalchemy.orm import Session
+from datetime import datetime
+import json
+import uuid
+
+from app.models.models import (
+    Worksheet, Question, Passage, Example, 
+    GradingResult, QuestionResult
+)
+from app.core.config import get_settings
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️ Gemini 라이브러리가 설치되지 않았습니다.")
+
+settings = get_settings()
+
+class NewGradingService:
+    """새로운 채점 서비스 - 객관식은 DB 비교, 주관식/서술형은 Gemini AI 채점"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        if GEMINI_AVAILABLE and settings.gemini_api_key:
+            genai.configure(api_key=settings.gemini_api_key)
+            self.model = genai.GenerativeModel(settings.gemini_model)
+        else:
+            self.model = None
+    
+    async def grade_worksheet(self, worksheet_id: str, student_name: str, 
+                            answers: Dict[str, str], completion_time: int) -> Dict[str, Any]:
+        """문제지 전체 채점"""
+        try:
+            # 문제지 정보 조회
+            worksheet = self.db.query(Worksheet).filter(
+                Worksheet.worksheet_id == worksheet_id
+            ).first()
+            
+            if not worksheet:
+                raise Exception("문제지를 찾을 수 없습니다.")
+            
+            # 문제들 조회
+            questions = self.db.query(Question).filter(
+                Question.worksheet_id == worksheet_id
+            ).all()
+            
+            if not questions:
+                raise Exception("문제를 찾을 수 없습니다.")
+            
+            # 각 문제별 채점
+            question_results = []
+            total_score = 0
+            max_score = 0
+            
+            for question in questions:
+                student_answer = answers.get(question.question_id, "")
+                
+                # 문제별 채점
+                result = await self._grade_single_question(
+                    question, student_answer, worksheet_id
+                )
+                
+                question_results.append(result)
+                total_score += result["score"]
+                max_score += result["max_score"]
+            
+            # 채점 결과 저장
+            grading_result = await self._save_grading_result(
+                worksheet_id, student_name, completion_time,
+                total_score, max_score, question_results
+            )
+            
+            # 결과 반환
+            percentage = (total_score / max_score * 100) if max_score > 0 else 0
+            
+            return {
+                "result_id": grading_result.result_id,
+                "student_name": student_name,
+                "worksheet_id": worksheet_id,
+                "total_score": total_score,
+                "max_score": max_score,
+                "percentage": round(percentage, 2),
+                "completion_time": completion_time,
+                "question_results": question_results,
+                "needs_review": any(qr.get("needs_review", False) for qr in question_results),
+                "created_at": grading_result.created_at
+            }
+            
+        except Exception as e:
+            print(f"❌ 채점 오류: {str(e)}")
+            raise e
+    
+    async def _grade_single_question(self, question: Question, student_answer: str, 
+                                   worksheet_id: str) -> Dict[str, Any]:
+        """개별 문제 채점"""
+        
+        question_result = {
+            "question_id": question.question_id,
+            "question_type": question.question_type,
+            "question_text": question.question_text,
+            "student_answer": student_answer,
+            "correct_answer": question.correct_answer,
+            "max_score": 10,  # 기본 점수
+            "score": 0,
+            "is_correct": False,
+            "grading_method": "db",
+            "ai_feedback": None,
+            "needs_review": False
+        }
+        
+        if not student_answer.strip():
+            # 답안이 없는 경우
+            question_result["score"] = 0
+            question_result["is_correct"] = False
+            return question_result
+        
+        if question.question_type == "객관식":
+            # 객관식: DB의 정답과 직접 비교
+            question_result["score"] = 10 if student_answer.strip() == question.correct_answer.strip() else 0
+            question_result["is_correct"] = question_result["score"] > 0
+            question_result["grading_method"] = "db"
+            
+        elif question.question_type in ["주관식", "서술형"]:
+            # 주관식/서술형: Gemini AI 채점
+            if self.model:
+                ai_result = await self._grade_with_ai(
+                    question, student_answer, worksheet_id
+                )
+                question_result.update(ai_result)
+                question_result["grading_method"] = "ai"
+                question_result["needs_review"] = True  # AI 채점은 검수 필요
+            else:
+                # AI 사용 불가능한 경우 기본 점수
+                question_result["score"] = 5  # 중간 점수
+                question_result["is_correct"] = True
+                question_result["ai_feedback"] = "AI 채점 서비스를 사용할 수 없어 기본 점수가 부여되었습니다."
+                question_result["needs_review"] = True
+        
+        return question_result
+    
+    async def _grade_with_ai(self, question: Question, student_answer: str, 
+                           worksheet_id: str) -> Dict[str, Any]:
+        """Gemini AI를 사용한 주관식/서술형 채점"""
+        
+        try:
+            # 관련 지문/예문 정보 수집
+            context_info = await self._get_question_context(question, worksheet_id)
+            
+            # AI 채점 프롬프트 생성
+            prompt = self._create_grading_prompt(
+                question, student_answer, context_info
+            )
+            
+            # Gemini API 호출
+            response = self.model.generate_content(
+                prompt, 
+                generation_config={"response_mime_type": "application/json"}
+            )
+            
+            # 응답 파싱
+            ai_result = json.loads(response.text)
+            
+            return {
+                "score": min(max(ai_result.get("score", 0), 0), 10),  # 0-10점 범위
+                "is_correct": ai_result.get("score", 0) >= 6,  # 6점 이상을 정답으로 간주
+                "ai_feedback": ai_result.get("feedback", ""),
+                "grading_rationale": ai_result.get("rationale", ""),
+                "key_points_matched": ai_result.get("key_points_matched", []),
+                "improvement_suggestions": ai_result.get("improvement_suggestions", [])
+            }
+            
+        except Exception as e:
+            print(f"❌ AI 채점 오류: {str(e)}")
+            return {
+                "score": 5,  # 오류 시 중간 점수
+                "is_correct": True,
+                "ai_feedback": f"AI 채점 중 오류가 발생했습니다: {str(e)}",
+                "grading_rationale": "시스템 오류로 인한 기본 점수 부여",
+                "key_points_matched": [],
+                "improvement_suggestions": []
+            }
+    
+    async def _get_question_context(self, question: Question, worksheet_id: str) -> Dict[str, Any]:
+        """문제 관련 지문/예문 정보 수집"""
+        
+        context = {
+            "passage": None,
+            "example": None
+        }
+        
+        # 관련 지문 조회
+        if question.passage_id:
+            passage = self.db.query(Passage).filter(
+                Passage.worksheet_id == worksheet_id,
+                Passage.passage_id == question.passage_id
+            ).first()
+            
+            if passage:
+                context["passage"] = {
+                    "content": passage.passage_content,
+                    "original_content": passage.original_content,
+                    "korean_translation": passage.korean_translation
+                }
+        
+        # 관련 예문 조회
+        if question.example_id:
+            example = self.db.query(Example).filter(
+                Example.worksheet_id == worksheet_id,
+                Example.example_id == question.example_id
+            ).first()
+            
+            if example:
+                context["example"] = {
+                    "content": example.example_content,
+                    "original_content": example.original_content,
+                    "korean_translation": example.korean_translation
+                }
+        
+        return context
+    
+    def _create_grading_prompt(self, question: Question, student_answer: str, 
+                             context_info: Dict[str, Any]) -> str:
+        """AI 채점용 프롬프트 생성"""
+        
+        prompt = f"""
+# 영어 문제 채점 시스템
+
+당신은 영어 교육 전문가입니다. 다음 문제에 대한 학생의 답안을 채점해주세요.
+
+## 문제 정보
+- **문제 유형**: {question.question_type}
+- **문제 영역**: {question.question_subject}
+- **난이도**: {question.question_difficulty}
+- **문제 내용**: {question.question_text}
+- **출제자 정답**: {question.correct_answer}
+
+## 학생 답안
+{student_answer}
+
+## 추가 정보
+"""
+        
+        # 지문 정보 추가
+        if context_info.get("passage"):
+            passage = context_info["passage"]
+            prompt += f"""
+### 관련 지문
+- **지문 내용**: {passage.get('original_content', '')}
+- **한글 번역**: {passage.get('korean_translation', '')}
+"""
+        
+        # 예문 정보 추가
+        if context_info.get("example"):
+            example = context_info["example"]
+            prompt += f"""
+### 관련 예문
+- **예문 내용**: {example.get('original_content', '')}
+- **한글 번역**: {example.get('korean_translation', '')}
+"""
+        
+        prompt += f"""
+
+## 채점 기준
+1. **정확성**: 문법적 정확성, 어휘 사용의 적절성
+2. **완성도**: 답안의 완전성, 요구사항 충족도
+3. **이해도**: 문제 의도 파악 및 내용 이해도
+4. **표현력**: 자연스러운 영어 표현 (서술형의 경우)
+
+## 채점 지침
+- 출제자의 정답과 완전히 일치하지 않더라도, 의미상 올바르고 문법적으로 정확하면 점수를 부여
+- 주관적 문제의 경우 다양한 답변이 가능함을 고려
+- 부분 점수 부여 가능 (창의적이고 합리적인 답변에 대해)
+- 문법 오류가 있어도 의미 전달이 명확하면 부분 점수 부여
+
+## 응답 형식 (JSON)
+{{
+    "score": 점수 (0-10점),
+    "feedback": "구체적인 피드백 (한글, 200자 이내)",
+    "rationale": "채점 근거 (한글, 100자 이내)",
+    "key_points_matched": ["맞춘 핵심 포인트들"],
+    "improvement_suggestions": ["개선 제안사항들"]
+}}
+
+채점해주세요:
+"""
+        
+        return prompt
+    
+    async def _save_grading_result(self, worksheet_id: str, student_name: str, 
+                                 completion_time: int, total_score: int, max_score: int,
+                                 question_results: List[Dict[str, Any]]) -> GradingResult:
+        """채점 결과 데이터베이스 저장"""
+        
+        try:
+            # 채점 결과 메인 레코드 생성
+            result_id = str(uuid.uuid4())
+            percentage = (total_score / max_score * 100) if max_score > 0 else 0
+            needs_review = any(qr.get("needs_review", False) for qr in question_results)
+            
+            grading_result = GradingResult(
+                result_id=result_id,
+                worksheet_id=worksheet_id,
+                student_name=student_name,
+                completion_time=completion_time,
+                total_score=total_score,
+                max_score=max_score,
+                percentage=percentage,
+                needs_review=needs_review,
+                is_reviewed=False,
+                created_at=datetime.now()
+            )
+            
+            self.db.add(grading_result)
+            self.db.flush()  # ID 생성을 위해 flush
+            
+            # 문제별 결과 저장
+            for qr in question_results:
+                question_result = QuestionResult(
+                    grading_result_id=grading_result.id,
+                    question_id=qr["question_id"],
+                    question_type=qr["question_type"],
+                    student_answer=qr["student_answer"],
+                    correct_answer=qr["correct_answer"],
+                    score=qr["score"],
+                    max_score=qr["max_score"],
+                    is_correct=qr["is_correct"],
+                    grading_method=qr["grading_method"],
+                    ai_feedback=qr.get("ai_feedback"),
+                    needs_review=qr.get("needs_review", False),
+                    is_reviewed=False,
+                    created_at=datetime.now()
+                )
+                
+                self.db.add(question_result)
+            
+            self.db.commit()
+            return grading_result
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"❌ 채점 결과 저장 오류: {str(e)}")
+            raise e
+    
+    async def review_grading_result(self, result_id: str, 
+                                  question_reviews: Dict[str, Dict[str, Any]], 
+                                  reviewed_by: str = "교사") -> Dict[str, Any]:
+        """AI 채점 결과 검수"""
+        
+        try:
+            # 채점 결과 조회
+            grading_result = self.db.query(GradingResult).filter(
+                GradingResult.result_id == result_id
+            ).first()
+            
+            if not grading_result:
+                raise Exception("채점 결과를 찾을 수 없습니다.")
+            
+            # 문제별 결과 조회
+            question_results = self.db.query(QuestionResult).filter(
+                QuestionResult.grading_result_id == grading_result.id
+            ).all()
+            
+            total_score_adjustment = 0
+            
+            # 각 문제별 검수 적용
+            for question_result in question_results:
+                question_id = question_result.question_id
+                
+                if question_id in question_reviews:
+                    review = question_reviews[question_id]
+                    
+                    # 검수된 점수 적용
+                    if "score" in review:
+                        old_score = question_result.score
+                        new_score = min(max(review["score"], 0), question_result.max_score)
+                        
+                        question_result.reviewed_score = new_score
+                        total_score_adjustment += (new_score - old_score)
+                    
+                    # 검수 피드백 적용
+                    if "feedback" in review:
+                        question_result.reviewed_feedback = review["feedback"]
+                    
+                    question_result.is_reviewed = True
+            
+            # 전체 점수 업데이트
+            grading_result.total_score += total_score_adjustment
+            grading_result.percentage = (grading_result.total_score / grading_result.max_score * 100) if grading_result.max_score > 0 else 0
+            grading_result.is_reviewed = True
+            grading_result.reviewed_at = datetime.now()
+            grading_result.reviewed_by = reviewed_by
+            grading_result.needs_review = False
+            
+            self.db.commit()
+            
+            return {
+                "status": "success",
+                "message": "검수가 완료되었습니다.",
+                "result_id": result_id,
+                "total_score": grading_result.total_score,
+                "percentage": round(grading_result.percentage, 2),
+                "reviewed_questions": len(question_reviews)
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            print(f"❌ 검수 오류: {str(e)}")
+            raise e
+
+# 전역 함수로 노출
+async def grade_worksheet_submission(db: Session, worksheet_id: str, student_name: str, 
+                                   answers: Dict[str, str], completion_time: int) -> Dict[str, Any]:
+    """문제지 제출 채점 (전역 함수)"""
+    service = NewGradingService(db)
+    return await service.grade_worksheet(worksheet_id, student_name, answers, completion_time)
+
+async def review_ai_grading(db: Session, result_id: str, 
+                          question_reviews: Dict[str, Dict[str, Any]], 
+                          reviewed_by: str = "교사") -> Dict[str, Any]:
+    """AI 채점 결과 검수 (전역 함수)"""
+    service = NewGradingService(db)
+    return await service.review_grading_result(result_id, question_reviews, reviewed_by)

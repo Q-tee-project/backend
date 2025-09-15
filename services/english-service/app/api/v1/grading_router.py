@@ -11,7 +11,7 @@ from app.schemas.schemas import (
 from app.models.models import (
     Worksheet, GradingResult, QuestionResult, Passage, Example
 )
-from app.services.grading_service import perform_grading
+from app.services.new_grading_service import grade_worksheet_submission, review_ai_grading
 
 router = APIRouter(tags=["Grading"])
 
@@ -28,29 +28,20 @@ async def submit_answers_and_grade(
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
-        student_name = submission_data.student_name
+        student_name = "학생"  # 기본 이름 사용
         answers = submission_data.answers
         completion_time = submission_data.completion_time
         
-        # 채점 수행
-        grading_result = await perform_grading(worksheet, answers, db, student_name, completion_time)
+        # 새로운 채점 서비스로 채점 수행
+        grading_result = await grade_worksheet_submission(
+            db, worksheet_id, student_name, answers, completion_time
+        )
         
         # 결과 반환
         return {
             "status": "success",
             "message": "답안이 제출되고 채점이 완료되었습니다.",
-            "grading_result": {
-                "result_id": grading_result["result_id"],
-                "student_name": student_name,
-                "completion_time": completion_time,
-                "total_score": grading_result["total_score"],
-                "max_score": grading_result["max_score"],
-                "percentage": grading_result["percentage"],
-                "needs_review": grading_result["needs_review"],
-                "passage_groups": grading_result.get("passage_groups", []),
-                "example_groups": grading_result.get("example_groups", []),
-                "standalone_questions": grading_result.get("standalone_questions", [])
-            }
+            "grading_result": grading_result
         }
         
     except HTTPException:
@@ -93,20 +84,8 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
         if not result:
             raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
         
-        # 원본 문제지에서 지문과 예문 데이터 조회
-        original_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == result.worksheet_id).first()
-        passages = original_worksheet.passages if original_worksheet else []
-        examples = original_worksheet.examples if original_worksheet else []
-        
-        # 백엔드에서 미리 그룹핑 (grading_service와 동일한 로직)
-        passage_groups = []
-        example_groups = []
-        standalone_questions = []
-        
-        # 문제별 결과를 딕셔너리로 변환 (그룹핑용)
+        # 문제별 결과를 딕셔너리로 변환
         question_results = []
-        processed_questions = set()
-        
         for question_result in result.question_results:
             question_data = {
                 "id": question_result.id,
@@ -123,73 +102,11 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 "reviewed_score": question_result.reviewed_score,
                 "reviewed_feedback": question_result.reviewed_feedback,
                 "is_reviewed": question_result.is_reviewed,
-                "created_at": question_result.created_at,
-                "passage_id": getattr(question_result, 'passage_id', None),
-                "example_id": getattr(question_result, 'example_id', None)
+                "created_at": question_result.created_at
             }
             question_results.append(question_data)
         
-        # 지문별 문제 그룹핑 (related_questions 기준)
-        for passage in passages:
-            if passage.related_questions:
-                related_questions = []
-                for question_id in passage.related_questions:
-                    matching_question = next((q for q in question_results if q["question_id"] == str(question_id)), None)
-                    if matching_question:
-                        related_questions.append(matching_question)
-                        processed_questions.add(matching_question["question_id"])
-                
-                if related_questions:
-                    passage_groups.append({
-                        "passage": {
-                            "passage_id": passage.passage_id,
-                            "original_content": passage.original_content,
-                            "korean_translation": passage.korean_translation,
-                            "text_type": getattr(passage, 'passage_type', None)
-                        },
-                        "questions": related_questions
-                    })
-        
-        # 예문별 문제 그룹핑 (지문에 속하지 않은 것만)
-        for example in examples:
-            if example.related_questions:
-                related_questions = []
-                
-                # related_questions가 문자열인 경우 리스트로 변환
-                if isinstance(example.related_questions, str):
-                    question_ids = [example.related_questions]
-                else:
-                    question_ids = example.related_questions
-                    
-                for question_id in question_ids:
-                    if str(question_id) not in processed_questions:
-                        matching_question = next((q for q in question_results if q["question_id"] == str(question_id)), None)
-                        if matching_question:
-                            related_questions.append(matching_question)
-                            processed_questions.add(matching_question["question_id"])
-                
-                if related_questions:
-                    example_groups.append({
-                        "example": {
-                            "example_id": example.example_id,
-                            "original_content": example.original_content,
-                            "korean_translation": example.korean_translation
-                        },
-                        "questions": related_questions
-                    })
-        
-        # 독립 문제들
-        standalone_questions = [q for q in question_results if q["question_id"] not in processed_questions]
-        
-        # 디버깅 로그
-        print(f"🔍 API 디버깅 - result_id: {result.result_id}")
-        print(f"📄 passage_groups 개수: {len(passage_groups)}")
-        print(f"📝 example_groups 개수: {len(example_groups)}")
-        print(f"📋 standalone_questions 개수: {len(standalone_questions)}")
-        print(f"🗂️ passages 개수: {len(passages)}")
-        print(f"🗂️ examples 개수: {len(examples)}")
-        
-        # 결과 객체 구성
+        # 결과 객체 구성 (단순화)
         result_dict = {
             "id": result.id,
             "result_id": result.result_id,
@@ -204,10 +121,7 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             "reviewed_at": result.reviewed_at,
             "reviewed_by": result.reviewed_by,
             "created_at": result.created_at,
-            "question_results": question_results,  # 호환성을 위해 유지
-            "passage_groups": passage_groups,      # 지문별 그룹
-            "example_groups": example_groups,      # 예문별 그룹  
-            "standalone_questions": standalone_questions  # 독립 문제들
+            "question_results": question_results
         }
         
         return result_dict
@@ -222,60 +136,16 @@ async def update_grading_review(
     review_data: ReviewRequest, 
     db: Session = Depends(get_db)
 ):
-    """채점 결과의 검수를 업데이트합니다."""
+    """AI 채점 결과의 검수를 업데이트합니다."""
     try:
-        # 채점 결과 조회
-        grading_result = db.query(GradingResult).filter(GradingResult.result_id == result_id).first()
-        if not grading_result:
-            raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
+        # 새로운 검수 서비스 사용
+        review_result = await review_ai_grading(
+            db, result_id, review_data.question_results, review_data.reviewed_by
+        )
         
-        # 문제별 검수 결과 업데이트
-        total_score = 0
-        max_score = 0
-        
-        for question_result in grading_result.question_results:
-            question_id = question_result.question_id
-            max_score += question_result.max_score
-            
-            if question_id in review_data.question_results:
-                review_info = review_data.question_results[question_id]
-                
-                # 검수된 점수와 피드백 업데이트
-                if "score" in review_info:
-                    question_result.reviewed_score = review_info["score"]
-                    total_score += review_info["score"]
-                else:
-                    total_score += question_result.score
-                
-                if "feedback" in review_info:
-                    question_result.reviewed_feedback = review_info["feedback"]
-                
-                question_result.is_reviewed = True
-            else:
-                total_score += question_result.score
-        
-        # 전체 채점 결과 업데이트
-        grading_result.total_score = total_score
-        grading_result.percentage = round((total_score / max_score * 100) if max_score > 0 else 0, 1)
-        grading_result.is_reviewed = True
-        grading_result.reviewed_at = datetime.now()
-        grading_result.reviewed_by = review_data.reviewed_by
-        grading_result.needs_review = False
-        
-        db.commit()
-        
-        return {
-            "status": "success",
-            "message": "검수가 완료되었습니다.",
-            "result": {
-                "result_id": result_id,
-                "total_score": total_score,
-                "max_score": max_score,
-                "percentage": grading_result.percentage
-            }
-        }
+        return review_result
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"검수 업데이트 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"검수 중 오류: {str(e)}")

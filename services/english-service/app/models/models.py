@@ -114,8 +114,8 @@ class Passage(Base):
     passage_id = Column(String(10), nullable=False)  # "1", "2" 등
     passage_type = Column(String(50), nullable=False)  # article, dialogue 등
     passage_content = Column(JSON, nullable=False)  # 지문 내용 (JSON 형태)
-    original_content = Column(Text, nullable=True)
-    korean_translation = Column(Text, nullable=True)
+    original_content = Column(JSON, nullable=True)
+    korean_translation = Column(JSON, nullable=True)
     related_questions = Column(JSON, nullable=False)  # 연관 문제 ID 배열
     created_at = Column(DateTime, nullable=False)
     
@@ -133,7 +133,7 @@ class Example(Base):
     example_content = Column(Text, nullable=False)  # 예문 내용
     original_content = Column(Text, nullable=True)
     korean_translation = Column(Text, nullable=True)
-    related_questions = Column(JSON, nullable=False)  # 연관 문제 ID 배열
+    related_question = Column(String(10), nullable=True)  # 연관 문제 ID
     created_at = Column(DateTime, nullable=False)
     
     # 관계 설정

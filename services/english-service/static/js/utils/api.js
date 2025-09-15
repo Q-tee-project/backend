@@ -1,17 +1,13 @@
 /**
- * 영어 서비스 API 호출 전용 모듈
- * 모든 서버 통신을 중앙집중식으로 관리
+ * API 통신 유틸리티
  */
 
-class ApiService {
+class ApiClient {
     constructor(baseUrl = '') {
         this.baseUrl = baseUrl;
     }
 
-    /**
-     * 기본 fetch 래퍼 - 에러 처리 및 JSON 파싱 통합
-     */
-    async _request(url, options = {}) {
+    async request(url, options = {}) {
         const config = {
             headers: {
                 'Content-Type': 'application/json',
@@ -24,226 +20,188 @@ class ApiService {
             const response = await fetch(this.baseUrl + url, config);
             
             if (!response.ok) {
-                throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+                const errorData = await response.json().catch(() => ({ 
+                    detail: `HTTP ${response.status}: ${response.statusText}` 
+                }));
+                console.error('API Error Details:', errorData);
+                
+                // 422 오류의 경우 상세한 검증 오류 표시
+                if (response.status === 422 && errorData.detail && Array.isArray(errorData.detail)) {
+                    const validationErrors = errorData.detail.map(err => {
+                        const location = err.loc ? err.loc.join('.') : 'unknown_field';
+                        const message = err.msg || 'validation error';
+                        const input = err.input ? JSON.stringify(err.input).substring(0, 100) : '';
+                        return `${location}: ${message} ${input ? `(input: ${input})` : ''}`;
+                    }).join('; ');
+                    throw new Error(`Validation Error: ${validationErrors}`);
+                }
+                
+                throw new Error(errorData.detail || `Request failed with status ${response.status}`);
             }
 
             return await response.json();
         } catch (error) {
-            console.error(`API 요청 오류 [${url}]:`, error);
+            console.error('API Request Error:', error);
             throw error;
         }
     }
 
-    // =============== 카테고리 관리 ===============
-    /**
-     * 영역별 카테고리 데이터 로드 (독해, 문법, 어휘)
-     */
-    async loadCategories() {
-        return await this._request('/categories');
+    // GET 요청
+    async get(url) {
+        return this.request(url, { method: 'GET' });
     }
 
-    // =============== 문제지 생성 ===============
-    /**
-     * 문제지 생성 옵션 전송
-     */
-    async generateQuestionOptions(formData) {
-        return await this._request('/question-options', {
+    // POST 요청
+    async post(url, data) {
+        return this.request(url, {
             method: 'POST',
-            body: JSON.stringify(formData)
+            body: JSON.stringify(data)
         });
     }
 
-    /**
-     * 문제지 생성 요청
-     */
-    async createWorksheet(worksheetData) {
-        return await this._request('/worksheets', {
-            method: 'POST',
-            body: JSON.stringify(worksheetData)
-        });
-    }
-
-    /**
-     * 문제지 저장 (문제지 + 답안지)
-     */
-    async saveWorksheet(saveData) {
-        return await this._request('/worksheets', {
-            method: 'POST',
-            body: JSON.stringify(saveData)
-        });
-    }
-
-    // =============== 문제지 관리 ===============
-    /**
-     * 저장된 문제지 목록 조회
-     */
-    async getWorksheets() {
-        return await this._request('/worksheets');
-    }
-
-    /**
-     * 특정 문제지 상세 조회
-     */
-    async getWorksheet(worksheetId) {
-        return await this._request(`/worksheets/${worksheetId}`);
-    }
-
-    /**
-     * 문제지 풀이용 데이터 조회
-     */
-    async getWorksheetForSolving(worksheetId) {
-        return await this._request(`/worksheets/${worksheetId}/solve`);
-    }
-
-    /**
-     * 편집용 문제지 조회 (정답/해설 포함)
-     */
-    async getWorksheetForEditing(worksheetId) {
-        return await this._request(`/worksheets/${worksheetId}/edit`);
-    }
-
-    // =============== 답안 제출 및 채점 ===============
-    /**
-     * 답안 제출 및 자동 채점 요청
-     */
-    async submitAnswers(answerData) {
-        return await this._request('/submit-answers', {
-            method: 'POST',
-            body: JSON.stringify(answerData)
-        });
-    }
-
-    // =============== 채점 결과 관리 ===============
-    /**
-     * 채점 결과 목록 조회
-     */
-    async getGradingResults() {
-        return await this._request('/grading-results');
-    }
-
-    /**
-     * 특정 채점 결과 상세 조회
-     */
-    async getGradingResult(resultId) {
-        return await this._request(`/grading-results/${resultId}`);
-    }
-
-    /**
-     * 검수 완료 및 결과 저장
-     */
-    async saveReviewedResult(resultId, reviewData) {
-        return await this._request(`/grading-results/${resultId}/review`, {
+    // PUT 요청
+    async put(url, data) {
+        return this.request(url, {
             method: 'PUT',
-            body: JSON.stringify(reviewData)
+            body: JSON.stringify(data)
         });
     }
 
-    // =============== 문제지 편집 관리 ===============
-    /**
-     * 문제 수정
-     */
-    async updateQuestion(worksheetId, questionId, questionData) {
-        return await this._request(`/worksheets/${worksheetId}/questions/${questionId}`, {
-            method: 'PUT',
-            body: JSON.stringify(questionData)
-        });
-    }
-
-    /**
-     * 문제 삭제 (정답/해설도 함께 삭제)
-     */
-    async deleteQuestion(worksheetId, questionId) {
-        return await this._request(`/worksheets/${worksheetId}/questions/${questionId}`, {
-            method: 'DELETE'
-        });
-    }
-
-    /**
-     * 정답/해설 수정
-     */
-    async updateAnswer(worksheetId, questionId, answerData) {
-        return await this._request(`/worksheets/${worksheetId}/questions/${questionId}/answer`, {
-            method: 'PUT',
-            body: JSON.stringify(answerData)
-        });
-    }
-
-    /**
-     * 지문 수정
-     */
-    async updatePassage(worksheetId, passageId, passageData) {
-        return await this._request(`/worksheets/${worksheetId}/passages/${passageId}`, {
-            method: 'PUT',
-            body: JSON.stringify(passageData)
-        });
-    }
-
-    /**
-     * 예문 수정
-     */
-    async updateExample(worksheetId, exampleId, exampleData) {
-        return await this._request(`/worksheets/${worksheetId}/examples/${exampleId}`, {
-            method: 'PUT',
-            body: JSON.stringify(exampleData)
-        });
-    }
-
-    /**
-     * AI 문제 수정 요청
-     */
-    async requestAIQuestionEdit(worksheetId, questionId, editPrompt) {
-        return await this._request(`/worksheets/${worksheetId}/questions/${questionId}/ai-edit`, {
-            method: 'POST',
-            body: JSON.stringify({ edit_prompt: editPrompt })
-        });
-    }
-
-    /**
-     * 지문 연계성 조회 (연관 문제들 확인)
-     */
-    async getPassageConnections(worksheetId, passageId) {
-        return await this._request(`/worksheets/${worksheetId}/passages/${passageId}/connections`);
-    }
-
-    // =============== 유틸리티 메서드 ===============
-    /**
-     * 파일 업로드 (FormData 전용)
-     */
-    async uploadFile(url, formData) {
-        const config = {
-            method: 'POST',
-            body: formData
-            // Content-Type 헤더는 자동 설정됨 (multipart/form-data)
-        };
-
-        try {
-            const response = await fetch(this.baseUrl + url, config);
-            
-            if (!response.ok) {
-                throw new Error(`파일 업로드 실패: ${response.status} ${response.statusText}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`파일 업로드 오류 [${url}]:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * 헬스체크 (서버 연결 상태 확인)
-     */
-    async healthCheck() {
-        try {
-            return await this._request('/health');
-        } catch (error) {
-            return { status: 'error', message: error.message };
-        }
+    // DELETE 요청
+    async delete(url) {
+        return this.request(url, { method: 'DELETE' });
     }
 }
 
-// 전역 API 서비스 인스턴스 생성
-const apiService = new ApiService();
+// API 클라이언트 인스턴스
+const api = new ApiClient();
 
-// 전역 변수로 API 서비스 제공 (브라우저 호환성)
-window.apiService = apiService;
+// API 엔드포인트들
+const API_ENDPOINTS = {
+    // 카테고리
+    categories: '/api/v1/categories',
+    
+    // 문제 생성
+    questionGenerate: '/api/v1/question-generate',
+    
+    // 문제지 관리
+    worksheets: '/api/v1/worksheets',
+    worksheet: (id) => `/api/v1/worksheets/${id}`,
+    worksheetEdit: (id) => `/api/v1/worksheets/${id}/edit`,
+    worksheetSolve: (id) => `/api/v1/worksheets/${id}/solve`,
+    
+    // 문제지 편집
+    updateQuestionText: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/text`,
+    updateQuestionChoice: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/choice`,
+    updateQuestionAnswer: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/answer`,
+    updatePassage: (worksheetId, passageId) => `/api/v1/worksheets/${worksheetId}/passages/${passageId}`,
+    updateExample: (worksheetId, exampleId) => `/api/v1/worksheets/${worksheetId}/examples/${exampleId}`,
+    
+    // 채점
+    submitAnswers: (worksheetId) => `/api/v1/worksheets/${worksheetId}/submit`,
+    gradingResults: '/api/v1/grading-results',
+    gradingResult: (id) => `/api/v1/grading-results/${id}`,
+    reviewGrading: (id) => `/api/v1/grading-results/${id}/review`
+};
+
+// 편의 함수들
+const ApiService = {
+    // 카테고리 조회
+    async getCategories() {
+        return api.get(API_ENDPOINTS.categories);
+    },
+
+    // 문제 생성
+    async generateQuestions(options) {
+        return api.post(API_ENDPOINTS.questionGenerate, options);
+    },
+
+    // 문제지 저장
+    async saveWorksheet(worksheetData) {
+        // 서버가 기대하는 형식으로 데이터 변환
+        const requestData = {
+            worksheet_data: worksheetData
+        };
+        return api.post(API_ENDPOINTS.worksheets, requestData);
+    },
+
+    // 문제지 목록 조회
+    async getWorksheets() {
+        return api.get(API_ENDPOINTS.worksheets);
+    },
+
+    // 문제지 편집용 조회
+    async getWorksheetForEdit(id) {
+        return api.get(API_ENDPOINTS.worksheetEdit(id));
+    },
+
+    // 문제지 풀이용 조회
+    async getWorksheetForSolve(id) {
+        return api.get(API_ENDPOINTS.worksheetSolve(id));
+    },
+
+    // 문제지 삭제
+    async deleteWorksheet(id) {
+        return api.delete(API_ENDPOINTS.worksheet(id));
+    },
+
+    // 문제 텍스트 수정
+    async updateQuestionText(worksheetId, questionId, text) {
+        return api.put(API_ENDPOINTS.updateQuestionText(worksheetId, questionId), {
+            question_text: text
+        });
+    },
+
+    // 문제 선택지 수정
+    async updateQuestionChoice(worksheetId, questionId, choiceIndex, text) {
+        return api.put(API_ENDPOINTS.updateQuestionChoice(worksheetId, questionId), {
+            choice_index: choiceIndex,
+            choice_text: text
+        });
+    },
+
+    // 문제 정답 수정
+    async updateQuestionAnswer(worksheetId, questionId, answer) {
+        return api.put(API_ENDPOINTS.updateQuestionAnswer(worksheetId, questionId), {
+            correct_answer: answer
+        });
+    },
+
+    // 지문 수정
+    async updatePassage(worksheetId, passageId, content) {
+        return api.put(API_ENDPOINTS.updatePassage(worksheetId, passageId), {
+            passage_content: content
+        });
+    },
+
+    // 예문 수정
+    async updateExample(worksheetId, exampleId, content) {
+        return api.put(API_ENDPOINTS.updateExample(worksheetId, exampleId), {
+            example_content: content
+        });
+    },
+
+    // 답안 제출 및 채점
+    async submitAnswers(worksheetId, data) {
+        return api.post(API_ENDPOINTS.submitAnswers(worksheetId), data);
+    },
+
+    // 채점 결과 목록 조회
+    async getGradingResults() {
+        return api.get(API_ENDPOINTS.gradingResults);
+    },
+
+    // 채점 결과 상세 조회
+    async getGradingResult(id) {
+        return api.get(API_ENDPOINTS.gradingResult(id));
+    },
+
+    // AI 채점 검수
+    async reviewGrading(id, data) {
+        return api.put(API_ENDPOINTS.reviewGrading(id), data);
+    }
+};
+
+// 전역으로 노출
+window.ApiService = ApiService;
+window.api = api;

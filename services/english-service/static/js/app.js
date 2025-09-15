@@ -1,103 +1,121 @@
-// 메인 애플리케이션 진입점 (리팩토링된 버전)
+/**
+ * 메인 애플리케이션 초기화
+ */
 
-// 페이지 로드 시 초기화
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 애플리케이션 초기화 시작');
-    
-    // 카테고리 로드
-    loadCategories();
-    
-    // 이벤트 리스너 등록
-    setupEventListeners();
-    
-    // 초기 설정
-    updateSubjectRatios();
-    updateFormatCounts();
-    
-    console.log('✅ 애플리케이션 초기화 완료');
-});
+class App {
+    constructor() {
+        this.questionGenerator = null;
+        this.worksheetEditor = null;
+        this.init();
+    }
 
-// 이벤트 리스너 설정
-function setupEventListeners() {
-    // 영역 선택 이벤트
-    document.querySelectorAll('input[name="subjects"]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            updateSubjectDetails();
-            updateSubjectRatios();
+    async init() {
+        try {
+            console.log('🚀 애플리케이션 초기화 시작');
+            
+            // DOM이 로드될 때까지 대기
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => this.initializeComponents());
+            } else {
+                this.initializeComponents();
+            }
+            
+        } catch (error) {
+            console.error('애플리케이션 초기화 오류:', error);
+        }
+    }
+
+    async initializeComponents() {
+        try {
+            console.log('📦 컴포넌트 초기화 시작');
+            
+            // DOM 요소 존재 확인
+            const requiredElements = [
+                'subjectDistribution',
+                'generateBtn', 
+                'worksheetsList'
+            ];
+            
+            for (const elementId of requiredElements) {
+                const element = document.getElementById(elementId);
+                if (!element) {
+                    throw new Error(`필수 DOM 요소를 찾을 수 없습니다: ${elementId}`);
+                }
+            }
+            
+            // 문제 생성기 초기화
+            this.questionGenerator = new QuestionGenerator();
+            
+            // 문제지 편집기 초기화
+            this.worksheetEditor = new WorksheetEditor();
+            
+            // 전역 참조 설정
+            window.questionGenerator = this.questionGenerator;
+            window.worksheetEditor = this.worksheetEditor;
+            
+            console.log('✅ 모든 컴포넌트 초기화 완료');
+            
+            // 추가 이벤트 리스너 설정
+            this.setupGlobalEventListeners();
+            
+        } catch (error) {
+            console.error('컴포넌트 초기화 오류:', error);
+            this.showError('애플리케이션 초기화에 실패했습니다.');
+        }
+    }
+
+    // 전역 이벤트 리스너 설정
+    setupGlobalEventListeners() {
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modals = document.querySelectorAll('.modal-overlay');
+                modals.forEach(modal => modal.remove());
+            }
         });
-    });
-    
-    // 문제 형식 변경 이벤트
-    const questionFormatSelect = document.getElementById('questionFormat');
-    if (questionFormatSelect) {
-        questionFormatSelect.addEventListener('change', updateFormatCounts);
+
+        // 에러 처리
+        window.addEventListener('error', (e) => {
+            console.error('전역 오류:', e.error);
+        });
+
+        // 미처리 Promise 거부
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('미처리 Promise 거부:', e.reason);
+        });
+
+        console.log('🎯 전역 이벤트 리스너 설정 완료');
     }
-    
-    // 총 문제 수 변경 이벤트
-    const totalQuestionsInput = document.getElementById('totalQuestions');
-    if (totalQuestionsInput) {
-        totalQuestionsInput.addEventListener('input', updateFormatCounts);
-    }
-    
-    // 문제 생성 폼 제출 이벤트
-    const questionForm = document.getElementById('questionForm');
-    if (questionForm) {
-        questionForm.addEventListener('submit', generateExam);
-    }
-    
-    // 검수 완료 버튼 이벤트
-    const completeReviewBtn = document.getElementById('complete-review-btn');
-    if (completeReviewBtn) {
-        completeReviewBtn.addEventListener('click', completeReview);
-    }
-    
-    // 검수 완료 및 저장 버튼 이벤트
-    const saveReviewedBtn = document.getElementById('save-reviewed-btn');
-    if (saveReviewedBtn) {
-        saveReviewedBtn.addEventListener('click', saveReviewedResults);
+
+    // 오류 메시지 표시
+    showError(message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-error';
+        alertDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            background: #dc3545;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            max-width: 400px;
+            word-wrap: break-word;
+        `;
+        alertDiv.textContent = message;
+        
+        document.body.appendChild(alertDiv);
+        
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
     }
 }
 
-// 검수 완료 및 저장 함수
-async function saveReviewedResults() {
-    const state = window.getGlobalState();
-    
-    if (!state.currentGradingResult || !state.currentResultId) {
-        alert('저장할 결과가 없습니다.');
-        return;
-    }
-    
-    try {
-        const saveBtn = document.getElementById('save-reviewed-btn');
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '💾 저장 중...';
-        
-        // 검수 데이터 준비
-        const reviewData = {
-            question_results: state.reviewedResults,
-            reviewed_by: "교사"
-        };
-        
-        // API 호출하여 검수 결과 저장
-        const result = await apiService.saveReviewedResult(state.currentResultId, reviewData);
-        
-        alert(`검수가 완료되었습니다!\n\n최종 점수: ${result.result.total_score}/${result.result.max_score}점 (${result.result.percentage}%)\n\n결과가 데이터베이스에 저장되었습니다.`);
-        
-        // 검수 완료 섹션 숨기기
-        document.getElementById('review-complete-section').style.display = 'none';
-        
-        // 결과 다시 로드하여 최신 상태 반영
-        await viewGradingResult(state.currentResultId);
-        
-    } catch (error) {
-        console.error('검수 결과 저장 오류:', error);
-        alert(`검수 결과 저장 중 오류가 발생했습니다: ${error.message}`);
-    } finally {
-        const saveBtn = document.getElementById('save-reviewed-btn');
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '💾 검수 완료 및 저장';
-    }
-}
+// 애플리케이션 시작
+const app = new App();
 
-// 전역 함수로 노출
-window.saveReviewedResults = saveReviewedResults;
+// 전역으로 노출
+window.app = app;

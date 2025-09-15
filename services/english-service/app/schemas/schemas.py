@@ -131,30 +131,7 @@ class CategoriesResponse(BaseModel):
 # 지문 유형 관련 스키마들 (간단 버전)
 # ===========================================
 
-# 지문 유형 생성 요청 스키마
-class TextTypeCreate(BaseModel):
-    type_name: str = Field(..., description="지문 유형 이름 (영문, 예: article, correspondence)")
-    display_name: str = Field(..., description="지문 유형 표시명 (한글)")
-    description: Optional[str] = Field(None, description="유형 설명")
-    json_format: Dict[str, Any] = Field(..., description="JSON 형식 예시")
-
-# 지문 유형 수정 요청 스키마
-class TextTypeUpdate(BaseModel):
-    display_name: Optional[str] = Field(None, description="지문 유형 표시명 (한글)")
-    description: Optional[str] = Field(None, description="유형 설명")
-    json_format: Optional[Dict[str, Any]] = Field(None, description="JSON 형식 예시")
-
-# 지문 유형 응답 스키마
-class TextTypeResponse(BaseModel):
-    id: int
-    type_name: str
-    display_name: str
-    description: Optional[str]
-    json_format: Dict[str, Any]
-    created_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
+# 지문 유형 관련 스키마들 제거 (사용하지 않음)
 
 # ====================================
 # 문제지 저장 관련 스키마
@@ -162,8 +139,7 @@ class TextTypeResponse(BaseModel):
 
 # 문제지 저장 요청 스키마
 class WorksheetSaveRequest(BaseModel):
-    worksheet_data: Dict[str, Any] = Field(..., description="생성된 문제지 JSON 데이터")
-    answer_data: Dict[str, Any] = Field(..., description="생성된 답안지 JSON 데이터")
+    worksheet_data: Dict[str, Any] = Field(..., description="생성된 통합 문제지 JSON 데이터 (문제지+답안지)")
 
 # 지문 스키마
 class PassageResponse(BaseModel):
@@ -182,7 +158,7 @@ class ExampleResponse(BaseModel):
     id: int
     example_id: str
     example_content: str
-    related_questions: List[str]
+    related_question: Optional[str]
     created_at: datetime
     
     class Config:
@@ -216,7 +192,6 @@ class AnswerSheetResponse(BaseModel):
 
 # 문제지 전체 응답 스키마
 class WorksheetResponse(BaseModel):
-    id: int
     worksheet_id: str
     worksheet_name: str
     school_level: str
@@ -228,19 +203,20 @@ class WorksheetResponse(BaseModel):
     passages: List[PassageResponse]
     examples: List[ExampleResponse]
     questions: List[QuestionResponse]
-    answer_sheet: Optional[AnswerSheetResponse]
     
     class Config:
         from_attributes = True
 
 # 문제지 목록 조회용 간단한 스키마
 class WorksheetSummary(BaseModel):
-    id: int
+    id: str  # worksheet_id와 동일한 값
     worksheet_id: str
     worksheet_name: str
     school_level: str
     grade: str
+    subject: str
     total_questions: int
+    duration: Optional[int]
     created_at: datetime
     
     class Config:
@@ -284,7 +260,7 @@ class ExampleInfo(BaseModel):
 class GradingResultResponse(BaseModel):
     id: int
     result_id: str
-    worksheet_id: int
+    worksheet_id: str
     student_name: str
     completion_time: int
     total_score: int
@@ -309,7 +285,7 @@ class GradingResultResponse(BaseModel):
 class GradingResultSummary(BaseModel):
     id: int
     result_id: str
-    worksheet_id: int
+    worksheet_id: str
     student_name: str
     completion_time: int
     total_score: int
@@ -330,6 +306,5 @@ class ReviewRequest(BaseModel):
     
 # 답안 제출 요청 스키마
 class SubmissionRequest(BaseModel):
-    student_name: str
     answers: Dict[str, str]  # question_id -> answer
-    completion_time: int
+    completion_time: int  # 소요 시간 (초)

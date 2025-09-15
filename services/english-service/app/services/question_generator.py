@@ -172,7 +172,7 @@ class PromptGenerator:
                 "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
                 "original_content": "완전한 형태의 원본 예문",
                 "korean_translation": "원본 예문의 자연스러운 한글 번역",
-                "related_questions": 1,
+                "related_question": "1",
             }
         ],
         "questions": [
@@ -324,7 +324,8 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 - 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
 - 같은 지문을 사용하는 문제들은 반드시 연속 번호로 배치
 - 문제 번호와 related_questions 배열이 정확히 일치해야 함
-- 각 지문의 related_questions는 연속된 숫자여야 함 
+- 각 지문의 related_questions는 연속된 숫자여야 함
+- 각 예문의 related_question은 해당하는 문제 번호여야 함
 - 문제 총 개수와 questions 배열 길이가 일치해야 함 
 - 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 
 
@@ -349,6 +350,10 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 - 지문 ID: "1", "2", "3" (단순한 숫자)
 - 예문 ID: "1", "2", "3" (단순한 숫자)
 
+**정답 형식 규칙:**
+- 객관식 정답은 반드시 단순한 번호로 표시(ex, "1", "2", "3")
+- 주관식, 서술형 정답은 반드시 텍스트로 표시
+
 **최종 강조사항:**
 - 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요
 - 추가 설명이나 텍스트는 절대 포함하지 마세요
@@ -369,10 +374,7 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
     def _get_text_type_formats(self, db: Session) -> str:
         """DB에서 텍스트 유형 형식을 가져옵니다."""
         try:
-            from app.database import SessionLocal
             from app.models.models import TextType
-            if db is None:
-                db = SessionLocal()
             text_types = db.query(TextType).all()
             
             if text_types:
@@ -385,9 +387,6 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
         except Exception as e:
             print(f"DB에서 텍스트 유형 조회 오류: {e}")
             return self._get_default_text_formats()
-        finally:
-            if db is None and 'db' in locals():
-                db.close()
     
     def _get_default_text_formats(self) -> str:
         """기본 텍스트 형식을 반환합니다."""

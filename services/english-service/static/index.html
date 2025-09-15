@@ -3,322 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>문제 생성 옵션 설정</title>
+    <title>영어 문제지 생성 시스템</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>📚 영어 문제지 시스템</h1>
-        
-        <!-- 탭 네비게이션 -->
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('generate-tab')">🚀 문제 생성</button>
-            <button class="tab" onclick="showTab('worksheets-tab')">📋 문제지 목록</button>
-            <button class="tab" onclick="showTab('solve-tab')" id="solve-tab-btn" style="display: none;">✏️ 문제 풀기</button>
-            <button class="tab" onclick="showTab('result-tab')">🎯 채점 결과</button>
-        </div>
+        <!-- 헤더 -->
+        <header class="header">
+            <h1>📚 영어 문제지 생성 시스템</h1>
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="generate">문제 생성</button>
+                <button class="tab-btn" data-tab="worksheets">문제지 목록</button>
+                <button class="tab-btn" data-tab="results">채점 결과</button>
+            </nav>
+        </header>
 
         <!-- 문제 생성 탭 -->
         <div id="generate-tab" class="tab-content active">
-            <h2 style="color: #007bff; margin-bottom: 20px;">문제 생성 옵션 설정</h2>
-            
-            <form id="questionForm">
-            <!-- 기본 설정 -->
-            <div class="form-section">
-                <div class="section-title">🏫 기본 설정</div>
+            <div class="generate-section">
+                <h2>📝 문제 생성 설정</h2>
+                
+                <!-- 기본 설정 -->
+                <div class="form-group">
+                    <label>문제지 제목:</label>
+                    <input type="text" id="worksheetTitle" placeholder="예: 중학교 1학년 영어 중간고사" value="영어 문제지">
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="schoolLevel">학교급</label>
-                        <select id="schoolLevel" required>
+                        <label>학교급:</label>
+                        <select id="schoolLevel">
                             <option value="중학교">중학교</option>
                             <option value="고등학교">고등학교</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="grade">학년</label>
-                        <select id="grade" required>
+                        <label>학년:</label>
+                        <select id="grade">
                             <option value="1">1학년</option>
                             <option value="2">2학년</option>
                             <option value="3">3학년</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="totalQuestions">총 문제 수</label>
-                        <input type="number" id="totalQuestions" min="1" max="100" value="15" required>
+                        <label>총 문제 수:</label>
+                        <input type="number" id="totalQuestions" value="10" min="1" max="50">
+                    </div>
+                    <div class="form-group">
+                        <label>시험 시간(분):</label>
+                        <input type="number" id="duration" value="45" min="10" max="120">
                     </div>
                 </div>
-            </div>
 
-            <!-- 영역 선택 -->
-            <div class="form-section">
-                <div class="section-title">🎯 영역 선택</div>
-                    <div class="checkbox-group">
-                        <div class="checkbox-item">
-                        <input type="checkbox" id="reading" name="subjects" value="독해">
-                        <label for="reading">독해</label>
-                        </div>
-                        <div class="checkbox-item">
-                        <input type="checkbox" id="grammar" name="subjects" value="문법">
-                        <label for="grammar">문법</label>
-                        </div>
-                        <div class="checkbox-item">
-                        <input type="checkbox" id="vocabulary" name="subjects" value="어휘">
-                        <label for="vocabulary">어휘</label>
-                        </div>
-                    </div>
-                <div id="subjectDetails"></div>
-                </div>
-                
-            <!-- 영역별 비율 -->
-            <div class="form-section">
-                <div class="section-title">⚖️ 영역별 비율</div>
-                <div class="ratio-group" id="subjectRatios"></div>
-                <div style="margin-top: 10px; font-size: 14px; color: #666;">
-                    총 비율: <span id="totalRatio">100</span>% / 100%
-                </div>
-            </div>
-
-            <!-- 문제 형식 -->
-            <div class="form-section">
-                <div class="section-title">📋 문제 형식</div>
-                <div class="form-group">
-                    <label for="questionFormat">문제 형식</label>
-                    <select id="questionFormat">
-                        <option value="전체">전체 (객관식+주관식+서술형)</option>
-                        <option value="객관식">객관식만</option>
-                        <option value="주관식">주관식만</option>
-                        <option value="서술형">서술형만</option>
-                    </select>
-                </div>
-                <div id="formatCounts"></div>
-            </div>
-
-            <!-- 난이도 분배 -->
-            <div class="form-section">
-                <div class="section-title">🎯 난이도 분배</div>
-                <div class="ratio-group">
-                    <div class="ratio-item">
-                        <label for="difficultyHigh">상 (어려움)</label>
-                        <input type="range" id="difficultyHigh" min="0" max="100" value="20" oninput="updateDifficultyRatio()">
-                        <input type="number" id="difficultyHighNum" min="0" max="100" value="20" oninput="syncDifficultyRatio('difficultyHigh')" style="width: 60px; margin-left: 10px;">
-                        <span class="range-value" id="difficultyHighValue">20%</span>
-                    </div>
-                    <div class="ratio-item">
-                        <label for="difficultyMedium">중 (보통)</label>
-                        <input type="range" id="difficultyMedium" min="0" max="100" value="60" oninput="updateDifficultyRatio()">
-                        <input type="number" id="difficultyMediumNum" min="0" max="100" value="60" oninput="syncDifficultyRatio('difficultyMedium')" style="width: 60px; margin-left: 10px;">
-                        <span class="range-value" id="difficultyMediumValue">60%</span>
-                    </div>
-                    <div class="ratio-item">
-                        <label for="difficultyLow">하 (쉬움)</label>
-                        <input type="range" id="difficultyLow" min="0" max="100" value="20" oninput="updateDifficultyRatio()">
-                        <input type="number" id="difficultyLowNum" min="0" max="100" value="20" oninput="syncDifficultyRatio('difficultyLow')" style="width: 60px; margin-left: 10px;">
-                        <span class="range-value" id="difficultyLowValue">20%</span>
+                <!-- 영역별 비율 설정 -->
+                <div class="subject-distribution">
+                    <h3>📊 영역별 문제 비율</h3>
+                    <div id="subjectDistribution">
+                        <!-- JavaScript로 동적 생성 -->
                     </div>
                 </div>
-                <div style="margin-top: 10px; font-size: 14px; color: #666;">
-                    총 비율: <span id="totalDifficultyRatio">100</span>% / 100%
-                </div>
-            </div>
 
-            <!-- 추가 요구사항 -->
-            <div class="form-section">
-                <div class="section-title">📝 추가 요구사항 (선택사항)</div>
-                <textarea id="additionalRequirements" rows="4" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; resize: vertical;" placeholder="특별한 요구사항이 있으면 여기에 입력하세요. (예: 특정 주제, 문제 스타일 등)"></textarea>
-            </div>
-
-            <!-- 제출 버튼 -->
-            <div class="submit-section">
-                <button type="submit" class="submit-btn">🚀 문제지 생성</button>
-            </div>
-        </form>
-
-        <!-- 로딩 -->
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p>문제지를 생성하고 있습니다...</p>
-        </div>
-
-        <!-- 결과 표시 -->
-        <div id="examResult" class="result-section">
-            <div id="examContent"></div>
-        </div>
-
-            <!-- 오류 표시 -->
-            <div id="error" class="error-section">
-                <h3>❌ 오류 발생</h3>
-                <p id="errorData"></p>
-            </div>
-        </div>
-
-
-        <!-- 문제 풀기 탭 -->
-        <div id="solve-tab" class="tab-content">
-            <div id="solve-header" class="solve-header">
-                <h2 style="color: #28a745; margin: 0;">문제 풀기</h2>
-                <div class="solve-info">
-                    <span id="solve-worksheet-name" class="solve-title"></span>
-                    <div class="solve-stats">
-                        <span id="solve-timer" class="timer">⏱️ 00:00:00</span>
-                        <span id="solve-progress" class="progress">📝 0/0 완료</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 문제 풀이 영역 -->
-            <div id="solve-content" class="solve-content">
-                <p style="text-align: center; color: #666; margin: 40px 0;">
-                    문제지 목록에서 "문제 풀기" 버튼을 클릭하여 시작하세요.
-                </p>
-            </div>
-            
-            <!-- 제출 버튼 -->
-            <div id="solve-submit-section" class="solve-submit-section" style="display: none;">
-                <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px dashed #28a745;">
-                    <h3 style="color: #28a745; margin-bottom: 15px;">📝 답안 제출</h3>
-                    <p style="color: #6c757d; margin-bottom: 20px;">모든 문제를 완료했나요? 답안을 제출하여 채점을 받아보세요!</p>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label for="student-name" style="display: block; margin-bottom: 8px; color: #495057; font-weight: bold;">👤 이름 (선택사항)</label>
-                        <input type="text" id="student-name" placeholder="이름을 입력하세요" style="
-                            width: 200px;
-                            max-width: 90%;
-                            padding: 12px 15px;
-                            border: 2px solid #dee2e6;
-                            border-radius: 8px;
-                            font-size: 14px;
-                            text-align: center;
-                        ">
+                <!-- 난이도 설정 -->
+                <div class="difficulty-distribution">
+                    <h3>🎯 난이도 분포</h3>
+                    <div class="difficulty-options">
+                        <label class="difficulty-option">
+                            <input type="radio" name="difficulty" value="혼합" checked>
+                            <span>혼합 (비율 직접 설정)</span>
+                        </label>
+                        <label class="difficulty-option">
+                            <input type="radio" name="difficulty" value="상">
+                            <span>상 (어려운 문제 위주)</span>
+                        </label>
+                        <label class="difficulty-option">
+                            <input type="radio" name="difficulty" value="중">
+                            <span>중 (보통 수준 문제 위주)</span>
+                        </label>
+                        <label class="difficulty-option">
+                            <input type="radio" name="difficulty" value="하">
+                            <span>하 (쉬운 문제 위주)</span>
+                        </label>
                     </div>
                     
-                    <button onclick="submitAnswers()" id="submit-answers-btn" class="submit-btn" style="
-                        background: linear-gradient(45deg, #28a745, #20c997); 
-                        padding: 15px 30px;
-                        font-size: 16px;
-                    ">
-                        📤 답안 제출하기
-                    </button>
+                    <!-- 혼합 난이도 비율 설정 -->
+                    <div id="difficultyRatios" class="difficulty-ratios">
+                        <h4>📊 난이도별 비율 설정</h4>
+                        <div class="ratio-controls">
+                            <div class="ratio-item">
+                                <span class="ratio-name">상 (어려움)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="difficulty-ratio-input" data-difficulty="상" value="20" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-ratio-questions="상">(4문제)</span>
+                                </div>
+                            </div>
+                            <div class="ratio-item">
+                                <span class="ratio-name">중 (보통)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="difficulty-ratio-input" data-difficulty="중" value="60" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-ratio-questions="중">(12문제)</span>
+                                </div>
+                            </div>
+                            <div class="ratio-item">
+                                <span class="ratio-name">하 (쉬움)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="difficulty-ratio-input" data-difficulty="하" value="20" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-ratio-questions="하">(4문제)</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ratio-total">
+                            <strong>총 비율: <span id="totalDifficultyRatio">100</span>%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 문제 형식 설정 -->
+                <div class="format-distribution">
+                    <h3>📝 문제 형식 분포</h3>
+                    <div class="format-options">
+                        <label class="format-option">
+                            <input type="radio" name="format" value="혼합" checked>
+                            <span>혼합 (비율 직접 설정)</span>
+                        </label>
+                        <label class="format-option">
+                            <input type="radio" name="format" value="객관식">
+                            <span>객관식 (선택형 문제 위주)</span>
+                        </label>
+                        <label class="format-option">
+                            <input type="radio" name="format" value="단답형">
+                            <span>단답형 (짧은 답안 작성)</span>
+                        </label>
+                        <label class="format-option">
+                            <input type="radio" name="format" value="서술형">
+                            <span>서술형 (긴 답안 작성)</span>
+                        </label>
+                    </div>
+                    
+                    <!-- 혼합 형식 비율 설정 -->
+                    <div id="formatRatios" class="format-ratios">
+                        <h4>📊 형식별 비율 설정</h4>
+                        <div class="ratio-controls">
+                            <div class="ratio-item">
+                                <span class="ratio-name">객관식 (선택형)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="format-ratio-input" data-format="객관식" value="60" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-format-questions="객관식">(12문제)</span>
+                                </div>
+                            </div>
+                            <div class="ratio-item">
+                                <span class="ratio-name">단답형 (짧은 답)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="format-ratio-input" data-format="단답형" value="25" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-format-questions="단답형">(5문제)</span>
+                                </div>
+                            </div>
+                            <div class="ratio-item">
+                                <span class="ratio-name">서술형 (긴 답)</span>
+                                <div class="ratio-controls-group">
+                                    <input type="number" class="format-ratio-input" data-format="서술형" value="15" min="0" max="100">
+                                    <span>%</span>
+                                    <span class="ratio-questions" data-format-questions="서술형">(3문제)</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ratio-total">
+                            <strong>총 비율: <span id="totalFormatRatio">100</span>%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 문제 생성 버튼 -->
+                <div class="generate-actions">
+                    <button id="generateBtn" class="btn btn-primary">🎯 문제 생성하기</button>
+                    <div id="loadingIndicator" class="loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <span>문제를 생성하고 있습니다...</span>
+                    </div>
                 </div>
             </div>
-            
-            <!-- 로딩 -->
-            <div id="solve-loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>문제지를 불러오고 있습니다...</p>
-            </div>
-            
-            <!-- 오류 표시 -->
-            <div id="solve-error" class="error-section" style="display: none;">
-                <h3>❌ 오류 발생</h3>
-                <p id="solve-error-data"></p>
+
+            <!-- 생성된 문제지 표시 영역 -->
+            <div id="generatedWorksheet" class="worksheet-container" style="display: none;">
+                <div class="worksheet-header">
+                    <h2>📄 생성된 문제지</h2>
+                    <div class="worksheet-actions">
+                        <button id="editModeBtn" class="btn btn-secondary">✏️ 편집 모드</button>
+                        <button id="saveWorksheetBtn" class="btn btn-success">💾 문제지 저장</button>
+                        <button id="newWorksheetBtn" class="btn btn-outline">🔄 새 문제지 생성</button>
+                    </div>
+                </div>
+                <div id="worksheetContent" class="worksheet-content">
+                    <!-- 문제지 내용이 여기에 표시됩니다 -->
+                </div>
             </div>
         </div>
 
         <!-- 문제지 목록 탭 -->
         <div id="worksheets-tab" class="tab-content">
-            <div id="worksheets-header" class="worksheets-header">
-                <h2 style="color: #007bff; margin: 0;">📋 문제지 목록</h2>
-                <div class="worksheets-actions">
-                    <button onclick="loadWorksheets()" class="btn btn-primary" style="margin-right: 10px;">
-                        🔄 새로고침
-                    </button>
+            <div class="worksheets-section">
+                <h2>📋 저장된 문제지 목록</h2>
+                <div id="worksheetsList" class="worksheets-list">
+                    <!-- JavaScript로 동적 생성 -->
                 </div>
-            </div>
-            
-            <!-- 문제지 목록 -->
-            <div id="worksheets-content" class="worksheets-content">
-                <div style="text-align: center; color: #666; margin: 40px 0;">
-                    <div style="font-size: 3rem; margin-bottom: 20px;">📚</div>
-                    <h3>문제지 목록</h3>
-                    <p>저장된 문제지들을 확인하고 관리할 수 있습니다.</p>
-                </div>
-            </div>
-            
-            <!-- 로딩 -->
-            <div id="worksheets-loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>문제지 목록을 불러오고 있습니다...</p>
-            </div>
-            
-            <!-- 오류 표시 -->
-            <div id="worksheets-error" class="error-section" style="display: none;">
-                <h3>❌ 오류 발생</h3>
-                <p id="worksheets-error-data"></p>
             </div>
         </div>
 
         <!-- 채점 결과 탭 -->
-        <div id="result-tab" class="tab-content">
-            <div id="result-header" class="result-header">
-                <h2 style="color: #dc3545; margin: 0;">🎯 채점 결과 관리</h2>
-                <div class="result-actions">
-                    <button onclick="displayGradingResults()" class="btn btn-primary" style="margin-right: 10px;">
-                        🔄 새로고침
-                    </button>
+        <div id="results-tab" class="tab-content">
+            <div class="results-section">
+                <h2>📊 채점 결과</h2>
+                <div id="gradingResults" class="results-list">
+                    <!-- JavaScript로 동적 생성 -->
                 </div>
-            </div>
-            
-            <!-- 채점 결과 목록 -->
-            <div id="result-content" class="result-list">
-                <div style="text-align: center; color: #666; margin: 40px 0;">
-                    <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
-                    <h3>채점 결과 목록</h3>
-                    <p>학생들이 제출한 답안의 채점 결과를 확인하고 검수할 수 있습니다.</p>
-                </div>
-            </div>
-            
-            <!-- 채점 결과 상세보기 -->
-            <div id="result-detail" class="result-detail" style="display: none;">
-                <div style="margin-bottom: 20px;">
-                    <button onclick="showResultList()" class="btn btn-secondary">
-                        ← 목록으로 돌아가기
-                    </button>
-                </div>
-                <div id="result-detail-content"></div>
-                
-                <!-- 검수 완료 버튼 -->
-                <div id="review-complete-section" class="review-complete-section" style="display: none;">
-                    <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dc3545;">
-                        <h3 style="color: #dc3545; margin-bottom: 15px;">✅ 검수 완료</h3>
-                        <p style="color: #6c757d; margin-bottom: 20px;">모든 검수가 완료되었습니다. 최종 결과를 저장하시겠습니까?</p>
-                        
-                        <button onclick="saveReviewedResults()" id="save-reviewed-btn" class="submit-btn" style="
-                            background: linear-gradient(45deg, #dc3545, #c82333); 
-                            padding: 15px 30px;
-                            font-size: 16px;
-                        ">
-                            💾 검수 완료 및 저장
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 로딩 -->
-            <div id="result-loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>채점 결과를 불러오고 있습니다...</p>
-            </div>
-            
-            <!-- 오류 표시 -->
-            <div id="result-error" class="error-section" style="display: none;">
-                <h3>❌ 오류 발생</h3>
-                <p id="result-error-data"></p>
             </div>
         </div>
     </div>
 
-    <!-- API 모듈 먼저 로드 -->
+    <!-- JavaScript 모듈들 -->
     <script src="/static/js/utils/api.js"></script>
-    <!-- 문제지 편집기 모듈 -->
-    <script src="/static/js/worksheet-editor.js"></script>
-    
-    <!-- 리팩토링된 모듈들 -->
-    <script src="/static/js/modules/globals.js"></script>
-    <script src="/static/js/modules/utils.js"></script>
-    <script src="/static/js/modules/question-generator.js"></script>
     <script src="/static/js/modules/worksheet-renderer.js"></script>
-    <script src="/static/js/modules/grading-system.js"></script>
+    <script src="/static/js/modules/question-generator.js"></script>
     <script src="/static/js/modules/editor.js"></script>
-    <script src="/static/js/app-new.js"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
