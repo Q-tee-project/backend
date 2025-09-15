@@ -50,6 +50,7 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
             user_prompt=request.user_text,
             generation_id=generation_id,
             status=WorksheetStatus.PROCESSING,
+            teacher_id=user_id,
             created_by=user_id,
             celery_task_id=task_id
         )

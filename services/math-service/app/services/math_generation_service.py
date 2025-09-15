@@ -164,6 +164,7 @@ class MathGenerationService:
             actual_difficulty_distribution=self._calculate_difficulty_distribution(generated_problems),
             actual_type_distribution=self._calculate_type_distribution(generated_problems),
             status=WorksheetStatus.COMPLETED,
+            teacher_id=user_id,
             created_by=user_id
         )
         
