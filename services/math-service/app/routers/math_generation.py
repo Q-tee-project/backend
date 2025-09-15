@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, List
 from celery.result import AsyncResult
 from datetime import datetime
 import asyncio
@@ -10,9 +10,15 @@ import json
 from ..database import get_db
 from ..schemas.math_generation import (
     MathProblemGenerationRequest, 
-    SchoolLevel
+    SchoolLevel,
+    AssignmentCreate,
+    AssignmentResponse,
+    AssignmentDeployRequest,
+    AssignmentDeploymentResponse,
+    StudentAssignmentResponse
 )
 from ..services.math_generation_service import MathGenerationService
+from ..models.math_generation import Assignment, AssignmentDeployment
 from ..tasks import generate_math_problems_task, grade_problems_task, grade_problems_mixed_task
 from ..celery_app import celery_app
 
@@ -323,13 +329,14 @@ async def stream_task_status(task_id: str):
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     try:
         from ..models.worksheet import Worksheet
         
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.created_by == 1)\
+            .filter(Worksheet.teacher_id == user_id)\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -367,6 +374,7 @@ async def get_worksheets(
 @router.get("/worksheets/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     try:
@@ -374,7 +382,7 @@ async def get_worksheet_detail(
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -605,7 +613,7 @@ async def update_worksheet(
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -977,7 +985,7 @@ async def delete_worksheet(
         
         # 워크시트 조회
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -1044,7 +1052,7 @@ async def delete_problem(
         
         # 워크시트 조회 (권한 확인)
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == problem.worksheet_id, Worksheet.created_by == 1)\
+            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == user_id)\
             .first()
         
         if not worksheet:
@@ -1086,4 +1094,252 @@ async def delete_problem(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"문제 삭제 중 오류 발생: {str(e)}"
+        )
+
+
+# ===== 과제 배포 관련 라우터 =====
+
+@router.post("/assignments/deploy", response_model=List[AssignmentDeploymentResponse])
+async def deploy_assignment(
+    deploy_request: AssignmentDeployRequest,
+    db: Session = Depends(get_db)
+):
+    """과제를 학생들에게 배포"""
+    try:
+        # 워크시트 존재 확인 (assignment_id가 실제로는 worksheet_id)
+        from ..models.worksheet import Worksheet
+        worksheet = db.query(Worksheet).filter(
+            Worksheet.id == deploy_request.assignment_id
+        ).first()
+        
+        if not worksheet:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="워크시트를 찾을 수 없습니다"
+            )
+        
+        # 기존 Assignment 확인 (같은 워크시트, 같은 클래스룸)
+        assignment = db.query(Assignment).filter(
+            Assignment.worksheet_id == worksheet.id,
+            Assignment.classroom_id == deploy_request.classroom_id
+        ).first()
+        
+        # Assignment가 없으면 새로 생성
+        if not assignment:
+            assignment = Assignment(
+                title=worksheet.title,
+                worksheet_id=worksheet.id,
+                classroom_id=deploy_request.classroom_id,
+                teacher_id=worksheet.teacher_id,
+                unit_name=worksheet.unit_name,
+                chapter_name=worksheet.chapter_name,
+                problem_count=worksheet.problem_count,
+                is_deployed="deployed"
+            )
+            db.add(assignment)
+            db.flush()  # ID를 얻기 위해 flush
+        else:
+            # 기존 Assignment의 배포 상태 업데이트
+            assignment.is_deployed = "deployed"
+        
+        # 배포 정보 생성 (중복 배포 방지)
+        deployments = []
+        for student_id in deploy_request.student_ids:
+            # 기존 배포 정보 확인
+            existing_deployment = db.query(AssignmentDeployment).filter(
+                AssignmentDeployment.assignment_id == assignment.id,
+                AssignmentDeployment.student_id == student_id
+            ).first()
+            
+            if not existing_deployment:
+                deployment = AssignmentDeployment(
+                    assignment_id=assignment.id,
+                    student_id=student_id,
+                    classroom_id=deploy_request.classroom_id,
+                    status="assigned"
+                )
+                db.add(deployment)
+                deployments.append(deployment)
+            else:
+                deployments.append(existing_deployment)
+        
+        db.commit()
+        
+        # 응답 데이터 생성
+        response_data = []
+        for deployment in deployments:
+            db.refresh(deployment)
+            response_data.append(AssignmentDeploymentResponse(
+                id=deployment.id,
+                assignment_id=deployment.assignment_id,
+                student_id=deployment.student_id,
+                classroom_id=deployment.classroom_id,
+                status=deployment.status,
+                deployed_at=deployment.deployed_at.isoformat()
+            ))
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"과제 배포 중 오류 발생: {str(e)}"
+        )
+
+
+@router.get("/assignments/student/{student_id}", response_model=List[StudentAssignmentResponse])
+async def get_student_assignments(
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    """학생의 과제 목록 조회"""
+    try:
+        print(f"🔍 학생 과제 목록 조회 - student_id: {student_id}")
+        
+        # 학생이 속한 클래스룸 확인
+        from ..models.user import StudentJoinRequest
+        student_classrooms = db.query(StudentJoinRequest).filter(
+            StudentJoinRequest.student_id == student_id,
+            StudentJoinRequest.status == "approved"
+        ).all()
+        
+        print(f"📚 학생이 속한 클래스룸 수: {len(student_classrooms)}")
+        for classroom in student_classrooms:
+            print(f"  - 클래스룸 ID: {classroom.classroom_id}")
+        
+        # 학생이 속한 클래스룸의 과제 배포 정보 조회
+        classroom_ids = [c.classroom_id for c in student_classrooms]
+        print(f"📚 조회할 클래스룸 ID 목록: {classroom_ids}")
+        
+        if not classroom_ids:
+            print("⚠️ 학생이 승인된 클래스룸에 속해있지 않습니다.")
+            return []
+        
+        deployments = db.query(AssignmentDeployment).join(Assignment).filter(
+            AssignmentDeployment.student_id == student_id,
+            AssignmentDeployment.classroom_id.in_(classroom_ids)
+        ).all()
+        
+        print(f"📚 찾은 배포 정보 수: {len(deployments)}")
+        
+        response_data = []
+        for deployment in deployments:
+            assignment = deployment.assignment
+            print(f"  - 과제: {assignment.title} (ID: {assignment.id})")
+            response_data.append(StudentAssignmentResponse(
+                id=deployment.id,
+                title=assignment.title,
+                unit_name=assignment.unit_name,
+                chapter_name=assignment.chapter_name,
+                problem_count=assignment.problem_count,
+                status=deployment.status,
+                deployed_at=deployment.deployed_at.isoformat(),
+                assignment_id=assignment.id
+            ))
+        
+        print(f"📚 최종 응답 데이터 수: {len(response_data)}")
+        return response_data
+        
+    except Exception as e:
+        print(f"❌ 학생 과제 목록 조회 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"학생 과제 목록 조회 중 오류 발생: {str(e)}"
+        )
+
+
+@router.get("/assignments/{assignment_id}/student/{student_id}", response_model=dict)
+async def get_assignment_detail_for_student(
+    assignment_id: int,
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    """학생용 과제 상세 정보 조회 (문제 포함)"""
+    try:
+        print(f"🔍 학생 과제 상세 조회 - assignment_id: {assignment_id}, student_id: {student_id}")
+        
+        # 배포 정보 확인
+        deployment = db.query(AssignmentDeployment).filter(
+            AssignmentDeployment.assignment_id == assignment_id,
+            AssignmentDeployment.student_id == student_id
+        ).first()
+        
+        print(f"🔍 배포 정보 조회 결과: {deployment}")
+        
+        if not deployment:
+            print(f"❌ 배포 정보를 찾을 수 없음 - assignment_id: {assignment_id}, student_id: {student_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"배포된 과제를 찾을 수 없습니다 (assignment_id: {assignment_id}, student_id: {student_id})"
+            )
+        
+        assignment = deployment.assignment
+        print(f"🔍 Assignment 정보: {assignment}")
+        print(f"🔍 Assignment ID: {assignment.id}")
+        print(f"🔍 Assignment Title: {assignment.title}")
+        print(f"🔍 Worksheet ID: {assignment.worksheet_id}")
+        
+        # 워크시트 존재 여부 확인
+        from ..models.worksheet import Worksheet
+        worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
+        print(f"🔍 Worksheet 존재 여부: {worksheet is not None}")
+        if worksheet:
+            print(f"🔍 Worksheet Title: {worksheet.title}")
+            print(f"🔍 Worksheet Status: {worksheet.status}")
+        
+        # 워크시트의 문제들 가져오기
+        print(f"🔍 문제 조회 시작 - worksheet_id: {assignment.worksheet_id}")
+        
+        # 먼저 워크시트가 존재하는지 확인
+        if not worksheet:
+            print(f"❌ 워크시트가 존재하지 않음 - worksheet_id: {assignment.worksheet_id}")
+            worksheet_problems = []
+        else:
+            print(f"✅ 워크시트 존재 확인 - Title: {worksheet.title}")
+            worksheet_problems = math_service.get_worksheet_problems(db, assignment.worksheet_id)
+            print(f"🔍 문제 개수: {len(worksheet_problems)}")
+            
+            # 문제가 없다면 데이터베이스에서 직접 확인
+            if len(worksheet_problems) == 0:
+                from ..models.problem import Problem
+                direct_problems = db.query(Problem).filter(
+                    Problem.worksheet_id == assignment.worksheet_id
+                ).all()
+                print(f"🔍 직접 조회한 문제 수: {len(direct_problems)}")
+                for p in direct_problems:
+                    print(f"  - 문제 ID: {p.id}, 순서: {p.sequence_order}, 텍스트: {p.question[:50]}...")
+        
+        response_data = {
+            "assignment": {
+                "id": assignment.id,
+                "title": assignment.title,
+                "unit_name": assignment.unit_name,
+                "chapter_name": assignment.chapter_name,
+                "problem_count": assignment.problem_count
+            },
+            "deployment": {
+                "id": deployment.id,
+                "status": deployment.status,
+                "deployed_at": deployment.deployed_at.isoformat()
+            },
+            "problems": worksheet_problems
+        }
+        
+        print(f"🔍 최종 응답 데이터:")
+        print(f"  - Assignment: {response_data['assignment']}")
+        print(f"  - Deployment: {response_data['deployment']}")
+        print(f"  - Problems 개수: {len(response_data['problems'])}")
+        print(f"  - Problems 내용: {response_data['problems']}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"과제 상세 정보 조회 중 오류 발생: {str(e)}"
         )

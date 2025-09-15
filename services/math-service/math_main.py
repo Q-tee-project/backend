@@ -10,6 +10,7 @@ import app.models.problem
 import app.models.math_generation
 import app.models.grading_result
 import app.models.curriculum
+import app.models.user
 
 Base.metadata.create_all(bind=engine)
 

@@ -46,9 +46,23 @@ class PromptTemplates:
 **생성 규칙**:
 1. 정확히 요청된 개수만큼 문제를 난이도 순서대로 생성
 2. 각 문제의 difficulty 필드를 분배에 맞게 정확히 설정
-3. 수학 표기: 모든 단계에서 LaTeX 표기법 사용 ($x^2$, $\sqrt{16}$, $2^3 \times 5^2$)
+3. 수학 표기: 안전한 LaTeX 사용 ($x^2$, $\sqrt{16}$, $2 \times 3$, $\frac{a}{b}$)
+   - 분수는 $\frac{분자}{분모}$ 형태로 정확히 작성
+   - LaTeX 명령어는 반드시 백슬래시(\)로 시작 (예: \frac, \sqrt, \sin, \cos)
+   - 복잡한 중첩 구조나 특수 패키지 명령어는 피하기
+   - 한국어와 LaTeX 혼용 시 공백 주의
 4. 해설은 난이도에 맞게 간결하게 (A:1문장, B:2-3문장, C:3-4문장)
 5. 교육과정 범위를 벗어나지 않도록 주의
+6. **correct_answer 필드는 절대 빈 값이나 null이 되어서는 안됨** - 모든 문제 유형에서 반드시 정답을 포함해야 함
+7. 객관식: correct_answer는 반드시 "A", "B", "C", "D" 중 하나 (①②③④ 절대 금지)
+8. 단답형/서술형: correct_answer에 실제 답안을 완전히 작성
+9. **정확성 필수**: correct_answer와 explanation의 답이 반드시 일치해야 함
+10. **LaTeX 안전성**: 
+   - 모든 LaTeX 명령어는 백슬래시(\)로 시작해야 함
+   - 분수: $\frac{분자}{분모}$ (rac{} 절대 금지)
+   - 제곱근: $\sqrt{내용}$ (qrt{} 절대 금지)  
+   - 삼각함수: $\sin(x)$, $\cos(x)$ (in(), os() 절대 금지)
+   - JSON 문자열 내에서 백슬래시 이스케이프 주의
 """
 
     @staticmethod
@@ -85,8 +99,8 @@ JSON 배열로 응답:
 [
   {
     "question": "문제 내용",
-    "choices": ["①", "②", "③", "④"] 또는 null,
-    "correct_answer": "정답",
+    "choices": ["선택지1", "선택지2", "선택지3", "선택지4"] (객관식만, ①②③④ 표시 절대 금지),
+    "correct_answer": "정답 (형식은 문제유형에 따라 다름)",
     "explanation": "간결한 해설",
     "problem_type": "multiple_choice/short_answer/essay", 
     "difficulty": "A/B/C",
@@ -95,6 +109,14 @@ JSON 배열로 응답:
     "diagram_elements": {"objects": [], "values": {}, "labels": []}
   }
 ]
+
+**correct_answer 필드 필수 지시사항**:
+- **객관식 (multiple_choice)**: 반드시 "A", "B", "C", "D" 중 하나만 사용 (①②③④ 절대 금지)
+  예시: "correct_answer": "B"
+- **단답형 (short_answer)**: 숫자, 식, 단답을 LaTeX 형식으로 작성
+  예시: "correct_answer": "$x = 2$", "correct_answer": "15", "correct_answer": "$3x + 5$"
+- **서술형 (essay)**: 모범답안을 완전한 문장으로 LaTeX 포함하여 작성
+  예시: "correct_answer": "$x = 2$를 대입하면 $2 \times 2 + 3 = 7$이 되어 등식이 성립한다. 따라서 답은 $x = 2$이다."
 """
 
     @staticmethod
@@ -111,6 +133,11 @@ JSON 배열로 응답:
 교육과정: {curriculum_data.get('grade')} {curriculum_data.get('semester')} - {curriculum_data.get('unit_name')} > {curriculum_data.get('chapter_name')}
 사용자 요청: "{user_prompt}"
 난이도 분배: {difficulty_distribution}
+
+**중요한 지시사항**: 
+- 모든 문제에서 correct_answer 필드는 반드시 문제 유형에 맞는 형식으로 정확히 작성해야 함
+- 객관식: choices는 ["선택지내용1", "선택지내용2", "선택지내용3", "선택지내용4"], correct_answer는 "A"/"B"/"C"/"D"
+- 단답형/서술형: correct_answer에 실제 답안을 LaTeX 형식 포함하여 완전히 작성
 
 {PromptTemplates.get_difficulty_criteria()}
 
