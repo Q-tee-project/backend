@@ -71,12 +71,13 @@ async def get_chapters_by_unit(unit_name: str = Query(..., description="대단�
 @router.post("/generate")
 async def generate_math_problems(
     request: MathProblemGenerationRequest,
+    user_id: int = Query(..., description="로그인한 교사 ID"),
     db: Session = Depends(get_db)
 ):
     try:
         task = generate_math_problems_task.delay(
             request_data=request.model_dump(),
-            user_id=1
+            user_id=user_id
         )
         
         return {

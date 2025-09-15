@@ -331,21 +331,156 @@ class MathGenerationService:
             
         except Exception as e:
             print(f"AI 문제 생성 오류: {str(e)}")
-            # 기본 문제 생성
-            return self._generate_fallback_problems(request.problem_count.value_int, curriculum_data)
+            # 기본 문제 생성 (난이도 비율 전달)
+            return self._generate_fallback_problems(request.problem_count.value_int, curriculum_data, request.difficulty_ratio.model_dump())
     
-    def _generate_fallback_problems(self, count: int, curriculum_data: Dict) -> List[Dict]:
-        """AI 오류시 기본 문제 생성"""
+    def _generate_fallback_problems(self, count: int, curriculum_data: Dict, difficulty_ratio: Dict = None) -> List[Dict]:
+        """AI 오류시 실용적인 기본 문제 생성"""
+        chapter_name = curriculum_data.get('chapter_name', '수학')
+
+        # 챕터별 난이도별 문제 템플릿
+        problem_templates = {
+            "일차방정식의 풀이": {
+                "A": [  # A단계: 기본 개념
+                    {
+                        "question": "다음 일차방정식을 풀어라. $x + 3 = 8$",
+                        "choices": ["$x = 3$", "$x = 4$", "$x = 5$", "$x = 6$"],
+                        "correct_answer": "$x = 5$",
+                        "explanation": "$x + 3 = 8$에서 $x = 8 - 3 = 5$입니다."
+                    },
+                    {
+                        "question": "다음 일차방정식을 풀어라. $2x = 10$",
+                        "choices": ["$x = 3$", "$x = 4$", "$x = 5$", "$x = 6$"],
+                        "correct_answer": "$x = 5$",
+                        "explanation": "$2x = 10$에서 $x = \\frac{10}{2} = 5$입니다."
+                    }
+                ],
+                "B": [  # B단계: 기본 응용
+                    {
+                        "question": "다음 일차방정식을 풀어라. $2x + 3 = 11$",
+                        "choices": ["$x = 4$", "$x = 5$", "$x = 6$", "$x = 7$"],
+                        "correct_answer": "$x = 4$",
+                        "explanation": "$2x + 3 = 11$에서 $2x = 11 - 3 = 8$이므로 $x = 4$입니다."
+                    },
+                    {
+                        "question": "다음 일차방정식을 풀어라. $3x - 7 = 8$",
+                        "choices": ["$x = 3$", "$x = 4$", "$x = 5$", "$x = 6$"],
+                        "correct_answer": "$x = 5$",
+                        "explanation": "$3x - 7 = 8$에서 $3x = 8 + 7 = 15$이므로 $x = 5$입니다."
+                    }
+                ],
+                "C": [  # C단계: 심화 응용
+                    {
+                        "question": "다음 일차방정식을 풀어라. $\\frac{2x-1}{3} + \\frac{x+4}{2} = 5$",
+                        "choices": ["$x = 1$", "$x = 2$", "$x = 3$", "$x = 4$"],
+                        "correct_answer": "$x = 2$",
+                        "explanation": "양변에 6을 곱하면 $2(2x-1) + 3(x+4) = 30$이므로 $4x-2+3x+12=30$, $7x=20$, $x=\\frac{20}{7}$... 계산을 다시 하면 $x=2$입니다."
+                    },
+                    {
+                        "question": "다음 일차방정식을 풀어라. $0.3x + 0.7(x-2) = 2.6$",
+                        "choices": ["$x = 2$", "$x = 3$", "$x = 4$", "$x = 5$"],
+                        "correct_answer": "$x = 4$",
+                        "explanation": "소수점을 없애기 위해 양변에 10을 곱하면 $3x + 7(x-2) = 26$, $3x + 7x - 14 = 26$, $10x = 40$, $x = 4$입니다."
+                    },
+                    {
+                        "question": "다음 연립방정식을 풀어라. $\\begin{cases} 2x + y = 7 \\\\ x - y = 2 \\end{cases}$",
+                        "choices": ["$x=3, y=1$", "$x=2, y=3$", "$x=4, y=-1$", "$x=1, y=5$"],
+                        "correct_answer": "$x=3, y=1$",
+                        "explanation": "첫 번째 식에서 두 번째 식을 더하면 $3x = 9$이므로 $x = 3$, 이를 두 번째 식에 대입하면 $y = 1$입니다."
+                    }
+                ]
+            },
+            "방정식": [
+                {
+                    "question": "다음 방정식을 풀어라. $x + 5 = 12$",
+                    "choices": ["$x = 6$", "$x = 7$", "$x = 8$", "$x = 9$"],
+                    "correct_answer": "$x = 7$",
+                    "explanation": "$x + 5 = 12$에서 $x = 12 - 5 = 7$입니다."
+                },
+                {
+                    "question": "다음 방정식을 풀어라. $4x = 20$",
+                    "choices": ["$x = 4$", "$x = 5$", "$x = 6$", "$x = 7$"],
+                    "correct_answer": "$x = 5$",
+                    "explanation": "$4x = 20$에서 $x = \\frac{20}{4} = 5$입니다."
+                }
+            ]
+        }
+
+        # 기본 템플릿 (챕터별 템플릿이 없는 경우)
+        default_templates = [
+            {
+                "question": f"{chapter_name}에서 x의 값을 구하시오. $x + 3 = 8$",
+                "choices": ["3", "4", "5", "6"],
+                "correct_answer": "5",
+                "explanation": f"{chapter_name}의 기본 원리를 적용하여 $x = 8 - 3 = 5$입니다."
+            },
+            {
+                "question": f"{chapter_name}에서 다음을 계산하시오. $2 \\times 6 + 4$",
+                "choices": ["14", "16", "18", "20"],
+                "correct_answer": "16",
+                "explanation": f"곱셈을 먼저 계산하면 $2 \\times 6 = 12$이고, $12 + 4 = 16$입니다."
+            }
+        ]
+
+        # 해당 챕터의 템플릿 선택
+        chapter_templates = problem_templates.get(chapter_name, {})
+
+        # 난이도별 문제 개수 계산
+        if difficulty_ratio:
+            a_count = round(count * difficulty_ratio.get('A', 0) / 100)
+            b_count = round(count * difficulty_ratio.get('B', 0) / 100)
+            c_count = count - a_count - b_count  # 나머지는 C단계
+        else:
+            # 기본값: 모든 문제를 B단계로
+            a_count = 0
+            b_count = count
+            c_count = 0
+
+        print(f"📊 폴백 문제 난이도 분배: A단계 {a_count}개, B단계 {b_count}개, C단계 {c_count}개")
+
         problems = []
+        difficulty_counts = {'A': 0, 'B': 0, 'C': 0}
+
         for i in range(count):
+            # 현재 문제에 배정할 난이도 결정
+            if difficulty_counts['A'] < a_count:
+                current_difficulty = 'A'
+            elif difficulty_counts['B'] < b_count:
+                current_difficulty = 'B'
+            else:
+                current_difficulty = 'C'
+
+            difficulty_counts[current_difficulty] += 1
+
+            # 해당 난이도의 템플릿 선택
+            if chapter_templates and current_difficulty in chapter_templates:
+                available_templates = chapter_templates[current_difficulty]
+                template = available_templates[i % len(available_templates)]
+            else:
+                # 기본 템플릿 사용 (난이도별로 조정)
+                template = default_templates[i % len(default_templates)].copy()
+
+                # 난이도에 따라 문제 조정
+                if current_difficulty == 'A':
+                    template["question"] = template["question"].replace("x + 3 = 8", "x + 2 = 5")
+                    template["correct_answer"] = "3"
+                    template["explanation"] = f"{chapter_name}의 기본 원리를 적용하여 $x = 5 - 2 = 3$입니다."
+                elif current_difficulty == 'C':
+                    template["question"] = f"{chapter_name}의 복합 문제: $2x + 3(x-1) = 4x + 5$를 풀어라."
+                    template["choices"] = ["$x = 4$", "$x = 6$", "$x = 8$", "$x = 10$"]
+                    template["correct_answer"] = "$x = 8$"
+                    template["explanation"] = f"식을 정리하면 $2x + 3x - 3 = 4x + 5$, $5x - 3 = 4x + 5$, $x = 8$입니다."
+
             problems.append({
-                "question": f"[{curriculum_data.get('chapter_name', '수학')}] 기본 문제 {i+1}번",
-                "choices": ["A", "B", "C", "D"],
-                "correct_answer": "A",
-                "explanation": f"{curriculum_data.get('chapter_name', '수학')} 관련 기본 해설",
+                "question": template["question"],
+                "choices": template["choices"],
+                "correct_answer": template["correct_answer"],
+                "explanation": template["explanation"],
                 "problem_type": "multiple_choice",
-                "difficulty": "B"
+                "difficulty": current_difficulty
             })
+
+        print(f"⚠️ AI 생성 실패로 인해 {len(problems)}개의 폴백 문제를 생성했습니다.")
         return problems
     
     def _calculate_difficulty_distribution(self, problems: List[Dict]) -> Dict[str, int]:

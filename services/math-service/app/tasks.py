@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 
-@celery_app.task(bind=True, name="app.tasks.generate_math_problems_task")
+@celery_app.task(bind=True, name="app.tasks.generate_math_problems_task", soft_time_limit=30, time_limit=40)
 def generate_math_problems_task(self, request_data: dict, user_id: int):
     """비동기 수학 문제 생성 태스크"""
     
@@ -50,6 +50,7 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
             user_prompt=request.user_text,
             generation_id=generation_id,
             status=WorksheetStatus.PROCESSING,
+            teacher_id=user_id,
             created_by=user_id,
             celery_task_id=task_id
         )

@@ -19,8 +19,19 @@ class ProblemGenerator:
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         
+        # API 키 설정 및 타임아웃 구성
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # 더 빠른 응답을 위한 최적화된 설정
+        self.model = genai.GenerativeModel(
+            'gemini-1.5-flash',  # 더 빠른 모델 사용
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.6,  # 빠른 생성을 위해 낮춤
+                top_p=0.9,       # 더 간결한 응답을 위해 높임
+                top_k=20,        # 선택지 줄여서 빠른 생성
+                max_output_tokens=4096,  # 토큰 수 절반으로 줄임
+            )
+        )
         self.prompt_templates = PromptTemplates()
     
     def generate_problems(
@@ -52,8 +63,14 @@ class ProblemGenerator:
             reference_problems=reference_problems
         )
         
-        # AI 호출 및 응답 처리
-        return self._call_ai_and_parse_response(prompt)
+        # AI 호출 및 응답 처리 (최적화된 매개변수 전달)
+        return self._call_ai_and_parse_response(
+            prompt=prompt,
+            curriculum_data=curriculum_data,
+            user_prompt=user_prompt,
+            problem_count=problem_count,
+            difficulty_ratio=difficulty_ratio
+        )
     
     def _calculate_difficulty_distribution(self, problem_count: int, difficulty_ratio: Dict) -> str:
         """난이도 분배 계산"""
@@ -118,12 +135,80 @@ class ProblemGenerator:
             print(f"참고 문제 로드 오류: {str(e)}")
             return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
     
-    def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
-        """AI 호출 및 응답 파싱"""
+    def _call_ai_and_parse_response(self, prompt: str, curriculum_data: Dict = None, user_prompt: str = None, problem_count: int = 1, difficulty_ratio: Dict = None) -> List[Dict]:
+        """AI 호출 및 응답 파싱 - 단계적 프롬프트 최적화"""
+        import time
+        from .optimized_prompt_templates import AdaptivePromptBuilder, PromptLengthAnalyzer
+
         try:
-            response = self.model.generate_content(prompt)
-            content = response.text
-            
+            # 프롬프트 길이 분석
+            analysis = PromptLengthAnalyzer.analyze_prompt_length(prompt)
+            print(f"📊 프롬프트 분석: {analysis['character_count']}자, 추정 토큰: {analysis['estimated_tokens']}")
+
+            # 단계적 시도 정의
+            retry_strategies = [
+                {'level': 'detailed', 'timeout': 20, 'description': '상세 프롬프트'},
+                {'level': 'standard', 'timeout': 15, 'description': '표준 프롬프트'},
+                {'level': 'minimal', 'timeout': 10, 'description': '최소 프롬프트'}
+            ]
+
+            # 프롬프트 길이에 따라 시작 전략 조정
+            if analysis['character_count'] > 2000:
+                retry_strategies = retry_strategies[1:]  # 상세 프롬프트 건너뛰기
+            elif analysis['character_count'] > 1500:
+                retry_strategies[0]['timeout'] = 15  # 첫 시도 타임아웃 단축
+
+            for attempt, strategy in enumerate(retry_strategies):
+                try:
+                    # 전략에 따른 프롬프트 생성
+                    if attempt == 0 and strategy['level'] == 'detailed':
+                        current_prompt = prompt  # 원본 프롬프트 사용
+                    else:
+                        # 최적화된 프롬프트 생성
+                        if curriculum_data and user_prompt is not None:
+                            difficulty_distribution = self._calculate_difficulty_distribution(problem_count, difficulty_ratio) if difficulty_ratio else "모든 문제 B단계"
+                            current_prompt = AdaptivePromptBuilder.build_prompt(
+                                detail_level=strategy['level'],
+                                curriculum_data=curriculum_data,
+                                user_prompt=user_prompt,
+                                problem_count=problem_count,
+                                difficulty_distribution=difficulty_distribution
+                            )
+                        else:
+                            current_prompt = prompt  # 백업용
+
+                    print(f"🤖 AI 생성 시도 {attempt + 1}/{len(retry_strategies)}: {strategy['description']} ({strategy['timeout']}초)")
+                    print(f"📝 프롬프트 길이: {len(current_prompt)}자")
+
+                    # 타임아웃과 함께 AI 모델로 컨텐츠 생성
+                    import signal
+
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError(f"AI 생성 타임아웃 ({strategy['timeout']}초 초과)")
+
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(strategy['timeout'])
+
+                    try:
+                        response = self.model.generate_content(current_prompt)
+                        content = response.text
+                        signal.alarm(0)  # 타임아웃 해제
+                        print(f"✅ AI 응답 성공 (시도 {attempt + 1}, {strategy['description']})")
+                        break
+                    except TimeoutError:
+                        signal.alarm(0)  # 타임아웃 해제
+                        raise TimeoutError(f"AI 응답 시간 초과 ({strategy['timeout']}초)")
+
+                except (TimeoutError, Exception) as e:
+                    print(f"❌ AI 생성 시도 {attempt + 1} 실패: {str(e)}")
+
+                    if attempt < len(retry_strategies) - 1:
+                        print(f"⏳ 다음 전략으로 즉시 시도...")
+                    else:
+                        print("❌ 모든 전략 실패 → 폴백으로 전환")
+                        raise e
+
+            # for 루프 밖에서 content 처리
             # JSON 부분만 추출
             if "```json" in content:
                 json_start = content.find("```json") + 7
@@ -131,19 +216,19 @@ class ProblemGenerator:
                 json_str = content[json_start:json_end].strip()
             else:
                 json_str = content
-            
+
             # JSON 정리 및 파싱
             problems_array = self._clean_and_parse_json(json_str)
             problems_list = problems_array if isinstance(problems_array, list) else [problems_array]
-            
+
             # LaTeX 검증 및 수정
             validated_problems = []
             for problem in problems_list:
                 validated_problem = self._validate_and_fix_latex(problem)
                 validated_problems.append(validated_problem)
-            
+
             return validated_problems
-            
+
         except Exception as e:
             import traceback
             error_msg = f"문제 생성 오류: {str(e)}\n{traceback.format_exc()}"
