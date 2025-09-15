@@ -9,8 +9,8 @@ import json
 import os
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
-from database import engine
-from models import (
+from app.database import engine
+from app.models.models import (
     GrammarCategory, GrammarTopic, GrammarAchievement,
     VocabularyCategory, Word, ReadingType, TextType
 )
