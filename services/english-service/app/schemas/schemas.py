@@ -222,9 +222,8 @@ class WorksheetSummary(BaseModel):
     class Config:
         from_attributes = True
 
-# 문제별 채점 결과 스키마
+# 문제별 채점 결과 스키마 (간소화)
 class QuestionResultResponse(BaseModel):
-    id: int
     question_id: str
     question_type: str
     student_answer: Optional[str]
@@ -234,11 +233,7 @@ class QuestionResultResponse(BaseModel):
     is_correct: bool
     grading_method: str
     ai_feedback: Optional[str]
-    needs_review: bool
-    reviewed_score: Optional[int]
-    reviewed_feedback: Optional[str]
-    is_reviewed: bool
-    created_at: datetime
+    # 검수 관련 필드들 및 id, created_at 제거
     
     class Config:
         from_attributes = True
@@ -256,34 +251,26 @@ class ExampleInfo(BaseModel):
     original_content: str
     korean_translation: Optional[str] = None
 
-# 채점 결과 전체 스키마
+# 채점 결과 전체 스키마 (문제지 데이터 포함)
 class GradingResultResponse(BaseModel):
-    id: int
-    result_id: str
+    result_id: str  # id 제거, result_id만 사용
     worksheet_id: str
     student_name: str
     completion_time: int
     total_score: int
     max_score: int
     percentage: float
-    needs_review: bool
-    is_reviewed: bool
-    reviewed_at: Optional[datetime]
-    reviewed_by: Optional[str]
+    question_results: List[QuestionResultResponse] = []
+    student_answers: Dict[str, str] = {}  # 학생 답안 딕셔너리
     created_at: datetime
-    question_results: List[QuestionResultResponse]
-    passages: List[PassageInfo] = []  # 지문 원문 정보 (호환성)
-    examples: List[ExampleInfo] = []  # 예문 원문 정보 (호환성)
-    passage_groups: List[Dict[str, Any]] = []  # 지문별 그룹 데이터
-    example_groups: List[Dict[str, Any]] = []   # 예문별 그룹 데이터
-    standalone_questions: List[QuestionResultResponse] = []  # 독립 문제들
+    worksheet_data: Dict[str, Any] = {}  # 문제지 데이터 포함
     
     class Config:
         from_attributes = True
 
 # 채점 결과 목록 조회용 간단한 스키마
 class GradingResultSummary(BaseModel):
-    id: int
+    id: str  # result_id가 UUID 문자열이므로 str로 변경
     result_id: str
     worksheet_id: str
     student_name: str
@@ -306,5 +293,6 @@ class ReviewRequest(BaseModel):
     
 # 답안 제출 요청 스키마
 class SubmissionRequest(BaseModel):
+    student_name: str  # 학생 이름
     answers: Dict[str, str]  # question_id -> answer
     completion_time: int  # 소요 시간 (초)

@@ -28,7 +28,7 @@ async def submit_answers_and_grade(
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
-        student_name = "학생"  # 기본 이름 사용
+        student_name = submission_data.student_name
         answers = submission_data.answers
         completion_time = submission_data.completion_time
         
@@ -37,11 +37,11 @@ async def submit_answers_and_grade(
             db, worksheet_id, student_name, answers, completion_time
         )
         
-        # 결과 반환
+        # 결과 반환 (grading_result 내용을 직접 반환)
         return {
             "status": "success",
             "message": "답안이 제출되고 채점이 완료되었습니다.",
-            "grading_result": grading_result
+            **grading_result  # grading_result의 모든 필드를 펼쳐서 포함
         }
         
     except HTTPException:
@@ -58,7 +58,7 @@ async def get_grading_results(db: Session = Depends(get_db)):
         result_summaries = []
         for result in results:
             result_summaries.append(GradingResultSummary(
-                id=result.id,
+                id=result.result_id,  # result_id를 id로 사용
                 result_id=result.result_id,
                 worksheet_id=result.worksheet_id,
                 student_name=result.student_name,
@@ -80,15 +80,18 @@ async def get_grading_results(db: Session = Depends(get_db)):
 async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
     """특정 채점 결과의 상세 정보를 조회합니다."""
     try:
-        result = db.query(GradingResult).filter(GradingResult.result_id == result_id).first()
+        # result_id (UUID)로 검색
+        result = db.query(GradingResult).filter(
+            GradingResult.result_id == result_id
+        ).first()
+        
         if not result:
             raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
         
-        # 문제별 결과를 딕셔너리로 변환
+        # 문제별 결과를 딕셔너리로 변환 (깔끔한 구조)
         question_results = []
         for question_result in result.question_results:
             question_data = {
-                "id": question_result.id,
                 "question_id": question_result.question_id,
                 "question_type": question_result.question_type,
                 "student_answer": question_result.student_answer,
@@ -97,18 +100,77 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 "max_score": question_result.max_score,
                 "is_correct": question_result.is_correct,
                 "grading_method": question_result.grading_method,
-                "ai_feedback": question_result.ai_feedback,
-                "needs_review": question_result.needs_review,
-                "reviewed_score": question_result.reviewed_score,
-                "reviewed_feedback": question_result.reviewed_feedback,
-                "is_reviewed": question_result.is_reviewed,
-                "created_at": question_result.created_at
+                "ai_feedback": question_result.ai_feedback
+                # 불필요한 필드들 제거: id, needs_review, reviewed_*, created_at
             }
             question_results.append(question_data)
         
-        # 결과 객체 구성 (단순화)
+        # 학생 답안을 딕셔너리로 변환
+        student_answers = {}
+        for qr in result.question_results:
+            student_answers[qr.question_id] = qr.student_answer
+        
+        # 문제지 데이터도 함께 조회
+        from ...models.models import Worksheet, Passage, Example, Question
+        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == result.worksheet_id).first()
+        
+        if not worksheet:
+            raise HTTPException(status_code=404, detail="관련 문제지를 찾을 수 없습니다.")
+        
+        # 문제지 데이터 구성
+        worksheet_data = {
+            "worksheet_id": worksheet.worksheet_id,
+            "worksheet_name": worksheet.worksheet_name,
+            "worksheet_level": worksheet.school_level,
+            "worksheet_grade": worksheet.grade,
+            "worksheet_subject": worksheet.subject,
+            "total_questions": worksheet.total_questions,
+            "worksheet_duration": worksheet.duration,
+            "passages": [],
+            "examples": [],
+            "questions": []
+        }
+        
+        # 지문 데이터 추가 (한글 번역 포함)
+        for passage in worksheet.passages:
+            worksheet_data["passages"].append({
+                "passage_id": passage.passage_id,
+                "passage_type": passage.passage_type,
+                "passage_content": passage.passage_content,
+                "original_content": passage.original_content,
+                "korean_translation": passage.korean_translation,
+                "related_questions": passage.related_questions
+            })
+        
+        # 예문 데이터 추가 (한글 번역 포함)
+        for example in worksheet.examples:
+            worksheet_data["examples"].append({
+                "example_id": example.example_id,
+                "example_content": example.example_content,
+                "original_content": example.original_content,
+                "korean_translation": example.korean_translation,
+                "related_question": example.related_question
+            })
+        
+        # 문제 데이터 추가 (답안 제외)
+        for question in worksheet.questions:
+            worksheet_data["questions"].append({
+                "question_id": question.question_id,
+                "question_text": question.question_text,
+                "question_type": question.question_type,
+                "question_subject": question.question_subject,
+                "question_difficulty": question.question_difficulty,
+                "question_detail_type": question.question_detail_type,
+                "question_choices": question.question_choices,
+                "question_passage_id": question.passage_id,
+                "question_example_id": question.example_id,
+                "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
+                "learning_point": question.learning_point
+            })
+        
+        # 결과 객체 구성 (문제지 데이터 포함)
         result_dict = {
-            "id": result.id,
             "result_id": result.result_id,
             "worksheet_id": result.worksheet_id,
             "student_name": result.student_name,
@@ -116,12 +178,10 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             "total_score": result.total_score,
             "max_score": result.max_score,
             "percentage": result.percentage,
-            "needs_review": result.needs_review,
-            "is_reviewed": result.is_reviewed,
-            "reviewed_at": result.reviewed_at,
-            "reviewed_by": result.reviewed_by,
+            "question_results": question_results,
+            "student_answers": student_answers,
             "created_at": result.created_at,
-            "question_results": question_results
+            "worksheet_data": worksheet_data  # 문제지 데이터 포함
         }
         
         return result_dict
@@ -149,3 +209,4 @@ async def update_grading_review(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"검수 중 오류: {str(e)}")
+

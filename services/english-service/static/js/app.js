@@ -33,7 +33,8 @@ class App {
             const requiredElements = [
                 'subjectDistribution',
                 'generateBtn', 
-                'worksheetsList'
+                'worksheetsList',
+                'gradingResults'
             ];
             
             for (const elementId of requiredElements) {
@@ -46,12 +47,12 @@ class App {
             // 문제 생성기 초기화
             this.questionGenerator = new QuestionGenerator();
             
-            // 문제지 편집기 초기화
-            this.worksheetEditor = new WorksheetEditor();
+            // 문제지 관리자 초기화 (통합 모듈)
+            this.worksheetManager = new WorksheetManager();
             
-            // 전역 참조 설정
+            // 전역 참조 설정 (하위 호환성)
             window.questionGenerator = this.questionGenerator;
-            window.worksheetEditor = this.worksheetEditor;
+            window.worksheetManager = this.worksheetManager;
             
             console.log('✅ 모든 컴포넌트 초기화 완료');
             

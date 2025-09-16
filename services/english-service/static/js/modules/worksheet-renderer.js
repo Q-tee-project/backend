@@ -300,13 +300,27 @@ class WorksheetRenderer {
 
     // 문제지 목록 카드 렌더링
     renderWorksheetCard(worksheet) {
+        console.log('🎯 렌더링할 문제지 데이터:', worksheet);
+        
+        // 필드 값들을 안전하게 처리 (실제 API 응답 구조 기준)
+        const schoolLevel = worksheet.school_level || '중학교';
+        const grade = worksheet.grade || '';
+        const totalQuestions = worksheet.total_questions || 0;
+        const duration = worksheet.duration || 0;
+        const subject = worksheet.subject || '영어';
+        
+        console.log('📊 파싱된 값들:', {
+            schoolLevel, grade, totalQuestions, duration, subject
+        });
+        
         return `
             <div class="worksheet-card" data-worksheet-id="${worksheet.worksheet_id}">
-                <h3>${this.escapeHtml(worksheet.worksheet_name)}</h3>
+                <h3>${this.escapeHtml(worksheet.worksheet_name || '제목 없음')}</h3>
                 <div class="worksheet-meta">
-                    <p><strong>학교급:</strong> ${worksheet.school_level} ${worksheet.grade}학년</p>
-                    <p><strong>문제 수:</strong> ${worksheet.total_questions}문제 | 
-                       <strong>시간:</strong> ${worksheet.duration}분</p>
+                    <p><strong>학교급:</strong> ${schoolLevel} ${grade ? grade + '학년' : ''}</p>
+                    <p><strong>과목:</strong> ${subject}</p>
+                    <p><strong>문제 수:</strong> ${totalQuestions}문제 | 
+                       <strong>시간:</strong> ${duration}분</p>
                     <p><strong>생성일:</strong> ${this.formatDate(worksheet.created_at)}</p>
                 </div>
                 <div class="worksheet-actions">
@@ -341,6 +355,18 @@ class WorksheetRenderer {
         });
     }
 
+    formatTime(seconds) {
+        if (!seconds) return '0초';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        
+        if (minutes > 0) {
+            return `${minutes}분 ${remainingSeconds}초`;
+        } else {
+            return `${remainingSeconds}초`;
+        }
+    }
+
     // 채점 결과 카드 렌더링
     renderGradingResultCard(result) {
         const scorePercentage = Math.round((result.total_score / result.max_score) * 100);
@@ -350,17 +376,18 @@ class WorksheetRenderer {
         return `
             <div class="grading-result-card ${scoreClass}" data-result-id="${result.id}">
                 <h3>${this.escapeHtml(result.student_name)}</h3>
+                <div class="score-badge">
+                    ${result.total_score}/${result.max_score}점 (${scorePercentage}%)
+                </div>
                 <div class="result-meta">
-                    <p><strong>문제지:</strong> ${this.escapeHtml(result.worksheet_name)}</p>
-                    <p><strong>점수:</strong> ${result.total_score}/${result.max_score}점 (${scorePercentage}%)</p>
-                    <p><strong>제출일:</strong> ${this.formatDate(result.submitted_at)}</p>
+                    <p><strong>📋 문제지:</strong> ${this.escapeHtml(result.worksheet_name)}</p>
+                    <p><strong>📅 제출일:</strong> ${this.formatDate(result.submitted_at)}</p>
+                    <p><strong>⏱️ 소요시간:</strong> ${this.formatTime(result.completion_time)}</p>
+                    ${result.needs_review ? '<p><strong>🔍 상태:</strong> <span class="needs-review">검수 필요</span></p>' : ''}
                 </div>
                 <div class="result-actions">
                     <button class="btn btn-primary" onclick="viewGradingResult('${result.id}')">
-                        📊 상세보기
-                    </button>
-                    <button class="btn btn-secondary" onclick="reviewGrading('${result.id}')">
-                        🔍 검수
+                        📊 상세보기 / 수정
                     </button>
                 </div>
             </div>

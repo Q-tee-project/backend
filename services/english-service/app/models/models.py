@@ -168,8 +168,7 @@ class GradingResult(Base):
     __tablename__ = "grading_results"
     __table_args__ = {"schema": "english_service"}
     
-    id = Column(Integer, primary_key=True, index=True)
-    result_id = Column(String(50), unique=True, nullable=False, index=True)  # 고유 결과 ID
+    result_id = Column(String(50), primary_key=True, index=True)  # UUID 기본키
     worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     student_name = Column(String(100), nullable=False)
     completion_time = Column(Integer, nullable=False)  # 소요 시간 (초)
@@ -192,7 +191,7 @@ class QuestionResult(Base):
     __table_args__ = {"schema": "english_service"}
     
     id = Column(Integer, primary_key=True, index=True)
-    grading_result_id = Column(Integer, ForeignKey("english_service.grading_results.id"), nullable=False)
+    grading_result_id = Column(String(50), ForeignKey("english_service.grading_results.result_id"), nullable=False)
     question_id = Column(String(10), nullable=False)
     question_type = Column(String(20), nullable=False)
     student_answer = Column(Text, nullable=True)

@@ -16,7 +16,28 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
-    version=settings.app_version
+    version=settings.app_version,
+    docs_url="/docs",  # Swagger UI 경로
+    redoc_url="/redoc",  # ReDoc 경로
+    openapi_url="/api/v1/openapi.json",  # OpenAPI JSON 경로
+    openapi_tags=[
+        {
+            "name": "Health",
+            "description": "서버 및 데이터베이스 상태 확인"
+        },
+        {
+            "name": "Categories", 
+            "description": "문법, 어휘, 독해 카테고리 조회"
+        },
+        {
+            "name": "Worksheets",
+            "description": "문제지 생성, 관리 및 편집 기능"
+        },
+        {
+            "name": "Grading",
+            "description": "답안 제출, 채점 및 결과 관리"
+        }
+    ]
 )
 
 # CORS 미들웨어 추가
@@ -31,17 +52,11 @@ app.add_middleware(
 # 정적 파일 서빙 (HTML, CSS, JS 등)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 라우터 등록 (v1 API)
+# API v1 라우터 등록 (깔끔한 단일 버전)
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(category_router, prefix="/api/v1")
 app.include_router(worksheet_router, prefix="/api/v1")
 app.include_router(grading_router, prefix="/api/v1")
-
-# 기존 호환성을 위한 라우터 등록 (prefix 없이)
-app.include_router(health_router)
-app.include_router(category_router)  
-app.include_router(worksheet_router)
-app.include_router(grading_router)
 
 # 루트 경로에서 HTML 페이지 제공
 @app.get("/")

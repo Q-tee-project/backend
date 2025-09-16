@@ -123,8 +123,8 @@ class NewGradingService:
             question_result["is_correct"] = question_result["score"] > 0
             question_result["grading_method"] = "db"
             
-        elif question.question_type in ["주관식", "서술형"]:
-            # 주관식/서술형: Gemini AI 채점
+        elif question.question_type in ["단답형", "서술형"]:
+            # 단답형/서술형: Gemini AI 채점
             if self.model:
                 ai_result = await self._grade_with_ai(
                     question, student_answer, worksheet_id
@@ -271,7 +271,7 @@ class NewGradingService:
 
 ## 채점 지침
 - 출제자의 정답과 완전히 일치하지 않더라도, 의미상 올바르고 문법적으로 정확하면 점수를 부여
-- 주관적 문제의 경우 다양한 답변이 가능함을 고려
+- 단답형 문제의 경우 다양한 답변이 가능함을 고려
 - 부분 점수 부여 가능 (창의적이고 합리적인 답변에 대해)
 - 문법 오류가 있어도 의미 전달이 명확하면 부분 점수 부여
 
@@ -319,7 +319,7 @@ class NewGradingService:
             # 문제별 결과 저장
             for qr in question_results:
                 question_result = QuestionResult(
-                    grading_result_id=grading_result.id,
+                    grading_result_id=grading_result.result_id,
                     question_id=qr["question_id"],
                     question_type=qr["question_type"],
                     student_answer=qr["student_answer"],
@@ -360,7 +360,7 @@ class NewGradingService:
             
             # 문제별 결과 조회
             question_results = self.db.query(QuestionResult).filter(
-                QuestionResult.grading_result_id == grading_result.id
+                QuestionResult.grading_result_id == grading_result.result_id
             ).all()
             
             total_score_adjustment = 0
@@ -372,8 +372,24 @@ class NewGradingService:
                 if question_id in question_reviews:
                     review = question_reviews[question_id]
                     
-                    # 검수된 점수 적용
-                    if "score" in review:
+                    # is_correct 정답 인정 처리 (점수보다 우선 처리)
+                    if "is_correct" in review:
+                        old_score = question_result.score
+                        question_result.is_correct = review["is_correct"]
+                        
+                        # is_correct에 따라 점수 자동 계산
+                        if question_result.is_correct:
+                            # 정답으로 인정하면 만점
+                            new_score = question_result.max_score
+                        else:
+                            # 오답으로 처리하면 0점
+                            new_score = 0
+                        
+                        question_result.reviewed_score = new_score
+                        total_score_adjustment += (new_score - old_score)
+                    
+                    # 검수된 점수 적용 (is_correct가 없는 경우에만)
+                    elif "score" in review:
                         old_score = question_result.score
                         new_score = min(max(review["score"], 0), question_result.max_score)
                         

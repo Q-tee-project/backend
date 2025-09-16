@@ -7,6 +7,8 @@ class WorksheetEditor {
         this.worksheets = [];
         this.gradingResults = [];
         this.currentWorksheet = null;
+        this.currentGradingResult = null;
+        this.gradingEditMode = false;
         this.renderer = new WorksheetRenderer();
         this.startTime = Date.now(); // 문제지 시작 시간
         this.init();
@@ -214,9 +216,11 @@ class WorksheetEditor {
                     <h2>${title}</h2>
                     <div class="modal-actions">
                         ${editMode ? `
-                            <button class="btn btn-success" onclick="saveWorksheetChanges()">
-                                💾 저장
-                            </button>
+                            <div class="edit-status">
+                                <span class="auto-save-info">
+                                    💡 모든 변경사항이 자동으로 저장됩니다
+                                </span>
+                            </div>
                         ` : ''}
                         <button class="btn btn-secondary" onclick="printWorksheet()">
                             🖨️ 인쇄
@@ -251,7 +255,6 @@ class WorksheetEditor {
         });
 
         // 전역 함수 설정
-        window.saveWorksheetChanges = () => this.saveWorksheetChanges();
         window.printWorksheet = () => this.printWorksheet();
     }
 
@@ -458,17 +461,99 @@ class WorksheetEditor {
         };
     }
 
-    // 문제지 변경사항 저장
-    async saveWorksheetChanges() {
-        try {
-            // 현재 편집된 내용을 currentWorksheet에 반영
-            const result = await window.ApiService.saveWorksheet(this.currentWorksheet);
-            this.showSuccess('변경사항이 저장되었습니다.');
-        } catch (error) {
-            console.error('저장 오류:', error);
-            this.showError('저장에 실패했습니다.');
+    // 채점 수정 모드 토글
+    toggleGradingEditMode() {
+        this.gradingEditMode = !this.gradingEditMode;
+        
+        if (this.currentGradingResult && this.currentWorksheetData) {
+            this.renderGradingResult(this.currentGradingResult, this.currentWorksheetData);
         }
     }
+
+    // 문제별 점수 업데이트 (메모리에서만)
+    updateQuestionScore(questionId, newScore, maxScore) {
+        const score = Math.max(0, Math.min(parseInt(newScore) || 0, maxScore));
+        
+        if (this.currentGradingResult && this.currentGradingResult.question_results) {
+            const questionResult = this.currentGradingResult.question_results.find(qr => qr.question_id === questionId);
+            if (questionResult) {
+                questionResult.score = score;
+                questionResult.is_correct = score >= Math.ceil(maxScore * 0.6); // 60% 이상을 정답으로 간주
+                
+                // 총점 재계산
+                this.recalculateTotalScore();
+            }
+        }
+    }
+
+    // 총점 재계산
+    recalculateTotalScore() {
+        if (this.currentGradingResult && this.currentGradingResult.question_results) {
+            const totalScore = this.currentGradingResult.question_results.reduce((sum, qr) => sum + qr.score, 0);
+            const maxScore = this.currentGradingResult.question_results.reduce((sum, qr) => sum + qr.max_score, 0);
+            
+            this.currentGradingResult.total_score = totalScore;
+            this.currentGradingResult.percentage = maxScore > 0 ? (totalScore / maxScore * 100) : 0;
+            
+            // 헤더의 점수 정보 업데이트
+            this.updateScoreDisplay();
+        }
+    }
+
+    // 점수 표시 업데이트
+    updateScoreDisplay() {
+        const totalScoreElement = document.querySelector('.score-summary .score');
+        const percentageElement = document.querySelector('.score-summary .percentage');
+        
+        if (totalScoreElement && this.currentGradingResult) {
+            totalScoreElement.textContent = `${this.currentGradingResult.total_score} / ${this.currentGradingResult.max_score}점`;
+        }
+        
+        if (percentageElement && this.currentGradingResult) {
+            percentageElement.textContent = `${this.currentGradingResult.percentage.toFixed(1)}%`;
+        }
+    }
+
+    // 채점 수정사항 저장
+    async saveGradingChanges() {
+        try {
+            // 피드백 데이터 수집
+            const feedbackInputs = document.querySelectorAll('.feedback-input');
+            const questionReviews = {};
+            
+            // 점수와 피드백 수집
+            if (this.currentGradingResult && this.currentGradingResult.question_results) {
+                this.currentGradingResult.question_results.forEach(qr => {
+                    const feedbackInput = document.querySelector(`.feedback-input[data-question-id="${qr.question_id}"]`);
+                    const feedback = feedbackInput ? feedbackInput.value.trim() : qr.ai_feedback;
+                    
+                    questionReviews[qr.question_id] = {
+                        score: qr.score,
+                        feedback: feedback
+                    };
+                });
+            }
+            
+            // API 호출
+            const result = await window.ApiService.reviewGrading(this.currentGradingResult.result_id, {
+                question_results: questionReviews,
+                reviewed_by: "교사"
+            });
+            
+            this.showSuccess('채점 수정사항이 저장되었습니다.');
+            
+            // 수정 모드 해제
+            this.gradingEditMode = false;
+            this.renderGradingResult(this.currentGradingResult, this.currentWorksheetData);
+            
+        } catch (error) {
+            console.error('채점 수정사항 저장 오류:', error);
+            this.showError('채점 수정사항 저장에 실패했습니다.');
+        }
+    }
+
+    // 개별 편집이 자동저장되므로 별도 저장 함수 불필요
+    // 모든 변경사항은 handleEdit()에서 즉시 서버에 저장됨
 
     // 문제지 인쇄
     printWorksheet() {
@@ -514,7 +599,7 @@ class WorksheetEditor {
                 <div class="modal-body">
                     <div class="result-summary">
                         <h3>${result.student_name}님의 답안</h3>
-                        <p><strong>점수:</strong> ${result.total_score}/${result.max_score}점</p>
+                        <p><strong>점수:</strong> ${result.total_score} / ${result.max_score}점</p>
                         <p><strong>제출일:</strong> ${this.renderer.formatDate(result.submitted_at)}</p>
                     </div>
                     <div class="result-details">
@@ -567,18 +652,21 @@ class WorksheetEditor {
         }, 5000);
     }
 
-    // 채점 결과 보기
+    // 채점 결과 보기 (단일 API 호출)
     async viewGradingResult(resultId) {
         try {
             console.log('채점 결과 조회:', resultId);
             
-            // 채점 결과 데이터 가져오기
+            // 채점 결과 + 문제지 데이터 한 번에 가져오기
             const gradingResult = await window.ApiService.getGradingResult(resultId);
-            console.log('채점 결과 데이터:', gradingResult);
+            console.log('채점 결과 데이터 (문제지 포함):', gradingResult);
             
-            // 해당 문제지 데이터도 가져오기
-            const worksheetData = await window.ApiService.getWorksheetForSolving(gradingResult.worksheet_id);
-            console.log('문제지 데이터:', worksheetData);
+            // 문제지 데이터는 이제 gradingResult.worksheet_data에 포함됨
+            const worksheetData = gradingResult.worksheet_data;
+            
+            // 현재 채점 결과 저장
+            this.currentGradingResult = gradingResult;
+            this.currentWorksheetData = worksheetData;
             
             // 채점 결과 렌더링
             this.renderGradingResult(gradingResult, worksheetData);
@@ -604,7 +692,7 @@ class WorksheetEditor {
                     </div>
                     <div class="score-item">
                         <span class="label">총점:</span>
-                        <span class="value score">${gradingResult.total_score}/${gradingResult.max_score}점</span>
+                        <span class="value score">${gradingResult.total_score} / ${gradingResult.max_score}점</span>
                     </div>
                     <div class="score-item">
                         <span class="label">정답률:</span>
@@ -614,6 +702,19 @@ class WorksheetEditor {
                         <span class="label">소요시간:</span>
                         <span class="value">${Math.floor(gradingResult.completion_time / 60)}분 ${gradingResult.completion_time % 60}초</span>
                     </div>
+                </div>
+                <div class="grading-actions">
+                    <button class="btn btn-primary" onclick="window.worksheetEditor.toggleGradingEditMode()">
+                        ${this.gradingEditMode ? '📖 보기 모드' : '✏️ 채점 수정 모드'}
+                    </button>
+                    ${this.gradingEditMode ? `
+                        <button class="btn btn-success" onclick="window.worksheetEditor.saveGradingChanges()">
+                            💾 채점 수정사항 저장
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-secondary" onclick="window.worksheetEditor.showGradingResultsList()">
+                        ← 채점 결과 목록으로 돌아가기
+                    </button>
                 </div>
             </div>
         `;
@@ -674,13 +775,19 @@ class WorksheetEditor {
         return html;
     }
 
-    // 채점 결과와 함께 문제 렌더링
+    // 채점 결과와 함께 문제 렌더링 (학생 답안과 피드백 포함)
     renderQuestionWithResult(question, number, gradingResult) {
         const questionResult = gradingResult.question_results?.find(qr => qr.question_id === question.question_id);
-        const studentAnswer = gradingResult.student_answers?.[question.question_id];
+        const studentAnswer = gradingResult.student_answers?.[question.question_id] || '답안 없음';
+        const correctAnswer = questionResult?.correct_answer || '정답 없음';
+        const aiFeedback = questionResult?.ai_feedback;
         const isCorrect = questionResult?.is_correct || false;
         const score = questionResult?.score || 0;
         const maxScore = questionResult?.max_score || 1;
+        const gradingMethod = questionResult?.grading_method || 'unknown';
+        
+        // 디버깅용 로그
+        console.log(`문제 ${question.question_id}: 학생답안="${studentAnswer}", 정답="${correctAnswer}", 채점결과=`, questionResult);
         
         let html = `
             <div class="question grading-result-question ${isCorrect ? 'correct' : 'incorrect'}">
@@ -690,7 +797,26 @@ class WorksheetEditor {
                         ${question.question_subject} | ${question.question_difficulty} | ${question.question_type}
                     </span>
                     <span class="question-score ${isCorrect ? 'correct' : 'incorrect'}">
-                        ${score}/${maxScore}점 ${isCorrect ? '✅' : '❌'}
+                        ${this.gradingEditMode ? `
+                            <div class="score-edit-container">
+                                <input type="number" 
+                                       class="score-input" 
+                                       value="${score}" 
+                                       min="0" 
+                                       max="${maxScore}" 
+                                       data-question-id="${question.question_id}"
+                                       onchange="window.worksheetEditor.updateQuestionScore('${question.question_id}', this.value, ${maxScore})">
+                                / ${maxScore}점
+                                <label class="correct-toggle">
+                                    <input type="checkbox" 
+                                           class="correct-checkbox"
+                                           data-question-id="${question.question_id}"
+                                           ${isCorrect ? 'checked' : ''}
+                                           onchange="window.worksheetEditor.toggleQuestionCorrect('${question.question_id}', this.checked, ${maxScore})">
+                                    <span class="correct-label">정답 인정</span>
+                                </label>
+                            </div>
+                        ` : `${score} / ${maxScore}점 ${isCorrect ? '✅' : '❌'}`}
                     </span>
                 </div>
                 <div class="question-text">
@@ -704,7 +830,7 @@ class WorksheetEditor {
             question.question_choices.forEach((choice, index) => {
                 const marker = ['①', '②', '③', '④', '⑤'][index] || `${index + 1}.`;
                 const isStudentChoice = studentAnswer === (index + 1).toString() || studentAnswer === marker;
-                const isCorrectChoice = question.correct_answer === (index + 1).toString() || question.correct_answer === marker;
+                const isCorrectChoice = correctAnswer === (index + 1).toString() || correctAnswer === marker;
                 
                 let choiceClass = 'choice';
                 if (isStudentChoice && isCorrectChoice) {
@@ -740,7 +866,7 @@ class WorksheetEditor {
                     <div class="correct-answer">
                         <strong>정답:</strong> 
                         <span class="answer-text">
-                            ${this.renderer.escapeHtml(question.correct_answer || '')}
+                            ${this.renderer.escapeHtml(correctAnswer || '')}
                         </span>
                     </div>
                 </div>
@@ -757,18 +883,182 @@ class WorksheetEditor {
             `;
         }
 
+        // 채점 정보 표시
+        html += `
+            <div class="grading-info">
+                <div class="grading-details">
+                    <span class="grading-method">채점 방식: ${gradingMethod === 'ai' ? '🤖 AI 채점' : '📊 DB 비교'}</span>
+                    <span class="score-display">점수: ${score} / ${maxScore}점</span>
+                </div>
+            </div>
+        `;
+
         // AI 피드백 (있는 경우)
-        if (questionResult?.ai_feedback) {
+        if (aiFeedback) {
             html += `
                 <div class="ai-feedback">
-                    <strong>AI 피드백:</strong> 
-                    <span>${this.renderer.escapeHtml(questionResult.ai_feedback)}</span>
+                    <strong>🤖 AI 피드백:</strong> 
+                    ${this.gradingEditMode ? `
+                        <textarea class="feedback-input" 
+                                  data-question-id="${question.question_id}"
+                                  placeholder="AI 피드백을 수정하세요..."
+                                  onblur="window.worksheetEditor.updateQuestionFeedback('${question.question_id}', this.value)"
+                        >${aiFeedback}</textarea>
+                    ` : `
+                        <div class="feedback-text">${this.renderer.escapeHtml(aiFeedback)}</div>
+                    `}
+                </div>
+            `;
+        } else if (this.gradingEditMode && gradingMethod === 'ai') {
+            // AI 채점 문제인데 피드백이 없는 경우 추가할 수 있도록
+            html += `
+                <div class="ai-feedback">
+                    <strong>🤖 AI 피드백 추가:</strong>
+                    <textarea class="feedback-input" 
+                              data-question-id="${question.question_id}"
+                              placeholder="AI 피드백을 추가하세요..."
+                              onblur="window.worksheetEditor.updateQuestionFeedback('${question.question_id}', this.value)"
+                    ></textarea>
                 </div>
             `;
         }
 
-        html += '</div>';
+        html += `</div>`;
         return html;
+    }
+
+    // AI 피드백 업데이트 함수 추가
+    updateQuestionFeedback(questionId, feedback) {
+        // 현재 채점 결과에서 해당 문제 찾기
+        const questionResult = this.currentGradingResult?.question_results?.find(qr => qr.question_id === questionId);
+        if (questionResult) {
+            questionResult.ai_feedback = feedback;
+            console.log(`문제 ${questionId} 피드백 업데이트:`, feedback);
+            // TODO: 서버에 저장하는 API 호출 추가
+        }
+    }
+
+    // 채점 결과 목록으로 돌아가기
+    showGradingResultsList() {
+        // 채점 결과 탭 활성화
+        const resultTab = document.querySelector('.tab-btn[data-tab="results"]');
+        const worksheetContent = document.getElementById('worksheetContent');
+        const generatedWorksheet = document.getElementById('generatedWorksheet');
+        
+        if (resultTab) {
+            resultTab.click();
+        } else {
+            // 수동으로 채점 결과 탭 활성화
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            const resultTabContent = document.getElementById('results-tab');
+            if (resultTabContent) {
+                resultTabContent.classList.add('active');
+                this.displayGradingResults();
+            }
+        }
+        
+        // 워크시트 콘텐츠 숨기기
+        if (worksheetContent) {
+            worksheetContent.innerHTML = '';
+        }
+        
+        if (generatedWorksheet) {
+            generatedWorksheet.style.display = 'none';
+        }
+    }
+
+    // 정답 인정 토글 기능
+    async toggleQuestionCorrect(questionId, isCorrect) {
+        try {
+            if (!this.currentGradingResult) {
+                console.error('현재 채점 결과가 없습니다.');
+                return;
+            }
+
+            console.log(`문제 ${questionId} 정답 인정 상태 변경: ${isCorrect}`);
+
+            // API 호출
+            const reviewData = {
+                question_results: {
+                    [questionId]: {
+                        is_correct: isCorrect
+                    }
+                }
+            };
+
+            const response = await ApiService.updateGradingReview(
+                this.currentGradingResult.result_id, 
+                reviewData
+            );
+
+            if (response) {
+                console.log('정답 인정 상태 업데이트 성공:', response);
+                
+                // 현재 채점 결과 업데이트
+                const questionResult = this.currentGradingResult.question_results.find(
+                    qr => qr.question_id === questionId
+                );
+                
+                if (questionResult) {
+                    questionResult.is_correct = isCorrect;
+                    // 점수도 업데이트 (백엔드에서 계산된 값 반영)
+                    if (response.total_score !== undefined) {
+                        this.currentGradingResult.total_score = response.total_score;
+                        this.currentGradingResult.percentage = response.percentage;
+                    }
+                }
+
+                // UI 새로고침
+                this.renderGradingResultView();
+                
+                // 성공 피드백
+                this.showNotification('정답 인정 상태가 업데이트되었습니다.', 'success');
+            }
+
+        } catch (error) {
+            console.error('정답 인정 상태 업데이트 오류:', error);
+            this.showNotification('정답 인정 상태 업데이트 중 오류가 발생했습니다.', 'error');
+            
+            // 체크박스 상태 되돌리기
+            const checkbox = document.querySelector(`input[data-question-id="${questionId}"]`);
+            if (checkbox) {
+                checkbox.checked = !isCorrect;
+            }
+        }
+    }
+
+    // 알림 표시 함수
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        `;
+        
+        if (type === 'success') {
+            notification.style.backgroundColor = '#28a745';
+        } else if (type === 'error') {
+            notification.style.backgroundColor = '#dc3545';
+        } else {
+            notification.style.backgroundColor = '#007bff';
+        }
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
     }
 }
 

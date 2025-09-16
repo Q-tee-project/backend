@@ -207,6 +207,11 @@ const ApiService = {
     // AI 채점 검수
     async reviewGrading(id, data) {
         return api.put(API_ENDPOINTS.reviewGrading(id), data);
+    },
+
+    // 채점 결과 검수 업데이트 (별칭)
+    async updateGradingReview(id, data) {
+        return this.reviewGrading(id, data);
     }
 };
 

@@ -453,20 +453,24 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
             "questions": []
         }
         
-        # 지문 데이터 추가
+        # 지문 데이터 추가 (한글 번역 포함)
         for passage in worksheet.passages:
             worksheet_data["passages"].append({
                 "passage_id": passage.passage_id,
                 "passage_type": passage.passage_type,
                 "passage_content": passage.passage_content,
+                "original_content": passage.original_content,
+                "korean_translation": passage.korean_translation,
                 "related_questions": passage.related_questions
             })
         
-        # 예문 데이터 추가
+        # 예문 데이터 추가 (한글 번역 포함)
         for example in worksheet.examples:
             worksheet_data["examples"].append({
                 "example_id": example.example_id,
                 "example_content": example.example_content,
+                "original_content": example.original_content,
+                "korean_translation": example.korean_translation,
                 "related_question": example.related_question
             })
         
@@ -484,10 +488,18 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
                 "question_example_id": question.example_id
             })
         
+        # 응답 데이터 구조 통일 (채점 결과 호환성)
         return {
-            "status": "success",
-            "message": "문제 풀이용 문제지를 성공적으로 조회했습니다.",
-            "worksheet_data": worksheet_data
+            "worksheet_id": worksheet_data["worksheet_id"],
+            "worksheet_name": worksheet_data["worksheet_name"],
+            "worksheet_level": worksheet_data["worksheet_level"],
+            "worksheet_grade": worksheet_data["worksheet_grade"],
+            "worksheet_subject": worksheet_data["worksheet_subject"],
+            "total_questions": worksheet_data["total_questions"],
+            "worksheet_duration": worksheet_data["worksheet_duration"],
+            "passages": worksheet_data["passages"],
+            "examples": worksheet_data["examples"],
+            "questions": worksheet_data["questions"]
         }
         
     except HTTPException:
@@ -666,7 +678,7 @@ async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
         # 관련된 채점 결과 삭제
         grading_results = db.query(GradingResult).filter(GradingResult.worksheet_id == worksheet_id).all()
         for result in grading_results:
-            db.query(QuestionResult).filter(QuestionResult.grading_result_id == result.id).delete()
+            db.query(QuestionResult).filter(QuestionResult.grading_result_id == result.result_id).delete()
             db.delete(result)
         
         # 2. 문제 삭제

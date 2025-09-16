@@ -266,37 +266,62 @@ class PromptGenerator:
 - 예문의 소재는 글의 소재를 참고하여 생성
 - 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
 
-# 문제 질문과 예문 분리 규칙
-- **문제의 질문(question_text)에는 영어 문장이나 긴 예시를 직접 포함하지 마세요**
+# 🚨 문제 질문과 예문 분리 규칙 (절대 위반 금지)
+
+## 핵심 원칙
+- **example_content에는 절대 지시문을 포함하지 마세요!**
+- **example_content는 순수한 영어 예문, 보기, 문제만 포함해야 합니다!**
+- **모든 지시문과 한국어 설명은 question_text에만 들어가야 합니다!**
+
+## 세부 규칙
+- **문제의 질문(question_text)**: 순수한 한국어 지시문만 (예: "다음과 같이 소유격을 사용하여 쓰시오")
+- **예문 내용(example_content)**: 순수한 영어 예문만 (예: "<보기> The book of Tom → Tom's book\\n<문제> The car of my father")
 - **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
-- **문제 질문은 순수한 한국어 질문만 포함하고, 예문 ID로 참조하세요**
 - **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
-- **지문이 있는 문제에 예문이 필요할 경우 둘 다 생성하세요.**
 
-## 분리 예시:
-**잘못된 방식:**
+## 🚨 절대 금지되는 잘못된 예시들:
+
+### 1️⃣ example_content에 지시문이 포함된 경우 (절대 금지!)
+**❌ 잘못된 방식:**
+```
+example_content: "다음 명사구를 <보기>와 같이 소유격 형태로 바꾸시오.\\n\\n<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
+```
+
+**✅ 올바른 방식:**
+```
+question_text: "다음과 같이 소유격을 사용하여 쓰시오"
+example_content: "<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
+```
+
+### 2️⃣ question_text에 영어 문장이 포함된 경우
+**❌ 잘못된 방식:**
+```
 question_text: "다음 문장의 빈칸에 들어갈 말은?\\n\\nThey ___ good friends."
+```
 
-**올바른 방식:**
+**✅ 올바른 방식:**
+```
 question_text: "다음 문장의 빈칸에 들어갈 말은?"
 example_content: "They ___ good friends."
 question_example_id: "1"
+```
 
-**잘못된 방식:**
+### 3️⃣ question_text에 대화문이 포함된 경우
+**❌ 잘못된 방식:**
+```
 question_text: "다음 대화를 순서대로 배열하시오\\n(A) Hi! (B) How are you? (C) Fine, thanks."
+```
 
-**올바른 방식:**
+**✅ 올바른 방식:**
+```
 question_text: "다음 대화를 순서대로 배열하시오"
 example_content: "(A) Hi!\\n(B) How are you?\\n(C) Fine, thanks."
 question_example_id: "2"
+```
 
-**잘못된 방식:**
-question_text: "다음과 같이 소유격을 사용하여 쓰시오\\n<보기> The book of Tom → Tom's book\\n<문제> The car of my father"
-
-**올바른 방식:**
-question_text: "다음과 같이 소유격을 사용하여 쓰시오"
-example_content: "<보기> The book of Tom → Tom's book\\n<문제> The car of my father"
-question_example_id: "3"
+### 🎯 기억하세요!
+- **question_text**: 순수한 한국어 지시문만!
+- **example_content**: 순수한 영어 예문만! (지시문 절대 금지!)
 
 # 글의 소재
 - 개인생활 관련: 취미, 오락, 여행, 운동, 쇼핑, 건강, 일상 등
@@ -312,7 +337,6 @@ correspondence (서신/소통) : 이메일, 편지, 메모, 사내 공지 등
 dialogue (대화문) : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
 informational (정보성 양식) : 광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등
 review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
-social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트 등
 
 # 유형별 JSON 형식
 {json_formats_text}
@@ -353,6 +377,16 @@ social_media(SNS) : 트위터, 인스타그램 게시물, 페이스북 포스트
 **정답 형식 규칙:**
 - 객관식 정답은 반드시 단순한 번호로 표시(ex, "1", "2", "3")
 - 주관식, 서술형 정답은 반드시 텍스트로 표시
+
+## 🔥 최종 검증 체크리스트 (응답 전 필수 확인!)
+응답하기 전에 반드시 다음을 확인하세요:
+1. example_content에 한국어 지시문이 없는가?
+2. example_content에 "다음을", "~하시오" 같은 지시어가 없는가?
+3. question_text에 영어 문장이 없는가?
+4. question_text와 example_content가 명확히 분리되어 있는가?
+5. 각 example_content는 순수한 영어 예문만 포함하는가?
+
+** 주의: 위 체크리스트를 위반하면 전체 문제지가 사용 불가능해집니다!**
 
 **최종 강조사항:**
 - 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요
