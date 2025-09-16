@@ -632,6 +632,26 @@ async def update_example(worksheet_id: str, example_id: str, request: Dict[str, 
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예문 업데이트 중 오류: {str(e)}")
 
+@router.put("/worksheets/{worksheet_id}/title")
+async def update_worksheet_title(worksheet_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
+    """문제지 제목을 업데이트합니다."""
+    try:
+        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        
+        if not worksheet:
+            raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
+        
+        worksheet.worksheet_name = request.get("worksheet_name")
+        db.commit()
+        
+        return {"status": "success", "message": "문제지 제목이 업데이트되었습니다."}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"문제지 제목 업데이트 중 오류: {str(e)}")
+
 @router.delete("/worksheets/{worksheet_id}", response_model=Dict[str, Any])
 async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
     """문제지와 관련된 모든 데이터를 삭제합니다."""

@@ -389,6 +389,7 @@ class WorksheetEditor {
             
             switch (type) {
                 case 'title':
+                    await window.ApiService.updateWorksheetTitle(worksheetId, newContent);
                     this.currentWorksheet.worksheet_name = newContent;
                     break;
                     

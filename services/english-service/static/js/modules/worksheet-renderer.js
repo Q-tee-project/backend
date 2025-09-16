@@ -11,7 +11,7 @@ class WorksheetRenderer {
     renderWorksheet(data, options = {}) {
         const { showAnswers = true, editMode = false } = options; // 기본값을 true로 변경
         
-        let html = this.renderHeader(data);
+        let html = this.renderHeader(data, editMode);
         
         // 문제별로 연관된 지문/예문과 함께 렌더링
         this.renderedPassages.clear();
@@ -46,10 +46,10 @@ class WorksheetRenderer {
     }
 
     // 문제지 헤더 렌더링
-    renderHeader(data) {
+    renderHeader(data, editMode = false) {
         return `
-            <div class="worksheet-title ${data.editable ? 'editable' : ''}" 
-                 ${data.editable ? 'data-type="title"' : ''}>
+            <div class="worksheet-title ${editMode ? 'editable' : ''}" 
+                 ${editMode ? 'data-type="title"' : ''}>
                 ${data.worksheet_name || '영어 문제지'}
             </div>
             <div class="worksheet-info">

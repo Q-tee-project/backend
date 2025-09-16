@@ -91,6 +91,7 @@ const API_ENDPOINTS = {
     worksheetSolve: (id) => `/api/v1/worksheets/${id}/solve`,
     
     // 문제지 편집
+    updateWorksheetTitle: (worksheetId) => `/api/v1/worksheets/${worksheetId}/title`,
     updateQuestionText: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/text`,
     updateQuestionChoice: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/choice`,
     updateQuestionAnswer: (worksheetId, questionId) => `/api/v1/worksheets/${worksheetId}/questions/${questionId}/answer`,
@@ -143,6 +144,13 @@ const ApiService = {
     // 문제지 삭제
     async deleteWorksheet(id) {
         return api.delete(API_ENDPOINTS.worksheet(id));
+    },
+
+    // 문제지 제목 수정
+    async updateWorksheetTitle(worksheetId, title) {
+        return api.put(API_ENDPOINTS.updateWorksheetTitle(worksheetId), {
+            worksheet_name: title
+        });
     },
 
     // 문제 텍스트 수정
