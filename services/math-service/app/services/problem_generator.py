@@ -18,9 +18,24 @@ class ProblemGenerator:
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
-        
+
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # 기본 설정으로 복원 (타임아웃 해결을 위해 토큰 수 조정)
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,
+            max_output_tokens=12288,
+            top_p=0.8,
+            top_k=40
+        )
+
+        # 클라이언트 옵션 설정 (타임아웃 포함)
+        client_options = {"api_endpoint": "https://generativelanguage.googleapis.com"}
+
+        self.model = genai.GenerativeModel(
+            'gemini-2.5-pro',
+            generation_config=generation_config
+        )
         self.prompt_templates = PromptTemplates()
     
     def generate_problems(
@@ -97,20 +112,20 @@ class ProblemGenerator:
             b_types = chapter_problem_types[total_types//3:2*total_types//3] if total_types >= 6 else chapter_problem_types[1:2] if total_types >= 2 else []
             c_types = chapter_problem_types[2*total_types//3:] if total_types >= 3 else chapter_problem_types[-1:] if total_types >= 3 else []
             
-            # 참고 문제 텍스트 구성
+            # 참고 문제 텍스트 구성 - 난이도별 차별화
             reference_text = f"**{chapter_name} 참고 문제 유형:**\n\n"
-            
+
             if difficulty_ratio and difficulty_ratio.get('A', 0) > 0 and a_types:
                 reference_text += f"**A단계 유형**: {', '.join(a_types[:4])}\n"
-                reference_text += "   → 기본 개념과 정의를 직접 적용하는 문제로 변형\n\n"
-            
-            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:  
-                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n" 
-                reference_text += "   → 계산 과정과 공식 적용이 포함된 응용 문제로 변형\n\n"
-                
+                reference_text += "   → 엄청 쉬운 기본 계산 문제로 생성 (1-2줄, 1-2단계 계산)\n\n"
+
+            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:
+                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n"
+                reference_text += "   → 응용/연산 문제로 생성 (3-4줄, 여러 단계 계산)\n\n"
+
             if difficulty_ratio and difficulty_ratio.get('C', 0) > 0 and c_types:
                 reference_text += f"**C단계 유형**: {', '.join(c_types[:4])}\n"
-                reference_text += "   → 조건 분석과 종합적 사고가 필요한 심화 문제로 변형\n\n"
+                reference_text += "   → 평범한 중학생이 '헉!' 소리나는 심화 문제로 생성 (5-7줄, 복잡한 추론)\n\n"
             
             return reference_text
             
@@ -121,7 +136,10 @@ class ProblemGenerator:
     def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
         """AI 호출 및 응답 파싱"""
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+                prompt,
+                request_options={'timeout': 1200}  # 20분 타임아웃
+            )
             content = response.text
             
             # JSON 부분만 추출
@@ -269,6 +287,13 @@ class ProblemGenerator:
         
         # 잘못된 LaTeX 패턴들과 올바른 형태로의 매핑
         latex_fixes = [
+            # 잘못된 단일 문자 명령어 수정
+            (r'\\f(?!rac)', r''),                              # \f 제거 (단독 \f)
+            (r'\\n(?!eq|e)', r''),                             # \n 제거 (\neq 제외)
+            (r'\\l(?!og|eft|eq)', r''),                        # \l 제거 (\log, \left, \leq 제외)
+            (r'\\g(?!eq|t)', r''),                             # \g 제거 (\geq, \gt 제외)
+            (r'\\([fnglt])(?![a-zA-Z])', r''),                 # 단독 \f, \n, \g, \l, \t 제거
+            # 일반적인 LaTeX 오류 수정
             (r'rac\{([^}]+)\}\{([^}]+)\}', r'\\frac{\1}{\2}'),  # rac{} -> \frac{}{}
             (r'qrt\{([^}]+)\}', r'\\sqrt{\1}'),                # qrt{} -> \sqrt{}
             (r'in\(([^)]+)\)', r'\\sin(\1)'),                  # in() -> \sin()

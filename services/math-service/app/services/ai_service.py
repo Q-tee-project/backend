@@ -16,7 +16,7 @@ class AIService:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
         
         # 서비스 인스턴스 초기화
         self.problem_generator = ProblemGenerator()
