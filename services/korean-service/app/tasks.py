@@ -35,7 +35,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             user_id=user_id,
             school_level=request_data['school_level'],
             grade=request_data['grade'],
-            semester=request_data['semester'],
             korean_type=request_data['korean_type'],
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],
@@ -60,7 +59,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
         korean_data = {
             'school_level': request_data['school_level'],
             'grade': request_data['grade'],
-            'semester': request_data['semester'],
             'korean_type': request_data['korean_type'],
             'question_type': request_data['question_type'],
             'difficulty': request_data['difficulty']
@@ -81,14 +79,24 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             meta={'current': 60, 'total': 100, 'status': '워크시트 생성 중...'}
         )
 
-        # 워크시트 생성
-        worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
+        # 워크시트 생성 - 지문 정보 포함
+        if problems and len(problems) > 0:
+            # 첫 번째 문제에서 지문 정보 추출
+            first_problem = problems[0]
+            source_title = first_problem.get('source_title', '')
+            source_author = first_problem.get('source_author', '')
+            
+            if source_title and source_author:
+                worksheet_title = f"{source_title} - {source_author} ({request_data['problem_count']}문제)"
+            else:
+                worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
+        else:
+            worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
 
         worksheet = Worksheet(
             title=worksheet_title,
             school_level=request_data['school_level'],
             grade=request_data['grade'],
-            semester=request_data['semester'],
             korean_type=request_data['korean_type'],
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],

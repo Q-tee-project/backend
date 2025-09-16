@@ -26,7 +26,6 @@ class Difficulty(str, Enum):
 class KoreanProblemGenerationRequest(BaseModel):
     school_level: SchoolLevel
     grade: int = Field(..., ge=1, le=3, description="학년 (1-3)")
-    semester: str = Field(..., description="학기 (1학기, 2학기)")
     korean_type: KoreanType = Field(..., description="국어 문제 유형")
     question_type: QuestionType = Field(..., description="문제 형식")
     difficulty: Difficulty = Field(..., description="난이도")
@@ -42,7 +41,6 @@ class KoreanWorksheetCreate(BaseModel):
     title: str = Field(..., max_length=200, description="워크시트 제목")
     school_level: SchoolLevel
     grade: int = Field(..., ge=1, le=3)
-    semester: str
     korean_type: KoreanType
     question_type: QuestionType
     difficulty: Difficulty
@@ -57,7 +55,6 @@ class KoreanWorksheetResponse(BaseModel):
     title: str
     school_level: str
     grade: int
-    semester: str
     korean_type: str
     question_type: str
     difficulty: str

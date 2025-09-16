@@ -17,7 +17,6 @@ class KoreanGeneration(Base):
     # 교육과정 정보
     school_level = Column(String, nullable=False)  # "중학교", "고등학교"
     grade = Column(Integer, nullable=False)
-    semester = Column(String, nullable=False)
 
     # 국어 과목 정보
     korean_type = Column(String, nullable=False)  # "시", "소설", "수필/비문학", "문법"

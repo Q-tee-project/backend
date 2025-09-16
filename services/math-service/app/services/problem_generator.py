@@ -437,9 +437,44 @@ class ProblemGenerator:
     
     def _fix_latex_in_problem(self, problem: Dict) -> Dict:
         """LaTeX 수식 수정 - KaTeX 호환"""
-        # LaTeX 수정 패턴
+        # LaTeX 수정 패턴 - 가장 심각한 문제부터 처리
         latex_fixes = [
-            # 잘못된 명령어 수정
+            #  최우선: 가장 심각한 빈 분수 패턴 수정
+            (r'\$\\frac\{\}\{\}\$\{([^}]*)\}\{([^}]*)\}', r'$\\frac{\1}{\2}$'),  # $\frac{}{}${분자}{분모} -> $\frac{분자}{분모}$
+            (r'\$\\frac\{\}\{\}\$\{([^}]+)\}', r'$\\frac{\1}{1}$'),  # $\frac{}{}${내용} -> $\frac{내용}{1}$
+            (r'\$\\frac\{\}\{\}\$([a-zA-Z0-9+-]+)', r'$\\frac{\1}{1}$'),  # $\frac{}{}$변수 -> $\frac{변수}{1}$
+            (r'\$\\frac\{\}\{\}\$([^$]*)', r'$\\frac{1}{2}$'),  # $\frac{}{}$기타 -> 기본 분수
+            (r'\\frac\{\}\{\}', r'\\frac{1}{2}'),  # 빈 분수를 기본값으로
+
+            # 새로 발견된 문제 패턴 수정
+            (r'= \$\\frac\{\}\{\}\$\{(\d+)\}\{(\d+)\}([^$]*)', r'= $\\frac{\1}{\2}$\3'),  # = $\frac{}{}${숫자}{숫자}기타 -> = $\frac{숫자}{숫자}$기타
+            (r'\$\\frac\{\}\{\}\$\{(\d+)\}\{(\d+)\}([a-zA-Z])', r'$\\frac{\1}{\2}\3$'),  # $\frac{}{}${숫자}{숫자}변수 -> $\frac{숫자}{숫자}변수$
+
+            #  실제 데이터에서 발견된 구체적 오류 패턴들 수정
+            (r'\$\\frac\{\}\{\}\$\{a\+2b\}\{ab\}', r'$\\frac{a+2b}{ab}$'),
+            (r'\$\\frac\{\}\{\}\$\{2x-1\}\{3\}', r'$\\frac{2x-1}{3}$'),
+            (r'\$\\frac\{\}\{\}\$\{1\}\{6\}', r'$\\frac{1}{6}$'),
+            (r'\$\\frac\{\}\{\}\$\{2\}\{5\}', r'$\\frac{2}{5}$'),  # 구체적인 2/5 분수 패턴
+
+            # 이스케이프된 LaTeX 명령어 정리 (가장 먼저 처리)
+            (r'\\\\frac\{', r'\\frac{'),  # \\frac{ -> \frac{
+            (r'\\\\sqrt\{', r'\\sqrt{'),  # \\sqrt{ -> \sqrt{
+            (r'\\\\sin(?!\w)', r'\\sin'),  # \\sin -> \sin
+            (r'\\\\cos(?!\w)', r'\\cos'),  # \\cos -> \cos
+            (r'\\\\tan(?!\w)', r'\\tan'),  # \\tan -> \tan
+            (r'\\\\log(?!\w)', r'\\log'),  # \\log -> \log
+            (r'\\\\ln(?!\w)', r'\\ln'),    # \\ln -> \ln
+            (r'\\\\pi(?!\w)', r'\\pi'),    # \\pi -> \pi
+            (r'\\\\alpha(?!\w)', r'\\alpha'),  # \\alpha -> \alpha
+            (r'\\\\beta(?!\w)', r'\\beta'),     # \\beta -> \beta
+            (r'\\\\theta(?!\w)', r'\\theta'),  # \\theta -> \theta
+            (r'\\\\times(?!\w)', r'\\times'),  # \\times -> \times
+            (r'\\\\div(?!\w)', r'\\div'),      # \\div -> \div
+            (r'\\\\leq(?!\w)', r'\\leq'),      # \\leq -> \leq
+            (r'\\\\geq(?!\w)', r'\\geq'),      # \\geq -> \geq
+            (r'\\\\neq(?!\w)', r'\\neq'),      # \\neq -> \neq
+            
+            # 잘못된 명령어 수정 (백슬래시 없는 경우만)
             (r'(?<!\\)frac\{', r'\\frac{'),
             (r'(?<!\\)sqrt\{', r'\\sqrt{'),
             (r'(?<!\\)sin(?!\w)', r'\\sin'),
@@ -471,6 +506,13 @@ class ProblemGenerator:
             if field in problem and isinstance(problem[field], str):
                 problem[field] = self._apply_latex_fixes(problem[field], latex_fixes)
         
+        # 해설 길이 제한 적용
+        if 'explanation' in problem and isinstance(problem['explanation'], str):
+            problem['explanation'] = self._limit_explanation_length(
+                problem['explanation'], 
+                problem.get('difficulty', 'B')
+            )
+        
         # choices 배열 처리
         if 'choices' in problem and isinstance(problem['choices'], list):
             problem['choices'] = [
@@ -495,7 +537,48 @@ class ProblemGenerator:
         fixed = re.sub(r'(?<!\$)(\\(?:frac|sqrt|sin|cos|tan|log|pi|alpha|beta|theta)[^$]*?)(?!\$)', 
                       r'$\1$', fixed)
         
+        # 불완전한 LaTeX 수식 정리
+        # $\frac$ -> $\frac{}{}$
+        fixed = re.sub(r'\$\\frac\$', r'$\\frac{}{}$', fixed)
+        
+        # 이중 이스케이프된 $ 기호 정리
+        fixed = re.sub(r'\\\$', r'$', fixed)
+        
         return fixed
+    
+    def _limit_explanation_length(self, explanation: str, difficulty: str) -> str:
+        """해설 길이를 난이도에 따라 제한"""
+        if not explanation:
+            return explanation
+        
+        # 난이도별 최대 길이 설정
+        max_lengths = {
+            'A': 50,   # A단계: 50자 이하
+            'B': 100,  # B단계: 100자 이하
+            'C': 150   # C단계: 150자 이하
+        }
+        
+        max_length = max_lengths.get(difficulty, 100)  # 기본값: 100자
+        
+        if len(explanation) <= max_length:
+            return explanation
+        
+        # 해설이 너무 길면 핵심 부분만 추출
+        # 문장 단위로 자르기
+        sentences = explanation.split('.')
+        truncated = ""
+        
+        for sentence in sentences:
+            if len(truncated + sentence + '.') <= max_length:
+                truncated += sentence + '.'
+            else:
+                break
+        
+        # 아무것도 남지 않으면 첫 번째 문장만
+        if not truncated.strip():
+            truncated = sentences[0] + '.' if sentences else explanation[:max_length]
+        
+        return truncated.strip()
     
     def _validate_data_types(self, problem: Dict) -> Dict:
         """데이터 타입 검증 및 수정"""
