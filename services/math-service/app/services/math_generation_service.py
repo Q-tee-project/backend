@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from ..schemas.math_generation import MathProblemGenerationRequest, MathProblemGenerationResponse
-from ..services.ai_service import AIService
+from .problem_generator import ProblemGenerator
 from ..models.math_generation import MathProblemGeneration
 from ..models.problem import Problem
 from ..models.worksheet import Worksheet, WorksheetStatus
@@ -15,7 +15,7 @@ class MathGenerationService:
     """수학 문제 생성 서비스"""
     
     def __init__(self):
-        self.ai_service = AIService()
+        self.problem_generator = ProblemGenerator()
     
     def get_curriculum_structure(self, db: Session, school_level: Optional[str] = None) -> Dict:
         """교육과정 구조 조회 - 중1 1학기에 초점"""
@@ -197,11 +197,24 @@ class MathGenerationService:
         # 7. 생성된 문제들을 워크시트에 연결하여 저장
         problem_responses = []
         for i, problem_data in enumerate(generated_problems):
+            # 문제 유형과 난이도 검증
+            problem_type = problem_data.get("problem_type")
+            difficulty = problem_data.get("difficulty")
+
+            # 유효성 검사 및 기본값 설정 (로그와 함께)
+            if problem_type not in ["multiple_choice", "essay", "short_answer"]:
+                print(f"⚠️ 잘못된 문제유형 '{problem_type}' -> 'multiple_choice'로 대체")
+                problem_type = "multiple_choice"
+
+            if difficulty not in ["A", "B", "C"]:
+                print(f"⚠️ 잘못된 난이도 '{difficulty}' -> 'B'로 대체")
+                difficulty = "B"
+
             problem = Problem(
                 worksheet_id=worksheet.id,  # 워크시트에 연결
                 sequence_order=i + 1,
-                problem_type=problem_data.get("problem_type", "multiple_choice"),
-                difficulty=problem_data.get("difficulty", "B"),
+                problem_type=problem_type,
+                difficulty=difficulty,
                 question=problem_data.get("question", ""),
                 choices=json.dumps(problem_data.get("choices")) if problem_data.get("choices") else None,
                 correct_answer=problem_data.get("correct_answer", ""),
@@ -305,23 +318,12 @@ class MathGenerationService:
     def _generate_problems_with_ai(self, curriculum_data: Dict, problem_types: List[str], request: MathProblemGenerationRequest) -> List[Dict]:
         """AI를 통한 문제 생성"""
         
-        # 문제 유형 정보를 사용자 프롬프트에 추가
-        enhanced_prompt = f"""
-{request.user_text}
-
-다음 문제 유형들 중에서 다양하게 선택하여 문제를 생성해주세요:
-{', '.join(problem_types[:10])}  
-
-문제 생성 요구사항:
-- 총 {request.problem_count.value_int}개 문제
-- 난이도 비율: A단계 {request.difficulty_ratio.A}%, B단계 {request.difficulty_ratio.B}%, C단계 {request.difficulty_ratio.C}%
-- 유형 비율: 객관식 {request.problem_type_ratio.multiple_choice}%, 주관식 {request.problem_type_ratio.essay}%, 단답형 {request.problem_type_ratio.short_answer}%
-- 위 문제 유형들을 참고하여 다양한 유형의 문제를 포함해주세요
-        """
+        # 사용자 프롬프트 그대로 전달 (ProblemGenerator에서 모든 처리)
+        enhanced_prompt = request.user_text
         
         try:
-            # AI 서비스 호출 - 난이도 비율 정보 추가로 전달
-            problems = self.ai_service.generate_math_problem(
+            # ProblemGenerator 직접 호출 - 난이도 비율 정보 추가로 전달
+            problems = self.problem_generator.generate_problems(
                 curriculum_data=curriculum_data,
                 user_prompt=enhanced_prompt,
                 problem_count=request.problem_count.value_int,
@@ -351,20 +353,38 @@ class MathGenerationService:
     
     def _calculate_difficulty_distribution(self, problems: List[Dict]) -> Dict[str, int]:
         """난이도 분포 계산"""
-        distribution = {"A": 0, "B": 0, "C": 0}
+        distribution = {"A": 0, "B": 0, "C": 0, "UNKNOWN": 0}
         for problem in problems:
-            difficulty = problem.get("difficulty", "B")
-            if difficulty in distribution:
+            difficulty = problem.get("difficulty")
+            if difficulty in ["A", "B", "C"]:
                 distribution[difficulty] += 1
+            else:
+                # difficulty 필드가 누락되거나 잘못된 경우 UNKNOWN으로 분류
+                distribution["UNKNOWN"] += 1
+                print(f"⚠️ 난이도 필드 누락 또는 잘못됨: {difficulty}, 문제: {problem.get('question', '')[:50]}...")
+
+        # UNKNOWN이 있으면 경고 로그
+        if distribution["UNKNOWN"] > 0:
+            print(f"🚨 난이도 분류 실패한 문제 {distribution['UNKNOWN']}개 발견")
+
         return distribution
     
     def _calculate_type_distribution(self, problems: List[Dict]) -> Dict[str, int]:
         """유형 분포 계산"""
-        distribution = {"multiple_choice": 0, "essay": 0, "short_answer": 0}
+        distribution = {"multiple_choice": 0, "essay": 0, "short_answer": 0, "UNKNOWN": 0}
         for problem in problems:
-            problem_type = problem.get("problem_type", "multiple_choice")
-            if problem_type in distribution:
+            problem_type = problem.get("problem_type")
+            if problem_type in ["multiple_choice", "essay", "short_answer"]:
                 distribution[problem_type] += 1
+            else:
+                # problem_type 필드가 누락되거나 잘못된 경우 UNKNOWN으로 분류
+                distribution["UNKNOWN"] += 1
+                print(f"⚠️ 문제유형 필드 누락 또는 잘못됨: {problem_type}, 문제: {problem.get('question', '')[:50]}...")
+
+        # UNKNOWN이 있으면 경고 로그
+        if distribution["UNKNOWN"] > 0:
+            print(f"🚨 문제유형 분류 실패한 문제 {distribution['UNKNOWN']}개 발견")
+
         return distribution
     
     def get_worksheet_problems(self, db: Session, worksheet_id: int) -> List[Dict]:

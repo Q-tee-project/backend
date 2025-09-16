@@ -1,10 +1,11 @@
 """
-수학 문제 생성 로직 분리
+수학 문제 생성 로직 분리 - JSON 파싱 완벽 개선
 """
 import os
 import json
+import re
 import google.generativeai as genai
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
 from .prompt_templates import PromptTemplates
 from dotenv import load_dotenv
 
@@ -18,9 +19,21 @@ class ProblemGenerator:
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
-        
+
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # 기본 설정으로 복원 (타임아웃 해결을 위해 토큰 수 조정)
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,
+            max_output_tokens=12288,
+            top_p=0.8,
+            top_k=40
+        )
+
+        self.model = genai.GenerativeModel(
+            'gemini-2.5-pro',
+            generation_config=generation_config
+        )
         self.prompt_templates = PromptTemplates()
     
     def generate_problems(
@@ -71,8 +84,6 @@ class ProblemGenerator:
     def _get_reference_problems(self, chapter_name: str, difficulty_ratio: Dict) -> str:
         """참고 문제 가져오기"""
         try:
-            import os
-            
             problem_types_file_path = os.path.join(
                 os.path.dirname(__file__), 
                 "../../data/math_problem_types.json"
@@ -97,20 +108,20 @@ class ProblemGenerator:
             b_types = chapter_problem_types[total_types//3:2*total_types//3] if total_types >= 6 else chapter_problem_types[1:2] if total_types >= 2 else []
             c_types = chapter_problem_types[2*total_types//3:] if total_types >= 3 else chapter_problem_types[-1:] if total_types >= 3 else []
             
-            # 참고 문제 텍스트 구성
+            # 참고 문제 텍스트 구성 - 난이도별 차별화
             reference_text = f"**{chapter_name} 참고 문제 유형:**\n\n"
-            
+
             if difficulty_ratio and difficulty_ratio.get('A', 0) > 0 and a_types:
                 reference_text += f"**A단계 유형**: {', '.join(a_types[:4])}\n"
-                reference_text += "   → 기본 개념과 정의를 직접 적용하는 문제로 변형\n\n"
-            
-            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:  
-                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n" 
-                reference_text += "   → 계산 과정과 공식 적용이 포함된 응용 문제로 변형\n\n"
-                
+                reference_text += "   → 쎈 A단계: 공식 대입 수준의 기본 문제 (1~2줄, 정답률 80~90%)\n\n"
+
+            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:
+                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n"
+                reference_text += "   → 쎈 B단계: 실생활 응용/유형 문제 (3~4줄, 정답률 50~60%)\n\n"
+
             if difficulty_ratio and difficulty_ratio.get('C', 0) > 0 and c_types:
                 reference_text += f"**C단계 유형**: {', '.join(c_types[:4])}\n"
-                reference_text += "   → 조건 분석과 종합적 사고가 필요한 심화 문제로 변형\n\n"
+                reference_text += "   → 쎈 C단계: 창의적 사고 필요한 심화 문제 (5~7줄, 정답률 20~30%)\n\n"
             
             return reference_text
             
@@ -119,27 +130,21 @@ class ProblemGenerator:
             return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
     
     def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
-        """AI 호출 및 응답 파싱"""
+        """AI 호출 및 응답 파싱 - 개선된 버전"""
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+                prompt,
+                request_options={'timeout': 1200}  # 20분 타임아웃
+            )
             content = response.text
             
-            # JSON 부분만 추출
-            if "```json" in content:
-                json_start = content.find("```json") + 7
-                json_end = content.find("```", json_start)
-                json_str = content[json_start:json_end].strip()
-            else:
-                json_str = content
-            
-            # JSON 정리 및 파싱
-            problems_array = self._clean_and_parse_json(json_str)
-            problems_list = problems_array if isinstance(problems_array, list) else [problems_array]
+            # JSON 추출 및 파싱
+            problems = self._extract_and_parse_json(content)
             
             # LaTeX 검증 및 수정
             validated_problems = []
-            for problem in problems_list:
-                validated_problem = self._validate_and_fix_latex(problem)
+            for problem in problems:
+                validated_problem = self._validate_and_fix_problem(problem)
                 validated_problems.append(validated_problem)
             
             return validated_problems
@@ -150,170 +155,390 @@ class ProblemGenerator:
             print(error_msg)
             raise Exception(error_msg)
     
-    def _clean_and_parse_json(self, json_str: str):
-        """JSON 문자열 정리 및 파싱 - 개선된 버전"""
-        import re
-        import json
+    def _extract_and_parse_json(self, content: str) -> List[Dict]:
+        """JSON 추출 및 파싱 - 완전 개선 버전"""
+        # 1. JSON 블록 추출
+        json_str = self._extract_json_block(content)
         
+        # 2. JSON 문자열 전처리
+        preprocessed = self._preprocess_json_string(json_str)
+        
+        # 3. JSON 파싱 시도
         try:
-            # 1차 시도: 원본 그대로 파싱
-            return json.loads(json_str)
+            result = json.loads(preprocessed)
+            return result if isinstance(result, list) else [result]
         except json.JSONDecodeError as e:
-            print(f"1차 JSON 파싱 실패: {str(e)}")
+            # 4. 고급 복구 시도
+            recovered = self._advanced_json_recovery(preprocessed)
+            if recovered:
+                return recovered
             
-            try:
-                # 2차 시도: 고급 전처리
-                cleaned = self._preprocess_json_string(json_str)
-                return json.loads(cleaned)
-            except json.JSONDecodeError as e2:
-                print(f"2차 JSON 파싱 실패: {str(e2)}")
-                
-                try:
-                    # 3차 시도: JSON 배열 패턴 찾기 및 추가 정리
-                    array_match = re.search(r'\[.*\]', cleaned, re.DOTALL)
-                    if array_match:
-                        array_part = array_match.group(0)
-                        array_cleaned = self._preprocess_json_string(array_part)
-                        return json.loads(array_cleaned)
-                    else:
-                        raise e2
-                except (json.JSONDecodeError, Exception) as e3:
-                    print(f"3차 JSON 파싱 실패: {str(e3)}")
-                    print(f"문제가 있는 JSON 앞부분: {json_str[:300]}...")
-                    raise Exception(f"JSON 파싱 완전 실패: {str(e3)}")
+            # 5. 최후의 수단: 개별 객체 파싱
+            individual_problems = self._parse_individual_problems(preprocessed)
+            if individual_problems:
+                return individual_problems
+            
+            raise Exception(f"JSON 파싱 실패: {str(e)}\n원본: {json_str[:500]}...")
+    
+    def _extract_json_block(self, content: str) -> str:
+        """JSON 블록 추출"""
+        # JSON 코드 블록 찾기
+        if "```json" in content:
+            json_start = content.find("```json") + 7
+            json_end = content.find("```", json_start)
+            if json_end != -1:
+                return content[json_start:json_end].strip()
+        
+        # 배열 패턴 찾기
+        array_match = re.search(r'\[\s*\{.*?\}\s*\]', content, re.DOTALL)
+        if array_match:
+            return array_match.group(0)
+        
+        # 그냥 전체 반환
+        return content.strip()
     
     def _preprocess_json_string(self, json_str: str) -> str:
-        """JSON 문자열 전처리 - LaTeX 및 특수문자 처리"""
-        import re
+        """JSON 문자열 전처리 - 완전 개선"""
+        if not json_str:
+            return "[]"
         
-        # 기본 정리
+        # 1. 기본 정리
         cleaned = json_str.strip()
         
-        # 1. 제어 문자 제거 (탭, 캐리지 리턴, 기타 제어문자)
+        # 2. LaTeX 수식 보호 (임시 플레이스홀더로 교체)
+        math_expressions = []
+        
+        def protect_math(match):
+            expr = match.group(1)
+            placeholder = f"__MATH_{len(math_expressions)}__"
+            math_expressions.append(expr)
+            return f'"{placeholder}"' if match.group(0).startswith('"') else placeholder
+        
+        # $ ... $ 형태의 수식 보호
+        cleaned = re.sub(r'\$([^$]+)\$', protect_math, cleaned)
+        
+        # 3. 제어 문자 및 잘못된 문자 제거
         cleaned = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', cleaned)
         
-        # 2. 잘못된 줄바꿈 처리
-        cleaned = re.sub(r'\n\s*"', ' "', cleaned)  # 줄바꿈 후 따옴표
-        cleaned = re.sub(r',\s*\n\s*}', '}', cleaned)  # 끝부분 쉼표+줄바꿈
-        cleaned = re.sub(r',\s*\n\s*]', ']', cleaned)  # 배열 끝부분 처리
-        
-        # 3. LaTeX 수학 표기법 안전하게 처리
-        # $..$ 형태의 LaTeX를 찾아서 이스케이프 처리
-        def escape_latex_math(match):
+        # 4. 문자열 내 줄바꿈 처리
+        def fix_multiline_strings(match):
             content = match.group(1)
-            # 백슬래시를 두 배로 만들어 JSON에서 안전하게 처리
-            escaped = content.replace('\\', '\\\\')
-            return f"${escaped}$"
+            # 문자열 내부의 줄바꿈을 공백으로 변경
+            content = re.sub(r'\s*\n\s*', ' ', content)
+            return f'"{content}"'
         
-        # $...$ 패턴 처리
-        cleaned = re.sub(r'\$([^$]+)\$', escape_latex_math, cleaned)
+        # 따옴표로 둘러싸인 문자열 내부 정리
+        cleaned = re.sub(r'"([^"]*)"', fix_multiline_strings, cleaned)
         
-        # 4. 일반적인 이스케이프 문자 처리
-        # JSON 문자열 내부의 백슬래시 처리 (LaTeX 제외)
-        def fix_escape_in_strings(match):
-            quote = match.group(1)  # 시작 따옴표
-            content = match.group(2)  # 문자열 내용
-            end_quote = match.group(3)  # 끝 따옴표
-            
-            # LaTeX 수학 표기법이 아닌 경우만 처리
-            if '$' not in content:
-                # 잘못된 이스케이프 시퀀스 수정
-                content = re.sub(r'\\(?!["\\/bfnrt])', r'\\\\', content)
-            
-            return f'{quote}{content}{end_quote}'
+        # 5. JSON 구조 정리
+        # 끝부분 쉼표 제거
+        cleaned = re.sub(r',\s*}', '}', cleaned)
+        cleaned = re.sub(r',\s*]', ']', cleaned)
         
-        # JSON 문자열 내부 처리
-        cleaned = re.sub(r'(")([^"]*)(")(?=\s*[,}\]])', fix_escape_in_strings, cleaned)
+        # 누락된 쉼표 추가
+        cleaned = re.sub(r'}\s*{', '},{', cleaned)
+        cleaned = re.sub(r']\s*\[', '],[', cleaned)
         
-        # 5. 특수 LaTeX 명령어들 보호
-        latex_protections = [
-            (r'\\frac\{', '__FRAC_START__'),
-            (r'\\sqrt\{', '__SQRT_START__'),
-            (r'\\sin\(', '__SIN_START__'),
-            (r'\\cos\(', '__COS_START__'),
-            (r'\\tan\(', '__TAN_START__'),
-            (r'\\log\(', '__LOG_START__'),
-            (r'\\pi\b', '__PI__'),
-            (r'\\alpha\b', '__ALPHA__'),
-            (r'\\beta\b', '__BETA__'),
-            (r'\\theta\b', '__THETA__'),
-            (r'\\leq\b', '__LEQ__'),
-            (r'\\geq\b', '__GEQ__'),
-            (r'\\neq\b', '__NEQ__'),
-            (r'\\approx\b', '__APPROX__'),
-        ]
+        # 6. 필드명 정리 (따옴표 확인)
+        field_names = ['question', 'choices', 'correct_answer', 'explanation', 
+                      'problem_type', 'difficulty', 'has_diagram', 'diagram_type', 
+                      'diagram_elements']
         
-        # 보호 적용
-        protection_map = {}
-        for pattern, placeholder in latex_protections:
-            matches = re.findall(pattern, cleaned)
-            for match in matches:
-                if match not in protection_map:
-                    protection_map[match] = placeholder
-                cleaned = cleaned.replace(match, placeholder)
+        for field in field_names:
+            # 따옴표 없는 필드명에 따옴표 추가
+            cleaned = re.sub(f'(?<!")\\b{field}\\b(?!")', f'"{field}"', cleaned)
         
-        # 6. 마지막 정리
-        cleaned = re.sub(r',\s*}', '}', cleaned)  # 객체 끝 쉼표 제거
-        cleaned = re.sub(r',\s*]', ']', cleaned)  # 배열 끝 쉼표 제거
-        cleaned = re.sub(r'\s+', ' ', cleaned)    # 다중 공백 정리
+        # 7. 수식 복원
+        for i, expr in enumerate(math_expressions):
+            placeholder = f"__MATH_{i}__"
+            # LaTeX 백슬래시 이스케이프
+            escaped_expr = expr.replace('\\', '\\\\').replace('"', '\\"')
+            cleaned = cleaned.replace(placeholder, f"${escaped_expr}$")
         
-        # 7. LaTeX 명령어 복원
-        for original, placeholder in protection_map.items():
-            cleaned = cleaned.replace(placeholder, original)
+        # 8. 최종 정리
+        cleaned = re.sub(r'\s+', ' ', cleaned)  # 다중 공백 제거
         
         return cleaned
     
-    def _validate_and_fix_latex(self, problem: Dict) -> Dict:
-        """LaTeX 구문 검증 및 수정"""
-        import re
+    def _advanced_json_recovery(self, json_str: str) -> Optional[List[Dict]]:
+        """고급 JSON 복구 시도"""
+        try:
+            # 1. 배열 구조 확인 및 수정
+            if not json_str.startswith('['):
+                json_str = '[' + json_str
+            if not json_str.endswith(']'):
+                json_str = json_str + ']'
+            
+            # 2. 개별 객체 추출 시도
+            object_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+            matches = re.findall(object_pattern, json_str)
+            
+            if matches:
+                problems = []
+                for match in matches:
+                    try:
+                        # 개별 객체 파싱
+                        obj = json.loads(match)
+                        if self._is_valid_problem(obj):
+                            problems.append(obj)
+                    except:
+                        continue
+                
+                if problems:
+                    return problems
+            
+            # 3. 구조 복구 시도
+            # 잘못된 중첩 구조 수정
+            json_str = re.sub(r'(\w+):\s*{', r'"\1": {', json_str)
+            json_str = re.sub(r'(\w+):\s*\[', r'"\1": [', json_str)
+            json_str = re.sub(r'(\w+):\s*"', r'"\1": "', json_str)
+            json_str = re.sub(r'(\w+):\s*(\d+)', r'"\1": \2', json_str)
+            json_str = re.sub(r'(\w+):\s*(true|false|null)', r'"\1": \2', json_str)
+            
+            return json.loads(json_str)
+            
+        except:
+            return None
+    
+    def _parse_individual_problems(self, json_str: str) -> Optional[List[Dict]]:
+        """개별 문제 객체 파싱 - 최후의 수단"""
+        problems = []
         
-        # 잘못된 LaTeX 패턴들과 올바른 형태로의 매핑
-        latex_fixes = [
-            (r'rac\{([^}]+)\}\{([^}]+)\}', r'\\frac{\1}{\2}'),  # rac{} -> \frac{}{}
-            (r'qrt\{([^}]+)\}', r'\\sqrt{\1}'),                # qrt{} -> \sqrt{}
-            (r'in\(([^)]+)\)', r'\\sin(\1)'),                  # in() -> \sin()
-            (r'os\(([^)]+)\)', r'\\cos(\1)'),                  # os() -> \cos()
-            (r'an\(([^)]+)\)', r'\\tan(\1)'),                  # an() -> \tan()
-            (r'og\(([^)]+)\)', r'\\log(\1)'),                  # og() -> \log()
-            (r'lpha', r'\\alpha'),                             # lpha -> \alpha
-            (r'eta', r'\\beta'),                               # eta -> \beta
-            (r'heta', r'\\theta'),                             # heta -> \theta
-            (r'i([^a-zA-Z])', r'\\pi\1'),                      # pi -> \pi (단독으로 나오는 경우)
-            (r'eq([^a-zA-Z])', r'\\leq\1'),                    # leq -> \leq
-            (r'eq([^a-zA-Z])', r'\\geq\1'),                    # geq -> \geq
-            (r'eq([^a-zA-Z])', r'\\neq\1'),                    # neq -> \neq
-        ]
+        # 각 문제 객체를 개별적으로 찾아서 파싱
+        current_pos = 0
+        while True:
+            # { 찾기
+            start = json_str.find('{', current_pos)
+            if start == -1:
+                break
+            
+            # 매칭되는 } 찾기
+            bracket_count = 0
+            end = start
+            for i in range(start, len(json_str)):
+                if json_str[i] == '{':
+                    bracket_count += 1
+                elif json_str[i] == '}':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        end = i + 1
+                        break
+            
+            if end > start:
+                obj_str = json_str[start:end]
+                try:
+                    # 개별 객체 파싱 시도
+                    obj = json.loads(obj_str)
+                    if self._is_valid_problem(obj):
+                        problems.append(obj)
+                except:
+                    # 파싱 실패 시 수동 파싱 시도
+                    manual_obj = self._manual_parse_problem(obj_str)
+                    if manual_obj:
+                        problems.append(manual_obj)
+                
+                current_pos = end
+            else:
+                break
         
-        # 검사할 필드들
-        text_fields = ['question', 'correct_answer', 'explanation']
+        return problems if problems else None
+    
+    def _manual_parse_problem(self, obj_str: str) -> Optional[Dict]:
+        """수동으로 문제 객체 파싱"""
+        try:
+            problem = {}
+            
+            # 필드 추출 패턴
+            patterns = {
+                'question': r'"question"\s*:\s*"([^"]*(?:\\"[^"]*)*)"',
+                'correct_answer': r'"correct_answer"\s*:\s*"([^"]*(?:\\"[^"]*)*)"',
+                'explanation': r'"explanation"\s*:\s*"([^"]*(?:\\"[^"]*)*)"',
+                'problem_type': r'"problem_type"\s*:\s*"([^"]*)"',
+                'difficulty': r'"difficulty"\s*:\s*"([ABC])"',
+                'has_diagram': r'"has_diagram"\s*:\s*(true|false)',
+            }
+            
+            for field, pattern in patterns.items():
+                match = re.search(pattern, obj_str, re.IGNORECASE)
+                if match:
+                    value = match.group(1)
+                    if field == 'has_diagram':
+                        problem[field] = value.lower() == 'true'
+                    else:
+                        # 이스케이프된 따옴표 복원
+                        value = value.replace('\\"', '"')
+                        problem[field] = value
+            
+            # choices 배열 추출
+            choices_match = re.search(r'"choices"\s*:\s*\[([^\]]*)\]', obj_str)
+            if choices_match:
+                choices_str = choices_match.group(1)
+                choices = []
+                for choice_match in re.finditer(r'"([^"]*(?:\\"[^"]*)*)"', choices_str):
+                    choice = choice_match.group(1).replace('\\"', '"')
+                    choices.append(choice)
+                problem['choices'] = choices
+            
+            # 필수 필드 확인
+            if 'question' in problem and 'correct_answer' in problem:
+                # 기본값 설정
+                problem.setdefault('problem_type', 'short_answer')
+                problem.setdefault('difficulty', 'B')
+                problem.setdefault('has_diagram', False)
+                problem.setdefault('explanation', '')
+                
+                return problem
+            
+        except:
+            pass
         
-        # 각 텍스트 필드에서 LaTeX 오류 수정
-        for field in text_fields:
-            if field in problem and isinstance(problem[field], str):
-                original_text = problem[field]
-                fixed_text = self._fix_latex_text(original_text, latex_fixes)
-                if original_text != fixed_text:
-                    print(f"LaTeX 수정 ({field}): {original_text} -> {fixed_text}")
-                    problem[field] = fixed_text
+        return None
+    
+    def _is_valid_problem(self, obj: Dict) -> bool:
+        """문제 객체 유효성 검사"""
+        required_fields = ['question', 'correct_answer']
+        return all(field in obj for field in required_fields)
+    
+    def _validate_and_fix_problem(self, problem: Dict) -> Dict:
+        """문제 검증 및 수정 - 완전 개선"""
+        # 1. 필수 필드 확인 및 기본값 설정
+        problem = self._ensure_required_fields(problem)
         
-        # choices 배열 처리
-        if 'choices' in problem and isinstance(problem['choices'], list):
-            for i, choice in enumerate(problem['choices']):
-                if isinstance(choice, str):
-                    original_choice = choice
-                    fixed_choice = self._fix_latex_text(original_choice, latex_fixes)
-                    if original_choice != fixed_choice:
-                        print(f"LaTeX 수정 (choices[{i}]): {original_choice} -> {fixed_choice}")
-                        problem['choices'][i] = fixed_choice
+        # 2. LaTeX 수식 검증 및 수정
+        problem = self._fix_latex_in_problem(problem)
+        
+        # 3. 데이터 타입 검증
+        problem = self._validate_data_types(problem)
         
         return problem
     
-    def _fix_latex_text(self, text: str, latex_fixes: List) -> str:
-        """텍스트에서 LaTeX 오류 수정"""
-        import re
+    def _ensure_required_fields(self, problem: Dict) -> Dict:
+        """필수 필드 확인 및 기본값 설정"""
+        defaults = {
+            'question': '',
+            'correct_answer': '',
+            'explanation': '',
+            'problem_type': 'short_answer',
+            'difficulty': 'B',
+            'has_diagram': False,
+            'diagram_type': None,
+            'diagram_elements': None
+        }
         
-        fixed_text = text
-        for pattern, replacement in latex_fixes:
-            fixed_text = re.sub(pattern, replacement, fixed_text)
+        for field, default_value in defaults.items():
+            if field not in problem:
+                problem[field] = default_value
         
-        return fixed_text
+        # choices 필드는 객관식일 때만
+        if problem['problem_type'] == 'multiple_choice' and 'choices' not in problem:
+            problem['choices'] = []
+        
+        return problem
+    
+    def _fix_latex_in_problem(self, problem: Dict) -> Dict:
+        """LaTeX 수식 수정 - KaTeX 호환"""
+        # LaTeX 수정 패턴
+        latex_fixes = [
+            # 잘못된 명령어 수정
+            (r'(?<!\\)frac\{', r'\\frac{'),
+            (r'(?<!\\)sqrt\{', r'\\sqrt{'),
+            (r'(?<!\\)sin(?!\w)', r'\\sin'),
+            (r'(?<!\\)cos(?!\w)', r'\\cos'),
+            (r'(?<!\\)tan(?!\w)', r'\\tan'),
+            (r'(?<!\\)log(?!\w)', r'\\log'),
+            (r'(?<!\\)ln(?!\w)', r'\\ln'),
+            (r'(?<!\\)pi(?!\w)', r'\\pi'),
+            (r'(?<!\\)alpha(?!\w)', r'\\alpha'),
+            (r'(?<!\\)beta(?!\w)', r'\\beta'),
+            (r'(?<!\\)theta(?!\w)', r'\\theta'),
+            (r'(?<!\\)times(?!\w)', r'\\times'),
+            (r'(?<!\\)div(?!\w)', r'\\div'),
+            (r'(?<!\\)leq(?!\w)', r'\\leq'),
+            (r'(?<!\\)geq(?!\w)', r'\\geq'),
+            (r'(?<!\\)neq(?!\w)', r'\\neq'),
+            
+            # 단독 백슬래시 문자 제거
+            (r'\\([fnglts])(?![a-zA-Z])', r''),
+            
+            # 중괄호 누락 수정
+            (r'\^(\d{2,})', r'^{\1}'),  # 두 자리 이상 지수
+            (r'_(\d{2,})', r'_{\1}'),   # 두 자리 이상 아래첨자
+        ]
+        
+        # 텍스트 필드 처리
+        text_fields = ['question', 'correct_answer', 'explanation']
+        for field in text_fields:
+            if field in problem and isinstance(problem[field], str):
+                problem[field] = self._apply_latex_fixes(problem[field], latex_fixes)
+        
+        # choices 배열 처리
+        if 'choices' in problem and isinstance(problem['choices'], list):
+            problem['choices'] = [
+                self._apply_latex_fixes(choice, latex_fixes) 
+                if isinstance(choice, str) else choice
+                for choice in problem['choices']
+            ]
+        
+        return problem
+    
+    def _apply_latex_fixes(self, text: str, fixes: List[tuple]) -> str:
+        """LaTeX 수정 규칙 적용"""
+        if not text:
+            return text
+        
+        fixed = text
+        for pattern, replacement in fixes:
+            fixed = re.sub(pattern, replacement, fixed)
+        
+        # $ 기호 확인 (수식이 제대로 감싸져 있는지)
+        # 백슬래시로 시작하는 명령어가 $ 밖에 있으면 감싸기
+        fixed = re.sub(r'(?<!\$)(\\(?:frac|sqrt|sin|cos|tan|log|pi|alpha|beta|theta)[^$]*?)(?!\$)', 
+                      r'$\1$', fixed)
+        
+        return fixed
+    
+    def _validate_data_types(self, problem: Dict) -> Dict:
+        """데이터 타입 검증 및 수정"""
+        # difficulty는 대문자로
+        if 'difficulty' in problem:
+            difficulty = str(problem['difficulty']).upper()
+            if difficulty not in ['A', 'B', 'C']:
+                problem['difficulty'] = 'B'
+            else:
+                problem['difficulty'] = difficulty
+        
+        # problem_type 검증
+        valid_types = ['multiple_choice', 'short_answer', 'essay']
+        if 'problem_type' in problem:
+            if problem['problem_type'] not in valid_types:
+                # 추측
+                if 'choices' in problem and problem['choices']:
+                    problem['problem_type'] = 'multiple_choice'
+                else:
+                    problem['problem_type'] = 'short_answer'
+        
+        # has_diagram은 boolean으로
+        if 'has_diagram' in problem:
+            if isinstance(problem['has_diagram'], str):
+                problem['has_diagram'] = problem['has_diagram'].lower() == 'true'
+            elif not isinstance(problem['has_diagram'], bool):
+                problem['has_diagram'] = False
+        
+        # 객관식 correct_answer 검증
+        if problem.get('problem_type') == 'multiple_choice':
+            if 'correct_answer' in problem:
+                answer = str(problem['correct_answer']).upper()
+                if answer not in ['A', 'B', 'C', 'D']:
+                    # 숫자로 되어 있으면 변환
+                    if answer in ['1', '2', '3', '4']:
+                        problem['correct_answer'] = chr(ord('A') + int(answer) - 1)
+                    # ①②③④로 되어 있으면 변환
+                    elif answer in ['①', '②', '③', '④']:
+                        mapping = {'①': 'A', '②': 'B', '③': 'C', '④': 'D'}
+                        problem['correct_answer'] = mapping.get(answer, 'A')
+                    else:
+                        problem['correct_answer'] = 'A'  # 기본값
+                else:
+                    problem['correct_answer'] = answer
+        
+        return problem

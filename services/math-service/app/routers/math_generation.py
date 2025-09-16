@@ -606,6 +606,7 @@ async def grade_worksheet_mixed(
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     try:
@@ -975,6 +976,7 @@ async def regenerate_single_problem(
 @router.delete("/worksheets/{worksheet_id}")
 async def delete_worksheet(
     worksheet_id: int,
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     """워크시트 삭제"""
@@ -1035,6 +1037,7 @@ async def delete_worksheet(
 @router.delete("/problems/{problem_id}")
 async def delete_problem(
     problem_id: int,
+    user_id: int = Query(..., description="로그인한 사용자 ID"),
     db: Session = Depends(get_db)
 ):
     """개별 문제 삭제"""
