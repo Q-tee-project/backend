@@ -43,4 +43,50 @@ class MathProblemGeneration(Base):
     # problems relationship removed since Problem model no longer exists
 
 
+class Assignment(Base):
+    """과제 정보"""
+    __tablename__ = "assignments"
+    __table_args__ = {"schema": "math_service"}
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    worksheet_id = Column(Integer, nullable=False)  # 워크시트 ID 참조
+    classroom_id = Column(Integer, nullable=False)  # 클래스룸 ID
+    teacher_id = Column(Integer, nullable=False)  # 교사 ID
+    
+    # 과제 메타데이터
+    unit_name = Column(String, nullable=False)
+    chapter_name = Column(String, nullable=False)
+    problem_count = Column(Integer, nullable=False)
+    
+    # 배포 상태
+    is_deployed = Column(String, default="draft")  # draft, deployed, completed
+    
+    # 메타데이터
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class AssignmentDeployment(Base):
+    """과제 배포 정보"""
+    __tablename__ = "assignment_deployments"
+    __table_args__ = {"schema": "math_service"}
+    
+    id = Column(Integer, primary_key=True, index=True)
+    assignment_id = Column(Integer, ForeignKey("math_service.assignments.id"), nullable=False)
+    student_id = Column(Integer, nullable=False)  # 학생 ID
+    classroom_id = Column(Integer, nullable=False)  # 클래스룸 ID
+    
+    # 배포 상태
+    status = Column(String, default="assigned")  # assigned, started, completed
+    
+    # 배포 시간
+    deployed_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    
+    # 관계
+    assignment = relationship("Assignment", backref="deployments")
+
+
 # GeneratedProblemSet 모델 제거됨 - Problem 테이블의 sequence_order와 worksheet_id로 대체

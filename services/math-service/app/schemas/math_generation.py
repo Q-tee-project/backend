@@ -118,3 +118,58 @@ class MathProblemGenerationResponse(BaseModel):
     problems: List[dict] = Field(description="생성된 문제 목록")
     total_generated: int
     created_at: str
+
+
+# 과제 배포 관련 스키마
+class AssignmentCreate(BaseModel):
+    """과제 생성 요청"""
+    title: str
+    worksheet_id: int
+    classroom_id: int
+    teacher_id: int
+    unit_name: str
+    chapter_name: str
+    problem_count: int
+
+
+class AssignmentResponse(BaseModel):
+    """과제 응답"""
+    id: int
+    title: str
+    worksheet_id: int
+    classroom_id: int
+    teacher_id: int
+    unit_name: str
+    chapter_name: str
+    problem_count: int
+    is_deployed: str
+    created_at: str
+
+
+class AssignmentDeployRequest(BaseModel):
+    """과제 배포 요청"""
+    assignment_id: int
+    student_ids: List[int]
+    classroom_id: int
+
+
+class AssignmentDeploymentResponse(BaseModel):
+    """과제 배포 응답"""
+    id: int
+    assignment_id: int
+    student_id: int
+    classroom_id: int
+    status: str
+    deployed_at: str
+
+
+class StudentAssignmentResponse(BaseModel):
+    """학생용 과제 응답"""
+    id: int
+    title: str
+    unit_name: str
+    chapter_name: str
+    problem_count: int
+    status: str
+    deployed_at: str
+    assignment_id: int

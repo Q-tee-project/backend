@@ -164,6 +164,7 @@ class MathGenerationService:
             actual_difficulty_distribution=self._calculate_difficulty_distribution(generated_problems),
             actual_type_distribution=self._calculate_type_distribution(generated_problems),
             status=WorksheetStatus.COMPLETED,
+            teacher_id=user_id,
             created_by=user_id
         )
         
@@ -340,8 +341,8 @@ class MathGenerationService:
         for i in range(count):
             problems.append({
                 "question": f"[{curriculum_data.get('chapter_name', '수학')}] 기본 문제 {i+1}번",
-                "choices": ["선택지 1", "선택지 2", "선택지 3", "선택지 4"],
-                "correct_answer": "선택지 1",
+                "choices": ["A", "B", "C", "D"],
+                "correct_answer": "A",
                 "explanation": f"{curriculum_data.get('chapter_name', '수학')} 관련 기본 해설",
                 "problem_type": "multiple_choice",
                 "difficulty": "B"
@@ -365,3 +366,50 @@ class MathGenerationService:
             if problem_type in distribution:
                 distribution[problem_type] += 1
         return distribution
+    
+    def get_worksheet_problems(self, db: Session, worksheet_id: int) -> List[Dict]:
+        """워크시트의 문제 목록 조회"""
+        try:
+            print(f"🔍 워크시트 문제 조회 시작 - worksheet_id: {worksheet_id}")
+            
+            problems = db.query(Problem).filter(
+                Problem.worksheet_id == worksheet_id
+            ).order_by(Problem.sequence_order).all()
+            
+            print(f"🔍 조회된 문제 수: {len(problems)}")
+            
+            problem_list = []
+            for i, problem in enumerate(problems):
+                print(f"  - 문제 {i+1}: ID={problem.id}, 순서={problem.sequence_order}")
+                # choices 필드 처리 - JSON 문자열인 경우 파싱
+                choices_data = problem.choices
+                if isinstance(choices_data, str):
+                    try:
+                        import json
+                        choices_data = json.loads(choices_data)
+                    except (json.JSONDecodeError, TypeError):
+                        choices_data = []
+                elif choices_data is None:
+                    choices_data = []
+                
+                problem_data = {
+                    "id": problem.id,
+                    "sequence_order": problem.sequence_order,
+                    "question": problem.question,  # Problem 모델의 실제 필드명
+                    "problem_type": problem.problem_type,
+                    "difficulty": problem.difficulty,
+                    "correct_answer": problem.correct_answer,
+                    "choices": choices_data,  # 배열로 보장
+                    "solution": problem.explanation,  # Problem 모델의 실제 필드명
+                    "created_at": problem.created_at.isoformat() if problem.created_at else None
+                }
+                problem_list.append(problem_data)
+            
+            print(f"🔍 최종 문제 리스트 길이: {len(problem_list)}")
+            return problem_list
+            
+        except Exception as e:
+            print(f"❌ 워크시트 문제 조회 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
