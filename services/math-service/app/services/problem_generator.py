@@ -436,115 +436,148 @@ class ProblemGenerator:
         return problem
     
     def _fix_latex_in_problem(self, problem: Dict) -> Dict:
-        """LaTeX 수식 수정 - KaTeX 호환"""
-        # LaTeX 수정 패턴 - 가장 심각한 문제부터 처리
-        latex_fixes = [
-            #  최우선: 가장 심각한 빈 분수 패턴 수정
-            (r'\$\\frac\{\}\{\}\$\{([^}]*)\}\{([^}]*)\}', r'$\\frac{\1}{\2}$'),  # $\frac{}{}${분자}{분모} -> $\frac{분자}{분모}$
-            (r'\$\\frac\{\}\{\}\$\{([^}]+)\}', r'$\\frac{\1}{1}$'),  # $\frac{}{}${내용} -> $\frac{내용}{1}$
-            (r'\$\\frac\{\}\{\}\$([a-zA-Z0-9+-]+)', r'$\\frac{\1}{1}$'),  # $\frac{}{}$변수 -> $\frac{변수}{1}$
-            (r'\$\\frac\{\}\{\}\$([^$]*)', r'$\\frac{1}{2}$'),  # $\frac{}{}$기타 -> 기본 분수
-            (r'\\frac\{\}\{\}', r'\\frac{1}{2}'),  # 빈 분수를 기본값으로
-
-            # 새로 발견된 문제 패턴 수정
-            (r'= \$\\frac\{\}\{\}\$\{(\d+)\}\{(\d+)\}([^$]*)', r'= $\\frac{\1}{\2}$\3'),  # = $\frac{}{}${숫자}{숫자}기타 -> = $\frac{숫자}{숫자}$기타
-            (r'\$\\frac\{\}\{\}\$\{(\d+)\}\{(\d+)\}([a-zA-Z])', r'$\\frac{\1}{\2}\3$'),  # $\frac{}{}${숫자}{숫자}변수 -> $\frac{숫자}{숫자}변수$
-
-            #  실제 데이터에서 발견된 구체적 오류 패턴들 수정
-            (r'\$\\frac\{\}\{\}\$\{a\+2b\}\{ab\}', r'$\\frac{a+2b}{ab}$'),
-            (r'\$\\frac\{\}\{\}\$\{2x-1\}\{3\}', r'$\\frac{2x-1}{3}$'),
-            (r'\$\\frac\{\}\{\}\$\{1\}\{6\}', r'$\\frac{1}{6}$'),
-            (r'\$\\frac\{\}\{\}\$\{2\}\{5\}', r'$\\frac{2}{5}$'),  # 구체적인 2/5 분수 패턴
-
-            # 이스케이프된 LaTeX 명령어 정리 (가장 먼저 처리)
-            (r'\\\\frac\{', r'\\frac{'),  # \\frac{ -> \frac{
-            (r'\\\\sqrt\{', r'\\sqrt{'),  # \\sqrt{ -> \sqrt{
-            (r'\\\\sin(?!\w)', r'\\sin'),  # \\sin -> \sin
-            (r'\\\\cos(?!\w)', r'\\cos'),  # \\cos -> \cos
-            (r'\\\\tan(?!\w)', r'\\tan'),  # \\tan -> \tan
-            (r'\\\\log(?!\w)', r'\\log'),  # \\log -> \log
-            (r'\\\\ln(?!\w)', r'\\ln'),    # \\ln -> \ln
-            (r'\\\\pi(?!\w)', r'\\pi'),    # \\pi -> \pi
-            (r'\\\\alpha(?!\w)', r'\\alpha'),  # \\alpha -> \alpha
-            (r'\\\\beta(?!\w)', r'\\beta'),     # \\beta -> \beta
-            (r'\\\\theta(?!\w)', r'\\theta'),  # \\theta -> \theta
-            (r'\\\\times(?!\w)', r'\\times'),  # \\times -> \times
-            (r'\\\\div(?!\w)', r'\\div'),      # \\div -> \div
-            (r'\\\\leq(?!\w)', r'\\leq'),      # \\leq -> \leq
-            (r'\\\\geq(?!\w)', r'\\geq'),      # \\geq -> \geq
-            (r'\\\\neq(?!\w)', r'\\neq'),      # \\neq -> \neq
-            
-            # 잘못된 명령어 수정 (백슬래시 없는 경우만)
-            (r'(?<!\\)frac\{', r'\\frac{'),
-            (r'(?<!\\)sqrt\{', r'\\sqrt{'),
-            (r'(?<!\\)sin(?!\w)', r'\\sin'),
-            (r'(?<!\\)cos(?!\w)', r'\\cos'),
-            (r'(?<!\\)tan(?!\w)', r'\\tan'),
-            (r'(?<!\\)log(?!\w)', r'\\log'),
-            (r'(?<!\\)ln(?!\w)', r'\\ln'),
-            (r'(?<!\\)pi(?!\w)', r'\\pi'),
-            (r'(?<!\\)alpha(?!\w)', r'\\alpha'),
-            (r'(?<!\\)beta(?!\w)', r'\\beta'),
-            (r'(?<!\\)theta(?!\w)', r'\\theta'),
-            (r'(?<!\\)times(?!\w)', r'\\times'),
-            (r'(?<!\\)div(?!\w)', r'\\div'),
-            (r'(?<!\\)leq(?!\w)', r'\\leq'),
-            (r'(?<!\\)geq(?!\w)', r'\\geq'),
-            (r'(?<!\\)neq(?!\w)', r'\\neq'),
-            
-            # 단독 백슬래시 문자 제거
-            (r'\\([fnglts])(?![a-zA-Z])', r''),
-            
-            # 중괄호 누락 수정
-            (r'\^(\d{2,})', r'^{\1}'),  # 두 자리 이상 지수
-            (r'_(\d{2,})', r'_{\1}'),   # 두 자리 이상 아래첨자
-        ]
-        
+        """LaTeX 수식 수정 - 체계적인 단계별 처리"""
         # 텍스트 필드 처리
         text_fields = ['question', 'correct_answer', 'explanation']
         for field in text_fields:
             if field in problem and isinstance(problem[field], str):
-                problem[field] = self._apply_latex_fixes(problem[field], latex_fixes)
-        
-        # 해설 길이 제한 적용
-        if 'explanation' in problem and isinstance(problem['explanation'], str):
-            problem['explanation'] = self._limit_explanation_length(
-                problem['explanation'], 
-                problem.get('difficulty', 'B')
-            )
-        
+                problem[field] = self._fix_latex_text(problem[field])
+
         # choices 배열 처리
         if 'choices' in problem and isinstance(problem['choices'], list):
             problem['choices'] = [
-                self._apply_latex_fixes(choice, latex_fixes) 
-                if isinstance(choice, str) else choice
+                self._fix_latex_text(choice) if isinstance(choice, str) else choice
                 for choice in problem['choices']
             ]
-        
+
+        # 해설 길이 제한 적용
+        if 'explanation' in problem and isinstance(problem['explanation'], str):
+            problem['explanation'] = self._limit_explanation_length(
+                problem['explanation'],
+                problem.get('difficulty', 'B')
+            )
+
         return problem
-    
-    def _apply_latex_fixes(self, text: str, fixes: List[tuple]) -> str:
-        """LaTeX 수정 규칙 적용"""
+
+    def _fix_latex_text(self, text: str) -> str:
+        """LaTeX 텍스트 수정 - 단계별 체계적 처리"""
         if not text:
             return text
-        
-        fixed = text
-        for pattern, replacement in fixes:
-            fixed = re.sub(pattern, replacement, fixed)
-        
-        # $ 기호 확인 (수식이 제대로 감싸져 있는지)
-        # 백슬래시로 시작하는 명령어가 $ 밖에 있으면 감싸기
-        fixed = re.sub(r'(?<!\$)(\\(?:frac|sqrt|sin|cos|tan|log|pi|alpha|beta|theta)[^$]*?)(?!\$)', 
-                      r'$\1$', fixed)
-        
+
+        # 1단계: 기본 정리
+        text = self._clean_basic_patterns(text)
+
+        # 2단계: 빈 분수 수정 (가장 구체적인 것부터)
+        text = self._fix_empty_fractions(text)
+
+        # 3단계: LaTeX 명령어 정리
+        text = self._fix_latex_commands(text)
+
+        # 4단계: 최종 정리
+        text = self._final_cleanup(text)
+
+        return text
+
+    def _clean_basic_patterns(self, text: str) -> str:
+        """기본 패턴 정리"""
+        # 이중 백슬래시 정리
+        text = re.sub(r'\\\\([a-zA-Z]+)', r'\\\1', text)
+
+        # 불필요한 이스케이프 제거
+        text = re.sub(r'\\([fnglts])(?![a-zA-Z])', r'', text)
+
+        return text
+
+    def _fix_empty_fractions(self, text: str) -> str:
+        """빈 분수 패턴 수정 - 모든 기호와 연산자 고려"""
+        # 1. 모든 기호/연산자 + 빈분수 + 외부 인수들 패턴 (가장 구체적)
+        text = re.sub(r'([+\-=\$\|\*\/\(\)\[\]<>≠≤≥])\s*\\frac\{\}\{\}\{([^}]+)\}\{([^}]+)\}', r'\1 $\\frac{\2}{\3}$', text)
+
+        # 2. 모든 기호/연산자 + 빈분수 + 숫자 패턴
+        text = re.sub(r'([+\-=\$\|\*\/\(\)\[\]<>≠≤≥])\s*\\frac\{\}\{\}([a-zA-Z0-9]+)', r'\1 $\\frac{\2}{1}$', text)
+
+        # 3. 모든 기호/연산자 + 빈분수 패턴
+        text = re.sub(r'([+\-=\$\|\*\/\(\)\[\]<>≠≤≥])\s*\\frac\{\}\{\}', r'\1 $\\frac{1}{2}$', text)
+
+        # 4. $로 감싸진 빈분수 + 외부 인수들
+        text = re.sub(r'\$\\frac\{\}\{\}\$\{([^}]+)\}\{([^}]+)\}', r'$\\frac{\1}{\2}$', text)
+
+        # 5. $로 감싸진 빈분수 + 하나의 인수
+        text = re.sub(r'\$\\frac\{\}\{\}\$\{([^}]+)\}', r'$\\frac{\1}{1}$', text)
+
+        # 6. 일반적인 빈분수 + 숫자
+        text = re.sub(r'\\frac\{\}\{\}([a-zA-Z0-9]+)', r'$\\frac{\1}{1}$', text)
+
+        # 7. 순수 빈분수 (기본값으로 대체)
+        text = re.sub(r'\\frac\{\}\{\}', r'$\\frac{1}{2}$', text)
+
+        return text
+
+    def _fix_latex_commands(self, text: str) -> str:
+        """LaTeX 명령어 정리 - 체계적인 수식 처리"""
+
+        # 1. 잘못된 명령어 수정 (qeq -> neq 등)
+        text = re.sub(r'\\qeq', r'\\neq', text)
+        text = re.sub(r'\\qec', r'\\neq', text)
+        text = re.sub(r'\\eq(?!ual)', r'=', text)
+
+        # 2. br 태그 문제 수정
+        text = re.sub(r'(<\s*br\s*/?\s*>)|(<\s*br\s*/?\s*)|(<br\s*/?>)', r'<br />', text)
+        text = re.sub(r'(\w+)<\s*br\s*/?\s*>\s*(\w+)', r'\1 \\neq \2', text)  # a< br/ > eq1 -> a ≠ eq1
+
+        # 3. 잘못된 frac 구문 수정
+        text = re.sub(r'\\frac\(([^)]+)\)\{([^}]+)\}', r'\\frac{\1}{\2}', text)  # \frac(a+b){2} -> \frac{a+b}{2}
+
+        # 4. 지수 처리 - 모든 지수를 중괄호로 감싸기
+        # 단일 문자 지수도 중괄호로 감싸기
+        text = re.sub(r'(\w+)\^([a-zA-Z0-9])(?![{}])', r'\1^{\2}', text)  # a^2 -> a^{2}
+        text = re.sub(r'(\w+)\^([a-zA-Z0-9,]+)(?![{}])', r'\1^{\2}', text)  # a^ab -> a^{ab}
+
+        # 5. 수식 표현을 $로 감싸기
+        # 지수 표현
+        text = re.sub(r'(\w+\^\{[^}]+\})', r'$\1$', text)
+
+        # 분수 표현
+        text = re.sub(r'(\\frac\{[^}]+\}\{[^}]+\})', r'$\1$', text)
+
+        # 기본 LaTeX 명령어들
+        latex_commands = ['sqrt', 'sin', 'cos', 'tan', 'log', 'ln', 'pi',
+                         'alpha', 'beta', 'theta', 'times', 'div', 'leq', 'geq', 'neq', 'dots']
+
+        for cmd in latex_commands:
+            # 백슬래시 없는 명령어들에 백슬래시 추가
+            text = re.sub(f'(?<!\\\\){cmd}(?!\\w)', f'\\\\{cmd}', text)
+            # $로 감싸지지 않은 명령어들 감싸기
+            text = re.sub(f'(?<!\\$)\\\\{cmd}(?!.*\\$)', f'$\\\\{cmd}$', text)
+
+        # 6. 변수 처리 - 수학적 맥락에서만
+        # 계수가 있는 변수: 2x, 3y -> $2x$, $3y$
+        text = re.sub(r'(\d+)([a-zA-Z])', r'$\1\2$', text)
+
+        # 괄호와 함께 있는 변수: (x+1), (2x-3) -> $(x+1)$, $(2x-3)$
+        text = re.sub(r'\(([^)]*[a-zA-Z][^)]*)\)', r'$(\1)$', text)
+
+        # 연산자와 함께 있는 변수: x+1, 2x-3 -> $x+1$, $2x-3$
+        text = re.sub(r'([a-zA-Z0-9]+[\+\-\*/][a-zA-Z0-9]+)', r'$\1$', text)
+
+        # 등호와 함께 있는 수식: 2(3x-1) = 4(x+3) -> $2(3x-1) = 4(x+3)$
+        text = re.sub(r'([^$]*[a-zA-Z][^$]*=+[^$]*[a-zA-Z][^$]*)', r'$\1$', text)
+
+        # 7. 단독 변수 처리 (마지막에)
+        # 단어 경계에서 단일 문자 변수
+        text = re.sub(r'(?<!\$)\b([a-zA-Z])\b(?![가-힣])', r'$\1$', text)
+
+        return text
+
+    def _final_cleanup(self, text: str) -> str:
+        """최종 정리"""
+        # 연속된 백슬래시 정리
+        text = re.sub(r'\\\\+', r'\\', text)
+
         # 불완전한 LaTeX 수식 정리
-        # $\frac$ -> $\frac{}{}$
-        fixed = re.sub(r'\$\\frac\$', r'$\\frac{}{}$', fixed)
-        
-        # 이중 이스케이프된 $ 기호 정리
-        fixed = re.sub(r'\\\$', r'$', fixed)
-        
-        return fixed
+        text = re.sub(r'\$\\frac\$', r'$\\frac{}{}$', text)
+
+        return text
     
     def _limit_explanation_length(self, explanation: str, difficulty: str) -> str:
         """해설 길이를 난이도에 따라 제한"""
