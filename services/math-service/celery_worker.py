@@ -10,6 +10,6 @@ if __name__ == '__main__':
     celery_app.worker_main([
         'worker',
         '--loglevel=info',
-        '--concurrency=2',
-        '--queues=math_generation,grading'
+        '--concurrency=4',
+        '--queues=math_queue'
     ])

@@ -15,10 +15,15 @@ from sqlalchemy.orm import Session
 @celery_app.task(bind=True, name="app.tasks.generate_math_problems_task")
 def generate_math_problems_task(self, request_data: dict, user_id: int):
     """비동기 수학 문제 생성 태스크"""
-    
+
     # 태스크 ID 생성
     task_id = self.request.id
     generation_id = str(uuid.uuid4())
+
+    # 로깅 추가
+    print(f"🚀 Math problems generation task started: {task_id}")
+    print(f"📝 Generation ID: {generation_id}")
+    print(f"👤 User ID: {user_id}")
     
     # 데이터베이스 세션 생성
     db = SessionLocal()
