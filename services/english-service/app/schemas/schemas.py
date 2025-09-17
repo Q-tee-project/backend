@@ -144,10 +144,10 @@ class WorksheetSaveRequest(BaseModel):
 # 지문 스키마
 class PassageResponse(BaseModel):
     id: int
-    passage_id: str
+    passage_id: int
     passage_type: str
     passage_content: Dict[str, Any]
-    related_questions: List[str]
+    related_questions: List[int]
     created_at: datetime
     
     class Config:
@@ -156,9 +156,9 @@ class PassageResponse(BaseModel):
 # 예문 스키마
 class ExampleResponse(BaseModel):
     id: int
-    example_id: str
+    example_id: int
     example_content: str
-    related_question: Optional[str]
+    related_question: Optional[int]
     created_at: datetime
     
     class Config:
@@ -167,15 +167,15 @@ class ExampleResponse(BaseModel):
 # 문제 스키마
 class QuestionResponse(BaseModel):
     id: int
-    question_id: str
+    question_id: int
     question_text: str
     question_type: str
     question_subject: str
     question_difficulty: str
     question_detail_type: Optional[str]
     question_choices: Optional[List[str]]
-    passage_id: Optional[str]
-    example_id: Optional[str]
+    passage_id: Optional[int]
+    example_id: Optional[int]
     created_at: datetime
     
     class Config:
@@ -224,7 +224,7 @@ class WorksheetSummary(BaseModel):
 
 # 문제별 채점 결과 스키마 (간소화)
 class QuestionResultResponse(BaseModel):
-    question_id: str
+    question_id: int
     question_type: str
     student_answer: Optional[str]
     correct_answer: Optional[str]
@@ -240,14 +240,14 @@ class QuestionResultResponse(BaseModel):
 
 # 지문 원문 정보 스키마 (채점 결과용)
 class PassageInfo(BaseModel):
-    passage_id: str
+    passage_id: int
     original_content: str
     korean_translation: Optional[str] = None
     text_type: Optional[str] = None
 
 # 예문 원문 정보 스키마 (채점 결과용)  
 class ExampleInfo(BaseModel):
-    example_id: str
+    example_id: int
     original_content: str
     korean_translation: Optional[str] = None
 
@@ -261,7 +261,7 @@ class GradingResultResponse(BaseModel):
     max_score: int
     percentage: float
     question_results: List[QuestionResultResponse] = []
-    student_answers: Dict[str, str] = {}  # 학생 답안 딕셔너리
+    student_answers: Dict[int, str] = {}  # 학생 답안 딕셔너리
     created_at: datetime
     worksheet_data: Dict[str, Any] = {}  # 문제지 데이터 포함
     
@@ -288,11 +288,11 @@ class GradingResultSummary(BaseModel):
 
 # 검수 요청 스키마
 class ReviewRequest(BaseModel):
-    question_results: Dict[str, Dict[str, Any]]  # question_id -> {score, feedback}
+    question_results: Dict[int, Dict[str, Any]]  # question_id -> {score, feedback}
     reviewed_by: Optional[str] = "교사"
     
 # 답안 제출 요청 스키마
 class SubmissionRequest(BaseModel):
     student_name: str  # 학생 이름
-    answers: Dict[str, str]  # question_id -> answer
+    answers: Dict[int, str]  # question_id -> answer
     completion_time: int  # 소요 시간 (초)

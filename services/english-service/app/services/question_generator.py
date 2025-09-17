@@ -147,7 +147,7 @@ class PromptGenerator:
         # JSON 응답 템플릿 정의
         json_template = """
     {
-        "worksheet_id": "1",
+        "worksheet_id": 1,
         "worksheet_name": "any_name", 
         "worksheet_date": "2025-01-01",
         "worksheet_time": "10:00",
@@ -158,39 +158,39 @@ class PromptGenerator:
         "total_questions": {total_questions},
         "passages": [
             {
-                "passage_id": "1",
+                "passage_id": 1,
                 "passage_type": "article",
                 "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
                 "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
                 "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
-                "related_questions": ["1", "2"]
+                "related_questions": [1, 2]
             }
         ],
         "examples": [
             {
-                "example_id": "1",
+                "example_id": 1,
                 "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
                 "original_content": "완전한 형태의 원본 예문",
                 "korean_translation": "원본 예문의 자연스러운 한글 번역",
-                "related_question": "1",
+                "related_question": 1,
             }
         ],
         "questions": [
             {
-                "question_id": "1",
+                "question_id": 1,
                 "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
                 "question_type": "객관식|단답형|서술형",
                 "question_subject": "독해|문법|어휘",
                 "question_difficulty": "상|중|하",
                 "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
-                "question_passage_id": "1",
-                "question_example_id": "1",
+                "question_passage_id": 1,
+                "question_example_id": 1,
                 "question_choices": [
                     "선택지 1",
-                    "선택지 2", 
+                    "선택지 2",
                     "선택지 3"
                 ],
-                "correct_answer": "정답 (객관식은 번호, 주관식은 텍스트)",
+                "correct_answer": 1 | "정답 텍스트",
                 "explanation": "정답에 대한 상세한 해설 (한국어)",
                 "learning_point": "문제와 관련된 핵심 학습 포인트"
             }
@@ -266,7 +266,7 @@ class PromptGenerator:
 - 예문의 소재는 글의 소재를 참고하여 생성
 - 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
 
-# 🚨 문제 질문과 예문 분리 규칙 (절대 위반 금지)
+# 문제 질문과 예문 분리 규칙 (절대 위반 금지)
 
 ## 핵심 원칙
 - **example_content에는 절대 지시문을 포함하지 마세요!**
@@ -279,49 +279,50 @@ class PromptGenerator:
 - **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
 - **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
 
-## 🚨 절대 금지되는 잘못된 예시들:
+## 절대 금지되는 잘못된 예시들:
 
-### 1️⃣ example_content에 지시문이 포함된 경우 (절대 금지!)
-**❌ 잘못된 방식:**
+### example_content에 지시문이 포함된 경우 (절대 금지!)
+** 잘못된 방식:**
 ```
 example_content: "다음 명사구를 <보기>와 같이 소유격 형태로 바꾸시오.\\n\\n<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
 ```
 
-**✅ 올바른 방식:**
+** 올바른 방식:**
 ```
 question_text: "다음과 같이 소유격을 사용하여 쓰시오"
 example_content: "<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
 ```
 
-### 2️⃣ question_text에 영어 문장이 포함된 경우
-**❌ 잘못된 방식:**
+### question_text에 영어 문장이 포함된 경우
+** 잘못된 방식:**
 ```
 question_text: "다음 문장의 빈칸에 들어갈 말은?\\n\\nThey ___ good friends."
 ```
 
-**✅ 올바른 방식:**
+** 올바른 방식:**
 ```
 question_text: "다음 문장의 빈칸에 들어갈 말은?"
 example_content: "They ___ good friends."
 question_example_id: "1"
 ```
 
-### 3️⃣ question_text에 대화문이 포함된 경우
-**❌ 잘못된 방식:**
+### question_text에 대화문이 포함된 경우
+** 잘못된 방식:**
 ```
 question_text: "다음 대화를 순서대로 배열하시오\\n(A) Hi! (B) How are you? (C) Fine, thanks."
 ```
 
-**✅ 올바른 방식:**
+** 올바른 방식:**
 ```
 question_text: "다음 대화를 순서대로 배열하시오"
 example_content: "(A) Hi!\\n(B) How are you?\\n(C) Fine, thanks."
 question_example_id: "2"
 ```
 
-### 🎯 기억하세요!
+### 기억하세요!
 - **question_text**: 순수한 한국어 지시문만!
 - **example_content**: 순수한 영어 예문만! (지시문 절대 금지!)
+
 
 # 글의 소재
 - 개인생활 관련: 취미, 오락, 여행, 운동, 쇼핑, 건강, 일상 등
@@ -337,6 +338,8 @@ correspondence (서신/소통) : 이메일, 편지, 메모, 사내 공지 등
 dialogue (대화문) : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
 informational (정보성 양식) : 광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등
 review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
+
+# 추가 요청이 없을 시 글의 소재와 글의 유형은 자유롭게 선정해서 사용 단, 유형별 JSON 형식을 반드시 준수하여 생성
 
 # 유형별 JSON 형식
 {json_formats_text}
@@ -358,6 +361,10 @@ review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
 - 지문 참조 시: "위 글", "위 지문", "다음 글" 등으로만 표현
 - 예문 참조 시: "다음 예문", "위 예문", "다음 문장" 등으로만 표현
 
+# 정답 형식
+- 객관식 정답은 반드시 단순한 번호로 표시(ex, 1, 2, 3)
+- 주관식, 서술형 정답은 반드시 텍스트로 표시("정답 텍스트")
+
 **잘못된 예시들 (절대 사용 금지):**
 - "지문 P1의 빈칸에 들어갈 말은?"
 - "예문 E1에서 빈칸에 들어갈 말은?"  
@@ -371,14 +378,15 @@ review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
 - "다음을 보고 답하시오"
 
 **ID 형식 규칙:**
-- 지문 ID: "1", "2", "3" (단순한 숫자)
-- 예문 ID: "1", "2", "3" (단순한 숫자)
+- 지문 ID: 1, 2, 3 (단순한 숫자, integer)
+- 예문 ID: 1, 2, 3 (단순한 숫자, integer)
+- 문제 ID: 1, 2, 3 (단순한 숫자, integer)
 
 **정답 형식 규칙:**
-- 객관식 정답은 반드시 단순한 번호로 표시(ex, "1", "2", "3")
+- 객관식 정답은 반드시 단순한 번호로 표시(ex, 1, 2, 3)
 - 주관식, 서술형 정답은 반드시 텍스트로 표시
 
-## 🔥 최종 검증 체크리스트 (응답 전 필수 확인!)
+## 최종 검증 체크리스트 (응답 전 필수 확인!)
 응답하기 전에 반드시 다음을 확인하세요:
 1. example_content에 한국어 지시문이 없는가?
 2. example_content에 "다음을", "~하시오" 같은 지시어가 없는가?

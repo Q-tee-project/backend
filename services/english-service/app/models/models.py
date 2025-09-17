@@ -111,7 +111,7 @@ class Passage(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
-    passage_id = Column(String(10), nullable=False)  # "1", "2" 등
+    passage_id = Column(Integer, nullable=False)  # "1", "2" 등
     passage_type = Column(String(50), nullable=False)  # article, dialogue 등
     passage_content = Column(JSON, nullable=False)  # 지문 내용 (JSON 형태)
     original_content = Column(JSON, nullable=True)
@@ -129,11 +129,11 @@ class Example(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
-    example_id = Column(String(10), nullable=False)  # "1", "2" 등
+    example_id = Column(Integer, nullable=False)  # "1", "2" 등
     example_content = Column(Text, nullable=False)  # 예문 내용
     original_content = Column(Text, nullable=True)
     korean_translation = Column(Text, nullable=True)
-    related_question = Column(String(10), nullable=True)  # 연관 문제 ID
+    related_question = Column(Integer, nullable=True)  # 연관 문제 ID
     created_at = Column(DateTime, nullable=False)
     
     # 관계 설정
@@ -146,15 +146,15 @@ class Question(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
-    question_id = Column(String(10), nullable=False)  # "1", "2" 등
+    question_id = Column(Integer, nullable=False)  # "1", "2" 등
     question_text = Column(Text, nullable=False)  # 문제 질문
     question_type = Column(String(20), nullable=False)  # 객관식, 주관식, 서술형
     question_subject = Column(String(20), nullable=False)  # 독해, 문법, 어휘
     question_difficulty = Column(String(10), nullable=False)  # 상, 중, 하
     question_detail_type = Column(String(100), nullable=True)  # 세부 유형
     question_choices = Column(JSON, nullable=True)  # 선택지 (객관식인 경우)
-    passage_id = Column(String(10), nullable=True)  # 연관 지문 ID
-    example_id = Column(String(10), nullable=True)  # 연관 예문 ID
+    passage_id = Column(Integer, nullable=True)  # 연관 지문 ID
+    example_id = Column(Integer, nullable=True)  # 연관 예문 ID
     correct_answer = Column(Text, nullable=True)
     explanation = Column(Text, nullable=True)
     learning_point = Column(Text, nullable=True)
@@ -192,7 +192,7 @@ class QuestionResult(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     grading_result_id = Column(String(50), ForeignKey("english_service.grading_results.result_id"), nullable=False)
-    question_id = Column(String(10), nullable=False)
+    question_id = Column(Integer, nullable=False)
     question_type = Column(String(20), nullable=False)
     student_answer = Column(Text, nullable=True)
     correct_answer = Column(Text, nullable=True)

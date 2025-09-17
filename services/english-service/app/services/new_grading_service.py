@@ -30,8 +30,8 @@ class NewGradingService:
         else:
             self.model = None
     
-    async def grade_worksheet(self, worksheet_id: str, student_name: str, 
-                            answers: Dict[str, str], completion_time: int) -> Dict[str, Any]:
+    async def grade_worksheet(self, worksheet_id: str, student_name: str,
+                            answers: Dict[int, str], completion_time: int) -> Dict[str, Any]:
         """문제지 전체 채점"""
         try:
             # 문제지 정보 조회
@@ -344,8 +344,8 @@ class NewGradingService:
             print(f"❌ 채점 결과 저장 오류: {str(e)}")
             raise e
     
-    async def review_grading_result(self, result_id: str, 
-                                  question_reviews: Dict[str, Dict[str, Any]], 
+    async def review_grading_result(self, result_id: str,
+                                  question_reviews: Dict[int, Dict[str, Any]],
                                   reviewed_by: str = "교사") -> Dict[str, Any]:
         """AI 채점 결과 검수"""
         
@@ -427,14 +427,14 @@ class NewGradingService:
             raise e
 
 # 전역 함수로 노출
-async def grade_worksheet_submission(db: Session, worksheet_id: str, student_name: str, 
-                                   answers: Dict[str, str], completion_time: int) -> Dict[str, Any]:
+async def grade_worksheet_submission(db: Session, worksheet_id: str, student_name: str,
+                                   answers: Dict[int, str], completion_time: int) -> Dict[str, Any]:
     """문제지 제출 채점 (전역 함수)"""
     service = NewGradingService(db)
     return await service.grade_worksheet(worksheet_id, student_name, answers, completion_time)
 
-async def review_ai_grading(db: Session, result_id: str, 
-                          question_reviews: Dict[str, Dict[str, Any]], 
+async def review_ai_grading(db: Session, result_id: str,
+                          question_reviews: Dict[int, Dict[str, Any]],
                           reviewed_by: str = "교사") -> Dict[str, Any]:
     """AI 채점 결과 검수 (전역 함수)"""
     service = NewGradingService(db)

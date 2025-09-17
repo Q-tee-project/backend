@@ -119,20 +119,19 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
             
             prompt = generator.generate_prompt(request_dict, db=db)
             print("✅ 프롬프트 생성 성공!")
-            
+            print(f"🔍 프롬프트: {prompt}")
         except Exception as prompt_error:
             print(f"❌ 프롬프트 생성 오류: {prompt_error}")
             raise prompt_error
         
         # LLM에 프롬프트 전송 및 응답 받기
         llm_response = None
-        answer_sheet = None
         llm_error = None
         
         if GEMINI_AVAILABLE:
             try:
                 print("🤖 Gemini API 호출 시작...")
-                
+
                 # Gemini API 키 설정
                 if not settings.gemini_api_key:
                     raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
@@ -146,7 +145,6 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
                 print("📝 통합 문제지/답안지 생성 중...")
                 response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
                 llm_response = response.text
-                answer_sheet = llm_response # 호환성을 위해 동일 데이터 할당
                 print("✅ 통합 생성 완료!")
                 
             except Exception as api_error:
@@ -167,18 +165,15 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
         
         # JSON 파싱 처리
         parsed_llm_response = None
-        parsed_answer_sheet = None
         
         if llm_response:
             try:
                 # 통합 JSON 파싱
                 parsed_llm_response = json.loads(llm_response)
-                parsed_answer_sheet = parsed_llm_response # 동일 객체 할당
                 print("✅ 통합 JSON 파싱 완료!")
             except json.JSONDecodeError as e:
                 print(f"⚠️ 통합 JSON 파싱 실패: {e}")
                 parsed_llm_response = None
-                parsed_answer_sheet = None
         
         # 백엔드에서 결과 출력
         print("=" * 80)
@@ -188,13 +183,6 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
             print(f"📄 문제지 ID: {parsed_llm_response.get('worksheet_id', 'N/A')}")
             print(f"📝 문제지 제목: {parsed_llm_response.get('worksheet_name', 'N/A')}")
             print(f"📊 총 문제 수: {parsed_llm_response.get('total_questions', 'N/A')}개")
-        if parsed_answer_sheet:
-            passages_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("passages", []))
-            examples_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("examples", []))
-            questions_count = len(parsed_answer_sheet.get("answer_sheet", {}).get("questions", []))
-            print(f"📖 지문 수: {passages_count}개 (한글 번역 포함)")
-            print(f"📝 예문 수: {examples_count}개 (한글 번역 포함)")
-            print(f"🔍 정답 및 해설: {questions_count}개")
         print("=" * 80)
 
         return {
@@ -202,9 +190,7 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
             "status": "success",
             "request_data": request.dict(),
             "distribution_summary": distribution_summary,
-            "prompt": prompt,
             "llm_response": parsed_llm_response,  # 파싱된 객체 전달
-            "answer_sheet": parsed_answer_sheet,  # 파싱된 객체 전달
             "llm_error": llm_error,
             "subject_types_validation": {
                 "reading_types": subject_details.get('reading_types', []),
@@ -232,6 +218,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         
         # 문제지 메타데이터 추출
         worksheet_id = str(uuid.uuid4())  # UUID로 자동 생성
+        teacher_id = worksheet_data.get('teacher_id')
         worksheet_name = worksheet_data.get('worksheet_name')
         school_level = worksheet_data.get('worksheet_level')
         grade = str(worksheet_data.get('worksheet_grade'))
@@ -508,7 +495,7 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=f"문제지 조회 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/questions/{question_id}/text")
-async def update_question_text(worksheet_id: str, question_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
+async def update_question_text(worksheet_id: str, question_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
     """문제 텍스트를 업데이트합니다."""
     try:
         question = db.query(Question).filter(
@@ -531,7 +518,7 @@ async def update_question_text(worksheet_id: str, question_id: str, request: Dic
         raise HTTPException(status_code=500, detail=f"문제 텍스트 업데이트 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/questions/{question_id}/choice")
-async def update_question_choice(worksheet_id: str, question_id: str, request: Dict[str, Any], db: Session = Depends(get_db)):
+async def update_question_choice(worksheet_id: str, question_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
     """문제 선택지를 업데이트합니다."""
     try:
         question = db.query(Question).filter(
@@ -561,7 +548,7 @@ async def update_question_choice(worksheet_id: str, question_id: str, request: D
         raise HTTPException(status_code=500, detail=f"선택지 업데이트 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/questions/{question_id}/answer")
-async def update_question_answer(worksheet_id: str, question_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
+async def update_question_answer(worksheet_id: str, question_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
     """문제 정답을 업데이트합니다."""
     try:
         question = db.query(Question).filter(
@@ -584,7 +571,7 @@ async def update_question_answer(worksheet_id: str, question_id: str, request: D
         raise HTTPException(status_code=500, detail=f"정답 업데이트 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/passages/{passage_id}")
-async def update_passage(worksheet_id: str, passage_id: str, request: Dict[str, Any], db: Session = Depends(get_db)):
+async def update_passage(worksheet_id: str, passage_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
     """지문을 업데이트합니다."""
     try:
         passage = db.query(Passage).filter(
@@ -622,7 +609,7 @@ async def update_passage(worksheet_id: str, passage_id: str, request: Dict[str, 
         raise HTTPException(status_code=500, detail=f"지문 업데이트 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/examples/{example_id}")
-async def update_example(worksheet_id: str, example_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
+async def update_example(worksheet_id: str, example_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
     """예문을 업데이트합니다."""
     try:
         example = db.query(Example).filter(

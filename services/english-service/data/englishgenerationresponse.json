@@ -1,0 +1,455 @@
+{
+  "message": "문제지와 답안지 생성이 완료되었습니다!",
+  "status": "success",
+  "request_data": {
+    "school_level": "중학교",
+    "grade": 1,
+    "total_questions": 10,
+    "subjects": [
+      "독해",
+      "문법"
+    ],
+    "subject_details": {
+      "reading_types": [
+        "주제 및 요지 파악",
+        "빈칸추론"
+      ],
+      "grammar_categories": [
+        "시제"
+      ],
+      "grammar_topics": [
+        "현재완료"
+      ],
+      "vocabulary_categories": []
+    },
+    "subject_ratios": [
+      {
+        "subject": "독해",
+        "ratio": 60
+      },
+      {
+        "subject": "문법",
+        "ratio": 40
+      }
+    ],
+    "question_format": "혼합형",
+    "format_ratios": [
+      {
+        "format": "객관식",
+        "ratio": 70
+      },
+      {
+        "format": "주관식",
+        "ratio": 30
+      }
+    ],
+    "difficulty_distribution": [
+      {
+        "difficulty": "상",
+        "ratio": 20
+      },
+      {
+        "difficulty": "중",
+        "ratio": 50
+      },
+      {
+        "difficulty": "하",
+        "ratio": 30
+      }
+    ],
+    "additional_requirements": "일상생활과 관련된 주제로 출제해주세요."
+  },
+  "distribution_summary": {
+    "total_questions": 10,
+    "subject_distribution": [
+      {
+        "subject": "독해",
+        "ratio": 60,
+        "count": 6
+      },
+      {
+        "subject": "문법",
+        "ratio": 40,
+        "count": 4
+      }
+    ],
+    "format_distribution": [
+      {
+        "format": "객관식",
+        "ratio": 70,
+        "count": 7
+      },
+      {
+        "format": "주관식",
+        "ratio": 30,
+        "count": 3
+      }
+    ],
+    "difficulty_distribution": [
+      {
+        "difficulty": "상",
+        "ratio": 20,
+        "count": 2
+      },
+      {
+        "difficulty": "중",
+        "ratio": 50,
+        "count": 5
+      },
+      {
+        "difficulty": "하",
+        "ratio": 30,
+        "count": 3
+      }
+    ],
+    "validation_passed": true
+  },
+  "llm_response": {
+    "worksheet_id": "1",
+    "worksheet_name": "중학교 1학년 영어 평가",
+    "worksheet_date": "2025-01-01",
+    "worksheet_time": "10:00",
+    "worksheet_duration": "45",
+    "worksheet_subject": "영어",
+    "worksheet_level": "중학교",
+    "worksheet_grade": 1,
+    "total_questions": 10,
+    "passages": [
+      {
+        "passage_id": "1",
+        "passage_type": "article",
+        "passage_content": {
+          "content": [
+            {
+              "type": "title",
+              "value": "My Husband's Happy Kitchen"
+            },
+            {
+              "type": "paragraph",
+              "value": "My husband, Tom, started a new hobby: cooking. At first, his wife, who is me, was a little [ A ]. I didn't understand why he wanted to cook. But now, I see it is a real joy for him. He watches cooking shows on TV and tries new recipes. He goes to the market to get fresh material for his dishes."
+            },
+            {
+              "type": "paragraph",
+              "value": "Last weekend, he made a beautiful dinner. He mixed vegetables and meat to cook a wonderful meal. He put it on a nice black plate. For dessert, he even made a strawberry cake! It was his third time making a cake, and it was perfect. This simple gesture made our family bond stronger. The overall feeling in our home is now very happy and peaceful."
+            }
+          ]
+        },
+        "original_content": {
+          "content": [
+            {
+              "type": "title",
+              "value": "My Husband's Happy Kitchen"
+            },
+            {
+              "type": "paragraph",
+              "value": "My husband, Tom, started a new hobby: cooking. At first, his wife, who is me, was a little anxious. I didn't understand why he wanted to cook. But now, I see it is a real joy for him. He watches cooking shows on TV and tries new recipes. He goes to the market to get fresh material for his dishes."
+            },
+            {
+              "type": "paragraph",
+              "value": "Last weekend, he made a beautiful dinner. He mixed vegetables and meat to cook a wonderful meal. He put it on a nice black plate. For dessert, he even made a strawberry cake! It was his third time making a cake, and it was perfect. This simple gesture made our family bond stronger. The overall feeling in our home is now very happy and peaceful."
+            }
+          ]
+        },
+        "korean_translation": {
+          "content": [
+            {
+              "type": "title",
+              "value": "남편의 행복한 부엌"
+            },
+            {
+              "type": "paragraph",
+              "value": "제 남편 톰은 요리라는 새로운 취미를 시작했습니다. 처음에는 그의 아내인 제가 조금 걱정스러웠습니다. 저는 그가 왜 요리를 하고 싶어 하는지 이해하지 못했습니다. 하지만 이제 저는 그것이 그에게 진정한 기쁨이라는 것을 압니다. 그는 TV에서 요리 프로그램을 보고 새로운 조리법을 시도합니다. 그는 요리에 쓸 신선한 재료를 사러 시장에 갑니다."
+            },
+            {
+              "type": "paragraph",
+              "value": "지난 주말, 그는 멋진 저녁 식사를 만들었습니다. 그는 채소와 고기를 섞어 훌륭한 식사를 요리했습니다. 그는 그것을 멋진 검은색 접시에 담았습니다. 후식으로는 딸기 케이크까지 만들었답니다! 그가 케이크를 만든 것은 세 번째였는데, 완벽했습니다. 이 소박한 행동은 우리 가족의 유대를 더 강하게 만들었습니다. 우리 집의 전반적인 분위기는 이제 매우 행복하고 평화롭습니다."
+            }
+          ]
+        },
+        "related_questions": [
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "passage_id": "2",
+        "passage_type": "article",
+        "passage_content": {
+          "content": [
+            {
+              "type": "title",
+              "value": "A Good Neighbor"
+            },
+            {
+              "type": "paragraph",
+              "value": "A new neighbor moved in next door last month. I saw her a few times, and she always appeared a bit anxious and lonely. I wanted to say hi, so one day, I knocked on her door. When she opened the door, I could see a slight shock on her face, but I just smiled and introduced myself. I gave her a small strawberry cake I had made."
+            },
+            {
+              "type": "paragraph",
+              "value": "That simple gesture was a good first step. We started talking and found we have a lot in common. Now, we often relax and have tea together. This experience is an important factor in building a peaceful community. Our neighborhood committee decided to [ B ] these small acts of kindness to build a stronger bond among residents. It is important to reach out to people."
+            }
+          ]
+        },
+        "original_content": {
+          "content": [
+            {
+              "type": "title",
+              "value": "A Good Neighbor"
+            },
+            {
+              "type": "paragraph",
+              "value": "A new neighbor moved in next door last month. I saw her a few times, and she always appeared a bit anxious and lonely. I wanted to say hi, so one day, I knocked on her door. When she opened the door, I could see a slight shock on her face, but I just smiled and introduced myself. I gave her a small strawberry cake I had made."
+            },
+            {
+              "type": "paragraph",
+              "value": "That simple gesture was a good first step. We started talking and found we have a lot in common. Now, we often relax and have tea together. This experience is an important factor in building a peaceful community. Our neighborhood committee decided to honor these small acts of kindness to build a stronger bond among residents. It is important to reach out to people."
+            }
+          ]
+        },
+        "korean_translation": {
+          "content": [
+            {
+              "type": "title",
+              "value": "좋은 이웃"
+            },
+            {
+              "type": "paragraph",
+              "value": "지난달에 새 이웃이 옆집으로 이사 왔습니다. 저는 그녀를 몇 번 보았는데, 그녀는 항상 약간 불안하고 외로워 보였습니다. 인사를 하고 싶어서 어느 날 그녀의 집 문을 두드렸습니다. 그녀가 문을 열었을 때, 그녀의 얼굴에 약간의 놀라움이 스치는 것을 볼 수 있었지만, 저는 그저 미소 지으며 제 자신을 소개했습니다. 저는 제가 만든 작은 딸기 케이크를 그녀에게 주었습니다."
+            },
+            {
+              "type": "paragraph",
+              "value": "그 소박한 행동은 좋은 첫걸음이었습니다. 우리는 이야기를 시작했고 공통점이 많다는 것을 알게 되었습니다. 이제 우리는 자주 함께 차를 마시며 휴식을 취합니다. 이 경험은 평화로운 공동체를 만드는 데 중요한 요소입니다. 우리 동네 위원회는 주민들 간의 더 강한 유대를 형성하기 위해 이러한 작은 친절의 행동들을 기리기로 결정했습니다. 사람들에게 다가가는 것은 중요합니다."
+            }
+          ]
+        },
+        "related_questions": [
+          "7",
+          "8",
+          "9"
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "example_id": "1",
+        "example_content": "He ______ dinner for his family every Friday.",
+        "original_content": "He cooks dinner for his family every Friday.",
+        "korean_translation": "그는 매주 금요일마다 그의 가족을 위해 저녁을 요리합니다.",
+        "related_question": "1"
+      },
+      {
+        "example_id": "2",
+        "example_content": "We (watch) a fun movie on TV last night.",
+        "original_content": "We watched a fun movie on TV last night.",
+        "korean_translation": "우리는 어젯밤 TV에서 재미있는 영화를 봤다.",
+        "related_question": "2"
+      },
+      {
+        "example_id": "3",
+        "example_content": "I _______ never seen a real helicopter before.",
+        "original_content": "I have never seen a real helicopter before.",
+        "korean_translation": "나는 전에 진짜 헬리콥터를 본 적이 없다.",
+        "related_question": "6"
+      },
+      {
+        "example_id": "4",
+        "example_content": "(you / ever / cook) for your rich husband?",
+        "original_content": "Have you ever cooked for your rich husband?",
+        "korean_translation": "너는 너의 부유한 남편을 위해 요리해 본 적이 있니?",
+        "related_question": "10"
+      }
+    ],
+    "questions": [
+      {
+        "question_id": "1",
+        "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "문법",
+        "question_difficulty": "하",
+        "question_detail_type": "시제",
+        "question_passage_id": null,
+        "question_example_id": "1",
+        "question_choices": [
+          "cook",
+          "cooks",
+          "cooked",
+          "is cooking"
+        ],
+        "correct_answer": "2",
+        "explanation": "문장에 'every Friday'라는 표현이 있으므로, 반복되는 습관을 나타내는 현재 시제를 사용해야 합니다. 주어가 3인칭 단수 'He'이므로 동사 'cook'에 '-s'를 붙인 'cooks'가 정답입니다.",
+        "learning_point": "주어가 3인칭 단수(he, she, it 등)이고 현재의 사실이나 반복되는 습관을 나타낼 때, 일반동사 뒤에 -s나 -es를 붙이는 현재 시제 규칙을 학습합니다."
+      },
+      {
+        "question_id": "2",
+        "question_text": "다음 문장의 괄호 안 단어를 알맞은 형태로 고쳐 쓰시오.",
+        "question_type": "주관식",
+        "question_subject": "문법",
+        "question_difficulty": "하",
+        "question_detail_type": "시제",
+        "question_passage_id": null,
+        "question_example_id": "2",
+        "question_choices": [],
+        "correct_answer": "watched",
+        "explanation": "문장 끝에 'last night'이라는 명백한 과거 시점을 나타내는 부사구가 있으므로, 동사 'watch'를 과거형인 'watched'로 써야 합니다.",
+        "learning_point": "yesterday, last night, ~ago 등 과거를 나타내는 부사구와 함께 쓰이는 과거 시제 동사의 형태(규칙 변화 -ed)를 학습합니다."
+      },
+      {
+        "question_id": "3",
+        "question_text": "위 글의 주제로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "독해",
+        "question_difficulty": "중",
+        "question_detail_type": "주제 및 요지 파악",
+        "question_passage_id": "1",
+        "question_example_id": null,
+        "question_choices": [
+          "How to make a strawberry cake",
+          "The joy of a husband's new hobby",
+          "The importance of a black plate",
+          "Problems between a husband and wife"
+        ],
+        "correct_answer": "2",
+        "explanation": "이 글은 남편이 요리라는 새로운 취미를 시작하면서 가족에게 기쁨과 행복을 가져다주었다는 내용이 중심이므로, '남편의 새로운 취미가 주는 즐거움'이 글의 주제로 가장 적절합니다.",
+        "learning_point": "글의 전체적인 내용을 파악하고, 반복적으로 나타나는 핵심어나 중심 생각을 찾아 주제를 파악하는 능력을 기릅니다."
+      },
+      {
+        "question_id": "4",
+        "question_text": "위 글의 빈칸 [A]에 들어갈 말로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "독해",
+        "question_difficulty": "중",
+        "question_detail_type": "빈칸추론",
+        "question_passage_id": "1",
+        "question_example_id": null,
+        "question_choices": [
+          "happy",
+          "anxious",
+          "rich",
+          "peaceful"
+        ],
+        "correct_answer": "2",
+        "explanation": "빈칸 뒤에 남편이 요리하는 것을 이해하지 못했다는 내용이 나오므로, 처음에는 기쁘기보다는 '걱정스러운, 불안한' 마음이었을 것이라고 추론할 수 있습니다. 따라서 'anxious'가 가장 적절합니다.",
+        "learning_point": "빈칸의 앞뒤 문맥을 통해 논리적으로 가장 자연스러운 단어를 추론하는 능력을 기릅니다."
+      },
+      {
+        "question_id": "5",
+        "question_text": "위 글의 내용으로 추론할 수 있는 것은?",
+        "question_type": "객관식",
+        "question_subject": "독해",
+        "question_difficulty": "상",
+        "question_detail_type": "주제 및 요지 파악",
+        "question_passage_id": "1",
+        "question_example_id": null,
+        "question_choices": [
+          "The husband was a professional cook.",
+          "The family did not like the strawberry cake.",
+          "The husband's hobby had a positive effect on the family.",
+          "The wife wanted to cook with her husband from the start."
+        ],
+        "correct_answer": "3",
+        "explanation": "남편의 요리라는 취미가 '가족의 유대를 더 강하게 만들었다(made our family bond stronger)'고 했으므로, 이 취미가 가족에게 긍정적인 영향을 미쳤다고 추론할 수 있습니다. 1번: 취미로 '시작했다(started)'고 했으므로 전문 요리사는 아닙니다. 2번: 케이크가 '완벽했다(perfect)'고 했으므로 좋아했음을 알 수 있습니다. 4번: 아내는 처음에는 '걱정했다(anxious)'고 했습니다.",
+        "learning_point": "글에 직접적으로 명시되지 않은 정보를 문맥과 단서를 통해 논리적으로 유추하는 종합적 사고 능력을 평가합니다."
+      },
+      {
+        "question_id": "6",
+        "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "문법",
+        "question_difficulty": "중",
+        "question_detail_type": "현재완료",
+        "question_passage_id": null,
+        "question_example_id": "3",
+        "question_choices": [
+          "is",
+          "am",
+          "have",
+          "has"
+        ],
+        "correct_answer": "3",
+        "explanation": "과거부터 현재까지의 경험을 나타내는 현재완료 시제(have/has + p.p.) 문장입니다. '본 적이 없다'는 경험을 나타내고, 주어가 1인칭 'I'이므로 'have'를 사용해야 합니다. 'never'는 '결코 ~한 적이 없다'는 의미의 부사입니다.",
+        "learning_point": "경험을 나타내는 현재완료 시제(have + p.p.)의 형태와 의미를 이해하고, 주어의 인칭과 수에 맞는 동사(have/has)를 선택하는 능력을 기릅니다."
+      },
+      {
+        "question_id": "7",
+        "question_text": "위 글의 목적으로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "독해",
+        "question_difficulty": "중",
+        "question_detail_type": "주제 및 요지 파악",
+        "question_passage_id": "2",
+        "question_example_id": null,
+        "question_choices": [
+          "To complain about a new neighbor",
+          "To advertise a strawberry cake",
+          "To show the importance of being a good neighbor",
+          "To explain the rules of the neighborhood committee"
+        ],
+        "correct_answer": "3",
+        "explanation": "글쓴이가 새로운 이웃에게 다가가 좋은 관계를 맺게 된 경험을 이야기하며, 이것이 평화로운 공동체를 만드는 데 중요한 요소라고 말하고 있습니다. 따라서 '좋은 이웃이 되는 것의 중요성을 보여주기 위해' 쓴 글입니다.",
+        "learning_point": "글의 전반적인 내용과 분위기를 파악하여 글쓴이의 의도나 글의 목적을 추론하는 능력을 기릅니다."
+      },
+      {
+        "question_id": "8",
+        "question_text": "위 글의 빈칸 [B]에 들어갈 말로 가장 적절한 것은?",
+        "question_type": "객관식",
+        "question_subject": "독해",
+        "question_difficulty": "상",
+        "question_detail_type": "빈칸추론",
+        "question_passage_id": "2",
+        "question_example_id": null,
+        "question_choices": [
+          "honor",
+          "shock",
+          "mix",
+          "switch"
+        ],
+        "correct_answer": "1",
+        "explanation": "빈칸 앞뒤 문맥을 보면, 동네 위원회가 주민 간의 유대를 강화하기 위해 '이러한 작은 친절의 행동들'을 어떻게 할지 결정했다는 내용입니다. 긍정적인 행동을 장려하는 의미이므로 '기리다, 존중하다'라는 뜻의 'honor'가 가장 적절합니다. 다른 단어들(shock: 충격을 주다, mix: 섞다, switch: 바꾸다)은 문맥에 맞지 않습니다.",
+        "learning_point": "문맥 속에서 단어의 미묘한 의미 차이를 이해하고, 글의 전체적인 흐름과 논리에 맞는 어휘를 선택하는 종합적인 어휘력과 추론 능력을 평가합니다."
+      },
+      {
+        "question_id": "9",
+        "question_text": "위 글에 근거하여, 글쓴이가 새 이웃에게 인사하기 위해 한 행동을 우리말로 쓰시오.",
+        "question_type": "주관식",
+        "question_subject": "독해",
+        "question_difficulty": "하",
+        "question_detail_type": "주제 및 요지 파악",
+        "question_passage_id": "2",
+        "question_example_id": null,
+        "question_choices": [],
+        "correct_answer": "그녀의 집 문을 두드렸다.",
+        "explanation": "글의 첫 번째 문단에 'I wanted to say hi, so one day, I knocked on her door.'라는 문장이 있습니다. 이를 통해 글쓴이가 이웃의 집 문을 두드렸다는 사실을 알 수 있습니다.",
+        "learning_point": "글의 내용 중에서 질문이 요구하는 구체적인 정보를 정확히 찾아내는 능력을 기릅니다."
+      },
+      {
+        "question_id": "10",
+        "question_text": "다음 괄호 안의 단어들을 바르게 배열하여 문장을 완성하시오.",
+        "question_type": "주관식",
+        "question_subject": "문법",
+        "question_difficulty": "중",
+        "question_detail_type": "현재완료",
+        "question_passage_id": null,
+        "question_example_id": "10",
+        "question_choices": [],
+        "correct_answer": "Have you ever cooked for your rich husband?",
+        "explanation": "현재완료 시제의 의문문은 'Have/Has + 주어 + (부사) + p.p. ~?'의 어순을 가집니다. 따라서 'Have you ever cooked for your rich husband?'가 올바른 순서입니다.",
+        "learning_point": "현재완료 시제(경험)의 의문문 어순(Have/Has + 주어 + p.p. ~?)을 정확히 이해하고 문장을 구성하는 능력을 기릅니다."
+      }
+    ]
+  },
+  "llm_error": null,
+  "subject_types_validation": {
+    "reading_types": [
+      "주제 및 요지 파악",
+      "빈칸추론"
+    ],
+    "grammar_categories": [
+      "시제"
+    ],
+    "grammar_topics": [
+      "현재완료"
+    ],
+    "vocabulary_categories": []
+  }
+}
