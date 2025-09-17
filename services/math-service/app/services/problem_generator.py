@@ -523,59 +523,113 @@ class ProblemGenerator:
 
         # 2. br 태그 문제 수정
         text = re.sub(r'(<\s*br\s*/?\s*>)|(<\s*br\s*/?\s*)|(<br\s*/?>)', r'<br />', text)
-        text = re.sub(r'(\w+)<\s*br\s*/?\s*>\s*(\w+)', r'\1 \\neq \2', text)  # a< br/ > eq1 -> a ≠ eq1
+        text = re.sub(r'(\w+)<\s*br\s*/?\s*>\s*(\w+)', r'\1 \\neq \2', text)
 
-        # 3. 잘못된 frac 구문 수정
-        text = re.sub(r'\\frac\(([^)]+)\)\{([^}]+)\}', r'\\frac{\1}{\2}', text)  # \frac(a+b){2} -> \frac{a+b}{2}
+        # 3. 잘못된 frac 구문 수정 - 여러 패턴 처리
+        text = re.sub(r'\\frac\(([^)]+)\)\{([^}]+)\}', r'$\\frac{\1}{\2}$', text)  # \frac(a-3){2} -> $\frac{a-3}{2}$
+        text = re.sub(r'\\frac\(([^)]+)\)([^{])', r'$\\frac{\1}{1}$\\2', text)  # \frac(a-3)5 -> $\frac{a-3}{1}$5
 
-        # 4. 지수 처리 - 모든 지수를 중괄호로 감싸기
-        # 단일 문자 지수도 중괄호로 감싸기
+        # 4. 절댓값 기호 처리 |x|, |y| -> $|x|$, $|y|$
+        text = re.sub(r'(?<!\$)\|([a-zA-Z0-9+\-*/\s]+)\|(?!\$)', r'$|\1|$', text)
+
+        # 5. {숫자}{숫자} 패턴을 분수로 변환 (가장 먼저 처리)
+        text = re.sub(r'\{(\d+)\}\{(\d+)\}', r'$\\frac{\1}{\2}$', text)  # {1}{4} -> $\frac{1}{4}$
+        text = re.sub(r'\{([a-zA-Z0-9+\-*/]+)\}\{(\d+)\}', r'$\\frac{\1}{\2}$', text)  # {a+b}{2} -> $\frac{a+b}{2}$
+
+        # 6. 잘못된 빈 분수 패턴 수정
+        text = re.sub(r'-\\frac\{\}\{\}(\d+)/(\d+)', r'$-\\frac{\1}{\2}$', text)  # -\frac{}{}1/2 -> $-\frac{1}{2}$
+        text = re.sub(r'\\frac\{\}\{\}(\d+)/(\d+)', r'$\\frac{\1}{\2}$', text)   # \frac{}{}1/2 -> $\frac{1}{2}$
+
+        # 7. 지수 처리 - 모든 지수를 중괄호로 감싸기
         text = re.sub(r'(\w+)\^([a-zA-Z0-9])(?![{}])', r'\1^{\2}', text)  # a^2 -> a^{2}
         text = re.sub(r'(\w+)\^([a-zA-Z0-9,]+)(?![{}])', r'\1^{\2}', text)  # a^ab -> a^{ab}
 
-        # 5. 수식 표현을 $로 감싸기
-        # 지수 표현
-        text = re.sub(r'(\w+\^\{[^}]+\})', r'$\1$', text)
+        # 8. 함수와 괄호 처리 - 개선된 패턴
+        # Q(ab,a-b) 같은 경우 내부 수식들도 개별적으로 LaTeX 처리
+        def fix_function_content(match):
+            func_name = match.group(1)
+            content = match.group(2)
+            # 쉼표로 분리된 각 부분을 개별 처리
+            parts = content.split(',')
+            fixed_parts = []
+            for part in parts:
+                part = part.strip()
+                # 각 부분이 수학적 표현인지 확인
+                if re.search(r'[a-zA-Z].*[+\-*/]|[+\-*/].*[a-zA-Z]', part):
+                    fixed_parts.append(f'${part.strip()}$')
+                elif re.match(r'^[a-zA-Z]+$', part):  # 순수 변수들
+                    fixed_parts.append(f'${part}$')
+                else:
+                    fixed_parts.append(part)
+            return f'${func_name}({", ".join(fixed_parts)})$'
 
-        # 분수 표현
-        text = re.sub(r'(\\frac\{[^}]+\}\{[^}]+\})', r'$\1$', text)
+        # 함수명(수식1, 수식2) 패턴 처리
+        text = re.sub(r'([A-Z])\(([^)]*[a-zA-Z][^)]*)\)', fix_function_content, text)
 
-        # 기본 LaTeX 명령어들
+        # 9. 복합 수식 처리 (계수 + 변수 + 연산자) - 더 정확한 패턴
+        # 3x-5, 2y+1 같은 전체 수식을 감싸기 (부분적 변환 방지)
+        text = re.sub(r'(?<!\$)(\d+[a-zA-Z][+\-*/]\d+)', r'$\1$', text)  # 3x-5 -> $3x-5$
+        text = re.sub(r'(?<!\$)(\d+[a-zA-Z])(?![+\-*/])', r'$\1$', text)  # 3x -> $3x$
+        text = re.sub(r'(?<!\$)([a-zA-Z][+\-*/]\d+)', r'$\1$', text)  # x-5, y+1 -> $x-5$, $y+1$
+
+        # 10. 괄호 안의 수식 처리 - a-b 같은 패턴 포함
+        text = re.sub(r'(?<!\$)([a-zA-Z]+[+\-*/][a-zA-Z0-9]+)(?!\$)', r'$\1$', text)  # a-b -> $a-b$
+
+        # 11. 지수 표현을 $로 감싸기
+        text = re.sub(r'(?<!\$)(\w+\^\{[^}]+\})', r'$\1$', text)
+
+        # 12. 분수 표현을 $로 감싸기
+        text = re.sub(r'(?<!\$)(\\frac\{[^}]+\}\{[^}]+\})', r'$\1$', text)
+
+        # 13. 기본 LaTeX 명령어들 + 추가 기호들
         latex_commands = ['sqrt', 'sin', 'cos', 'tan', 'log', 'ln', 'pi',
-                         'alpha', 'beta', 'theta', 'times', 'div', 'leq', 'geq', 'neq', 'dots']
+                         'alpha', 'beta', 'theta', 'times', 'div', 'leq', 'geq', 'neq', 'dots',
+                         'diamond', 'triangle', 'square', 'circ', 'bullet']
 
         for cmd in latex_commands:
             # 백슬래시 없는 명령어들에 백슬래시 추가
-            text = re.sub(f'(?<!\\\\){cmd}(?!\\w)', f'\\\\{cmd}', text)
+            text = re.sub(f'(?<!\\\\)\\b{cmd}\\b(?!\\w)', f'\\\\{cmd}', text)
             # $로 감싸지지 않은 명령어들 감싸기
             text = re.sub(f'(?<!\\$)\\\\{cmd}(?!.*\\$)', f'$\\\\{cmd}$', text)
 
-        # 6. 변수 처리 - 수학적 맥락에서만
-        # 계수가 있는 변수: 2x, 3y -> $2x$, $3y$
-        text = re.sub(r'(\d+)([a-zA-Z])', r'$\1\2$', text)
+        # 14. 등호가 포함된 수식 완전히 감싸기
+        text = re.sub(r'(?<!\$)([^$]*[a-zA-Z][^$]*=+[^$]*[a-zA-Z][^$]*)', r'$\1$', text)
 
-        # 괄호와 함께 있는 변수: (x+1), (2x-3) -> $(x+1)$, $(2x-3)$
-        text = re.sub(r'\(([^)]*[a-zA-Z][^)]*)\)', r'$(\1)$', text)
+        # 15. 한국어와 혼재된 수식 처리 방지
+        # 한국어가 포함된 LaTeX는 제거
+        def clean_korean_latex(match):
+            content = match.group(1)
+            if re.search(r'[가-힣]', content):
+                return content  # $ 제거하고 내용만 반환
+            return match.group(0)  # 원본 유지
 
-        # 연산자와 함께 있는 변수: x+1, 2x-3 -> $x+1$, $2x-3$
-        text = re.sub(r'([a-zA-Z0-9]+[\+\-\*/][a-zA-Z0-9]+)', r'$\1$', text)
+        text = re.sub(r'\$([^$]*[가-힣][^$]*)\$', clean_korean_latex, text)
 
-        # 등호와 함께 있는 수식: 2(3x-1) = 4(x+3) -> $2(3x-1) = 4(x+3)$
-        text = re.sub(r'([^$]*[a-zA-Z][^$]*=+[^$]*[a-zA-Z][^$]*)', r'$\1$', text)
-
-        # 7. 단독 변수 처리 (마지막에)
-        # 단어 경계에서 단일 문자 변수
-        text = re.sub(r'(?<!\$)\b([a-zA-Z])\b(?![가-힣])', r'$\1$', text)
+        # 16. 단독 변수 처리 (가장 마지막에, 이미 감싸진 것과 한국어 제외)
+        text = re.sub(r'(?<!\$)\b([a-zA-Z])\b(?![가-힣]|[^$]*\$)', r'$\1$', text)
 
         return text
 
     def _final_cleanup(self, text: str) -> str:
-        """최종 정리"""
+        """최종 정리 - 중복 LaTeX 처리 및 정리"""
         # 연속된 백슬래시 정리
         text = re.sub(r'\\\\+', r'\\', text)
 
         # 불완전한 LaTeX 수식 정리
         text = re.sub(r'\$\\frac\$', r'$\\frac{}{}$', text)
+
+        # 중복된 $ 기호 정리
+        text = re.sub(r'\$+', r'$', text)
+
+        # 연속된 LaTeX 수식 병합 ($a$$b$ -> $ab$)
+        text = re.sub(r'\$([^$]*)\$\$([^$]*)\$', r'$\1\2$', text)
+
+        # 빈 LaTeX 수식 제거 ($$)
+        text = re.sub(r'\$\s*\$', r'', text)
+
+        # 공백 정리
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
 
         return text
     
