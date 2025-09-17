@@ -75,8 +75,8 @@ async def generate_math_problems(
 ):
     try:
         task = generate_math_problems_task.delay(
-            request_data=request.model_dump(),
-            user_id=1
+            request.model_dump(),
+            1
         )
         
         return {

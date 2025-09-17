@@ -90,11 +90,15 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
             meta={'current': 60, 'total': 100, 'status': 'AI로 문제 생성 중...'}
         )
         
-        # AI 서비스를 통한 문제 생성
-        generated_problems = math_service._generate_problems_with_ai(
+        # ProblemGenerator 직접 호출 (Task에서는 직접 실행)
+        from .services.problem_generator import ProblemGenerator
+        problem_generator = ProblemGenerator()
+
+        generated_problems = problem_generator.generate_problems(
             curriculum_data=curriculum_data,
-            problem_types=problem_types,
-            request=request
+            user_prompt=request.user_text,
+            problem_count=request.problem_count.value_int,
+            difficulty_ratio=request.difficulty_ratio.model_dump()
         )
         
         # 진행률 업데이트
@@ -128,50 +132,99 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
         
         # 생성된 문제들을 워크시트에 연결하여 저장
         problem_responses = []
+        saved_problems_count = 0
+
+        # 배치 저장을 위한 문제 객체들 준비
+        print(f"💾 문제 {len(generated_problems)}개 배치 저장 시작...")
+        problems_to_save = []
+
+        # 1단계: Problem 객체들 생성
         for i, problem_data in enumerate(generated_problems):
-            problem = Problem(
-                worksheet_id=worksheet.id,
-                sequence_order=i + 1,
-                problem_type=problem_data.get("problem_type", "multiple_choice"),
-                difficulty=problem_data.get("difficulty", "B"),
-                question=problem_data.get("question", ""),
-                choices=json.dumps(problem_data.get("choices")) if problem_data.get("choices") else None,
-                correct_answer=problem_data.get("correct_answer", ""),
-                explanation=problem_data.get("explanation", ""),
-                latex_content=problem_data.get("latex_content"),
-                has_diagram=str(problem_data.get("has_diagram", False)).lower(),
-                diagram_type=problem_data.get("diagram_type"),
-                diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
-            )
-            
-            db.add(problem)
-            db.flush()
-            
-            # GeneratedProblemSet 제거됨 - Problem 테이블의 sequence_order로 대체
-            
-            # 응답용 데이터 생성
-            problem_responses.append({
-                "id": problem.id,
-                "sequence_order": i + 1,
-                "problem_type": problem.problem_type,
-                "difficulty": problem.difficulty,
-                "question": problem.question,
-                "choices": json.loads(problem.choices) if problem.choices else None,
-                "correct_answer": problem.correct_answer,
-                "explanation": problem.explanation,
-                "latex_content": problem.latex_content,
-                "has_diagram": problem.has_diagram == "true",
-                "diagram_type": problem.diagram_type,
-                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
-            })
+            try:
+                problem = Problem(
+                    worksheet_id=worksheet.id,
+                    sequence_order=i + 1,
+                    problem_type=problem_data.get("problem_type", "multiple_choice"),
+                    difficulty=problem_data.get("difficulty", "B"),
+                    question=problem_data.get("question", ""),
+                    choices=json.dumps(problem_data.get("choices")) if problem_data.get("choices") else None,
+                    correct_answer=problem_data.get("correct_answer", ""),
+                    explanation=problem_data.get("explanation", ""),
+                    latex_content=problem_data.get("latex_content"),
+                    has_diagram=str(problem_data.get("has_diagram", False)).lower(),
+                    diagram_type=problem_data.get("diagram_type"),
+                    diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
+                )
+                problems_to_save.append(problem)
+
+            except Exception as e:
+                print(f"❌ 문제 {i+1} 객체 생성 실패: {str(e)}")
+                continue
+
+        # 2단계: 배치 저장
+        try:
+            db.add_all(problems_to_save)
+            db.flush()  # ID 생성을 위한 flush
+            saved_problems_count = len(problems_to_save)
+            print(f"✅ 문제 {saved_problems_count}개 배치 저장 성공!")
+
+            # 3단계: 응답 데이터 생성
+            for problem in problems_to_save:
+                problem_responses.append({
+                    "id": problem.id,
+                    "sequence_order": problem.sequence_order,
+                    "problem_type": problem.problem_type,
+                    "difficulty": problem.difficulty,
+                    "question": problem.question,
+                    "choices": json.loads(problem.choices) if problem.choices else None,
+                    "correct_answer": problem.correct_answer,
+                    "explanation": problem.explanation,
+                    "latex_content": problem.latex_content,
+                    "has_diagram": problem.has_diagram == "true",
+                    "diagram_type": problem.diagram_type,
+                    "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
+                })
+
+        except Exception as e:
+            print(f"❌ 배치 저장 실패: {str(e)}")
+            # 실패 시 개별 저장으로 폴백
+            print("🔄 개별 저장으로 폴백...")
+            saved_problems_count = 0
+            for i, problem in enumerate(problems_to_save):
+                try:
+                    db.add(problem)
+                    db.flush()
+                    saved_problems_count += 1
+                    print(f"✅ 문제 {i+1} 개별 저장 성공")
+
+                    problem_responses.append({
+                        "id": problem.id,
+                        "sequence_order": problem.sequence_order,
+                        "problem_type": problem.problem_type,
+                        "difficulty": problem.difficulty,
+                        "question": problem.question,
+                        "choices": json.loads(problem.choices) if problem.choices else None,
+                        "correct_answer": problem.correct_answer,
+                        "explanation": problem.explanation,
+                        "latex_content": problem.latex_content,
+                        "has_diagram": problem.has_diagram == "true",
+                        "diagram_type": problem.diagram_type,
+                        "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
+                    })
+                except Exception as individual_error:
+                    print(f"❌ 문제 {i+1} 개별 저장도 실패: {str(individual_error)}")
         
+        # 저장 통계 로그
+        print(f"📊 문제 저장 완료: {saved_problems_count}/{len(generated_problems)}개 성공")
+
         # 워크시트 완료 상태로 업데이트
         worksheet.actual_difficulty_distribution = math_service._calculate_difficulty_distribution(generated_problems)
         worksheet.actual_type_distribution = math_service._calculate_type_distribution(generated_problems)
         worksheet.status = WorksheetStatus.COMPLETED
         worksheet.completed_at = datetime.now()
-        
+
         db.commit()
+        print(f"✅ 워크시트 {worksheet.id} 커밋 완료")
         
         # 성공 결과 반환
         result = {
