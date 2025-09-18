@@ -32,7 +32,6 @@ class Worksheet(Base):
 
     # 문제지 설정
     problem_count = Column(Integer, nullable=False)  # 10 or 20
-    korean_type_ratio = Column(JSON, nullable=True)  # {"시": 30, "소설": 40, "수필/비문학": 30}
     question_type_ratio = Column(JSON, nullable=True)  # {"객관식": 50, "서술형": 30, "단답형": 20}
     difficulty_ratio = Column(JSON, nullable=True)  # {"상": 30, "중": 40, "하": 30}
 

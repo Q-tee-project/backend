@@ -1,0 +1,1 @@
+# Korean Prompt Templates Package

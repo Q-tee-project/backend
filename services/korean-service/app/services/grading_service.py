@@ -12,7 +12,7 @@ class GradingService:
             raise ValueError("KOREAN_GEMINI_API_KEY or GEMINI_API_KEY environment variable is required")
 
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
 
     def grade_essay_problem(self, question: str, correct_answer: str, student_answer: str, explanation: str) -> Dict:
         """서술형 문제 채점"""
