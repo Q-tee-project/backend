@@ -4,7 +4,7 @@ from typing import List
 from datetime import datetime
 
 from app.database import get_db
-from app.models.models import (
+from app.models import (
     GrammarCategory, VocabularyCategory, ReadingType
 )
 

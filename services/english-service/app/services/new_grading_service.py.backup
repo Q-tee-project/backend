@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import uuid
 
-from app.models.models import (
+from app.models import (
     Worksheet, Question, Passage, Example, 
     GradingResult, QuestionResult
 )

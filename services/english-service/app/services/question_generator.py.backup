@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Tuple
 from datetime import datetime
 import random
 from sqlalchemy.orm import Session
-from ..models.models import Word
+from app.models import Word
 
 
 class QuestionDistributionCalculator:
@@ -148,11 +148,11 @@ class PromptGenerator:
         json_template = """
     {
         "worksheet_id": 1,
-        "worksheet_name": "any_name", 
+        "worksheet_name": "", 
         "worksheet_date": "2025-01-01",
         "worksheet_time": "10:00",
         "worksheet_duration": "60",
-        "worksheet_subject": "영어",
+        "worksheet_subject": "english",
         "worksheet_level": "{school_level}",
         "worksheet_grade": {grade},
         "total_questions": {total_questions},
@@ -166,25 +166,19 @@ class PromptGenerator:
                 "related_questions": [1, 2]
             }
         ],
-        "examples": [
-            {
-                "example_id": 1,
-                "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-                "original_content": "완전한 형태의 원본 예문",
-                "korean_translation": "원본 예문의 자연스러운 한글 번역",
-                "related_question": 1,
-            }
-        ],
         "questions": [
             {
                 "question_id": 1,
-                "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
                 "question_type": "객관식|단답형|서술형",
                 "question_subject": "독해|문법|어휘",
-                "question_difficulty": "상|중|하",
                 "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
+                "question_difficulty": "상|중|하",
+                "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
+                "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+                "example_original_content": "완전한 형태의 원본 예문",
+                "example_korean_translation": "원본 예문의 자연스러운 한글 번역",
+                "related_question": 1,
                 "question_passage_id": 1,
-                "question_example_id": 1,
                 "question_choices": [
                     "선택지 1",
                     "선택지 2",
@@ -416,7 +410,7 @@ review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
     def _get_text_type_formats(self, db: Session) -> str:
         """DB에서 텍스트 유형 형식을 가져옵니다."""
         try:
-            from app.models.models import TextType
+            from app.models import TextType
             text_types = db.query(TextType).all()
             
             if text_types:

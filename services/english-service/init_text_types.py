@@ -7,7 +7,7 @@
 
 from sqlalchemy.orm import sessionmaker
 from app.database import engine
-from app.models.models import TextType
+from app.models import TextType
 from datetime import datetime
 
 # 세션 생성

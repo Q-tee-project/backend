@@ -4,10 +4,10 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from app.database import init_db
 from app.core.config import get_settings, print_settings_summary
-from app.api.v1.health_router import router as health_router
-from app.api.v1.category_router import router as category_router
-from app.api.v1.worksheet_router import router as worksheet_router
-from app.api.v1.grading_router import router as grading_router
+from app.routers.health_router import router as health_router
+from app.routers.category_router import router as category_router
+from app.routers.worksheet_router import router as worksheet_router
+from app.routers.grading_router import router as grading_router
 
 # 설정 인스턴스 가져오기
 settings = get_settings()

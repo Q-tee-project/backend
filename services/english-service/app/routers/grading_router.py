@@ -4,14 +4,14 @@ from typing import List
 from datetime import datetime
 
 from app.database import get_db
-from app.schemas.schemas import (
+from app.schemas import (
     SubmissionRequest, GradingResultResponse, 
     GradingResultSummary, ReviewRequest
 )
-from app.models.models import (
-    Worksheet, GradingResult, QuestionResult, Passage, Example
+from app.models import (
+    Worksheet, GradingResult, QuestionResult, Passage
 )
-from app.services.new_grading_service import grade_worksheet_submission, review_ai_grading
+from app.services.grading.grading_service import grade_worksheet_submission, review_ai_grading
 
 router = APIRouter(tags=["Grading"])
 
@@ -111,7 +111,7 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             student_answers[qr.question_id] = qr.student_answer
         
         # 문제지 데이터도 함께 조회
-        from ...models.models import Worksheet, Passage, Example, Question
+        from app.models import Worksheet, Passage, Question
         worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == result.worksheet_id).first()
         
         if not worksheet:

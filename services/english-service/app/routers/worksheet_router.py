@@ -7,14 +7,14 @@ import uuid
 
 from app.database import get_db
 from app.core.config import get_settings
-from app.schemas.schemas import (
-    QuestionGenerationRequest, WorksheetSaveRequest, 
-    WorksheetResponse, WorksheetSummary
+from app.schemas.generation import WorksheetGenerationRequest
+from app.schemas.worksheet import (
+    WorksheetSaveRequest, WorksheetResponse, WorksheetSummary
 )
-from app.models.models import (
-    GradingResult, QuestionResult, Worksheet, Passage, Example, Question
+from app.models import (
+    GradingResult, QuestionResult, Worksheet, Passage, Question
 )
-from app.services.question_generator import PromptGenerator
+from app.services.generation.question_generator import PromptGenerator
 
 try:
     import google.generativeai as genai
@@ -26,19 +26,18 @@ except ImportError:
 router = APIRouter(tags=["Worksheets"])
 settings = get_settings()
 
-@router.post("/question-generate")
-async def receive_question_options(request: QuestionGenerationRequest, db: Session = Depends(get_db)):
+@router.post("/worksheet-generate")
+async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = Depends(get_db)):
     """사용자로부터 문제 생성 옵션을 입력받습니다."""
     print("🚨 함수 시작 - 요청이 서버에 도달했습니다!")
     
     try:
         print("\n" + "="*80)
         print("🎯 문제 생성 옵션 입력 받음!")
-        print("="*80)
         
-        print(f"🏫 학교급: {request.school_level}")
-        print(f"📚 학년: {request.grade}학년")
-        print(f"📊 총 문제 수: {request.total_questions}개")
+        print(f" 학교급: {request.school_level}")
+        print(f" 학년: {request.grade}학년")
+        print(f" 총 문제 수: {request.total_questions}개")
         
         print(f"\n🎯 선택된 영역: {', '.join(request.subjects)}")
         
@@ -188,16 +187,8 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
         return {
             "message": "문제지와 답안지 생성이 완료되었습니다!" if llm_response else "프롬프트가 생성되었습니다!",
             "status": "success",
-            "request_data": request.dict(),
-            "distribution_summary": distribution_summary,
             "llm_response": parsed_llm_response,  # 파싱된 객체 전달
             "llm_error": llm_error,
-            "subject_types_validation": {
-                "reading_types": subject_details.get('reading_types', []),
-                "grammar_categories": subject_details.get('grammar_categories', []),
-                "grammar_topics": subject_details.get('grammar_topics', []),
-                "vocabulary_categories": subject_details.get('vocabulary_categories', [])
-            }
         }
         
     except Exception as e:
@@ -209,10 +200,8 @@ async def receive_question_options(request: QuestionGenerationRequest, db: Sessi
 
 @router.post("/worksheets", response_model=Dict[str, Any])
 async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(get_db)):
-    """생성된 문제지와 답안지를 데이터베이스에 저장합니다."""
+    """생성된 문제지를 데이터베이스에 저장합니다."""
     print("🚨 저장 요청 시작!")
-    print(f"📥 요청 데이터 타입: {type(request)}")
-    print(f"📥 요청 데이터 내용: {request}")
     try:
         worksheet_data = request.worksheet_data
         
@@ -264,19 +253,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
             )
             db.add(db_passage)
         
-        # 3. Examples 저장
-        examples_data = worksheet_data.get('examples', [])
-        for example_data in examples_data:
-            db_example = Example(
-                worksheet_id=db_worksheet.worksheet_id,
-                example_id=example_data.get('example_id'),
-                example_content=example_data.get('example_content'),
-                original_content=example_data.get('original_content'),
-                korean_translation=example_data.get('korean_translation'),
-                related_question=example_data.get('related_question'),
-                created_at=datetime.now()
-            )
-            db.add(db_example)
+        # 3. Examples는 이제 Question 모델에 포함됨 (별도 저장 불필요)
         
         # 4. Questions 저장
         questions_data = worksheet_data.get('questions', [])
@@ -291,8 +268,10 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
                 question_detail_type=question_data.get('question_detail_type'),
                 question_choices=question_data.get('question_choices'),
                 passage_id=question_data.get('question_passage_id'),
-                example_id=question_data.get('question_example_id'),
                 correct_answer=question_data.get('correct_answer'),
+                example_content=question_data.get('example_content', ''),
+                example_original_content=question_data.get('example_original_content'),
+                example_korean_translation=question_data.get('example_korean_translation'),
                 explanation=question_data.get('explanation'),
                 learning_point=question_data.get('learning_point'),
                 created_at=datetime.now()
@@ -609,27 +588,7 @@ async def update_passage(worksheet_id: str, passage_id: int, request: Dict[str, 
         raise HTTPException(status_code=500, detail=f"지문 업데이트 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/examples/{example_id}")
-async def update_example(worksheet_id: str, example_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
-    """예문을 업데이트합니다."""
-    try:
-        example = db.query(Example).filter(
-            Example.worksheet_id == worksheet_id,
-            Example.example_id == example_id
-        ).first()
-        
-        if not example:
-            raise HTTPException(status_code=404, detail="예문을 찾을 수 없습니다.")
-        
-        example.example_content = request.get("example_content")
-        db.commit()
-        
-        return {"status": "success", "message": "예문이 업데이트되었습니다."}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"예문 업데이트 중 오류: {str(e)}")
+# 예문 업데이트는 이제 Question 모델을 통해 처리됨
 
 @router.put("/worksheets/{worksheet_id}/title")
 async def update_worksheet_title(worksheet_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
@@ -674,8 +633,7 @@ async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
         # 3. 지문 삭제
         db.query(Passage).filter(Passage.worksheet_id == worksheet_id).delete()
         
-        # 4. 예문 삭제
-        db.query(Example).filter(Example.worksheet_id == worksheet_id).delete()
+        # 4. 예문은 Question 모델에 포함되어 있으므로 별도 삭제 불필요
         
         # 5. 문제지 삭제
         db.delete(worksheet)

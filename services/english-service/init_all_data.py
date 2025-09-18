@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
 from app.database import engine
-from app.models.models import (
+from app.models import (
     GrammarCategory, GrammarTopic, GrammarAchievement,
     VocabularyCategory, Word, ReadingType, TextType
 )

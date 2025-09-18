@@ -53,7 +53,7 @@ class DifficultyDistribution(BaseModel):
     ratio: int = Field(..., ge=0, le=100, description="해당 난이도의 비율 (0-100%)")
 
 # 메인 문제 생성 요청 스키마
-class QuestionGenerationRequest(BaseModel):
+class WorksheetGenerationRequest(BaseModel):
     # 기본 정보
     school_level: str = Field(..., description="학교급")
     grade: int = Field(..., ge=1, le=3, description="학년")
