@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional, AsyncGenerator, List
 from celery.result import AsyncResult
 from datetime import datetime
@@ -112,7 +113,7 @@ async def get_generation_history(
     current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        history = math_service.get_generation_history(db, current_user["id"]=current_user["id"], skip=skip, limit=limit)
+        history = math_service.get_generation_history(db, user_id=current_user["id"], skip=skip, limit=limit)
         
         result = []
         for session in history:
@@ -143,7 +144,7 @@ async def get_generation_detail(
     current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        session = math_service.get_generation_detail(db, generation_id, current_user["id"]=current_user["id"])
+        session = math_service.get_generation_detail(db, generation_id, user_id=current_user["id"])
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -489,7 +490,7 @@ async def grade_worksheet(
         task = grade_problems_task.delay(
             worksheet_id=worksheet_id,
             image_data=image_data,
-            current_user["id"]=current_user["id"]
+            user_id=current_user["id"]
         )
         
         return {
@@ -538,7 +539,7 @@ async def grade_worksheet_canvas(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
             canvas_answers=canvas_answers,
-            current_user["id"]=current_user["id"]
+            user_id=current_user["id"]
         )
         
         print(f"✅ Celery 태스크 시작: {task.id}")
@@ -592,8 +593,9 @@ async def grade_worksheet_mixed(
         task = grade_problems_mixed_task.delay(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
-            handwritten_image_data=handwritten_image_data,
-            current_user["id"]=current_user["id"]
+            canvas_answers={},
+            user_id=current_user["id"],
+            handwritten_image_data=handwritten_image_data
         )
         
         return {

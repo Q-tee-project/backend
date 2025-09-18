@@ -25,6 +25,7 @@ from ..services.korean_generation_service import KoreanGenerationService
 from ..models.korean_generation import Assignment, AssignmentDeployment
 from ..tasks import generate_korean_problems_task, grade_korean_problems_task
 from ..celery_app import celery_app
+from sqlalchemy import func
 
 router = APIRouter()
 korean_service = KoreanGenerationService()
@@ -53,6 +54,65 @@ async def generate_korean_problems(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+
+@router.delete("/worksheets/{worksheet_id}")
+async def delete_worksheet(
+    worksheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
+):
+    """국어 워크시트 삭제"""
+    try:
+        from ..models.worksheet import Worksheet
+        from ..models.problem import Problem
+        from ..models.grading_result import KoreanGradingSession, KoreanProblemGradingResult
+
+        # 워크시트 조회 (권한 확인)
+        worksheet = db.query(Worksheet) \
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"]) \
+            .first()
+
+        if not worksheet:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="워크시트를 찾을 수 없습니다."
+            )
+
+        # 관련된 채점 결과 삭제
+        grading_sessions = db.query(KoreanGradingSession) \
+            .filter(KoreanGradingSession.worksheet_id == worksheet_id) \
+            .all()
+
+        for session in grading_sessions:
+            # 문제별 채점 결과 삭제
+            db.query(KoreanProblemGradingResult) \
+                .filter(KoreanProblemGradingResult.grading_session_id == session.id) \
+                .delete()
+            # 채점 세션 삭제
+            db.delete(session)
+
+        # 관련된 문제들 삭제
+        db.query(Problem).filter(Problem.worksheet_id == worksheet_id).delete()
+
+        # 워크시트 삭제
+        db.delete(worksheet)
+        db.commit()
+
+        return {
+            "message": "워크시트가 성공적으로 삭제되었습니다.",
+            "worksheet_id": worksheet_id,
+            "deleted_at": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"워크시트 삭제 중 오류 발생: {str(e)}"
         )
     except Exception as e:
         raise HTTPException(
