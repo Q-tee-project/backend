@@ -2,12 +2,11 @@ from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 
 
-# 세부영역 선택 스키마 (직접 내용 입력)
+# 세부영역 선택 스키마 (ID 기반)
 class SubjectDetails(BaseModel):
-    reading_types: Optional[List[str]] = Field(default=[], description="선택된 독해 유형들 (예: ['일반 글', '서신/소통', '대화문'])")
-    grammar_categories: Optional[List[str]] = Field(default=[], description="선택된 문법 카테고리들 (예: ['시제', '조동사', '관계사'])")
-    grammar_topics: Optional[List[str]] = Field(default=[], description="선택된 문법 토픽들 (예: ['현재완료', '과거완료', '미래완료'])")
-    vocabulary_categories: Optional[List[str]] = Field(default=[], description="선택된 어휘 카테고리들 (예: ['일상생활', '학교생활', '취미활동'])")
+    reading_types: Optional[List[int]] = Field(default=[], description="선택된 독해 유형 ID들 (예: [1, 2, 3])")
+    grammar_categories: Optional[List[int]] = Field(default=[], description="선택된 문법 카테고리 ID들 (예: [1, 2, 3])")
+    vocabulary_categories: Optional[List[int]] = Field(default=[], description="선택된 어휘 카테고리 ID들 (예: [1, 2, 3])")
 
 
 # 문제 비율 스키마

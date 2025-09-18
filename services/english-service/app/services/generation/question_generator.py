@@ -141,7 +141,7 @@ class PromptGenerator:
         format_lines = [f"{fmt['format']} : {fmt['count']}문제" for fmt in format_distribution]
         difficulty_lines = [f"난이도 {diff['difficulty']} 문제 : {diff['count']}문제" for diff in difficulty_distribution]
         subject_lines = [f"{subj['subject']} 문제 : {subj['count']}문제" for subj in subject_distribution]
-        subject_types_lines = self._generate_subject_types_lines(subject_distribution, subject_details)
+        subject_types_lines = self._generate_subject_types_lines(subject_distribution, subject_details, db)
         vocabulary_list = self._get_vocabulary_list(db, difficulty_distribution)
         
         # JSON 응답 템플릿 정의
@@ -377,7 +377,7 @@ review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
 - 문제 ID: 1, 2, 3 (단순한 숫자, integer)
 
 **정답 형식 규칙:**
-- 객관식 정답은 question_choices 배열의 인덱스 값(integer)으로 표시, 절대 "1", "2", "3" 형식으로 표시하지 마세요
+- 객관식 정답은 question_choices 배열의 인덱스 값+1(integer)으로 표시, 절대 "1", "2", "3" 형식으로 표시하지 마세요
 - 주관식, 서술형 정답은 반드시 텍스트로 표시
 
 ## 최종 검증 체크리스트 (응답 전 필수 확인!)
@@ -432,25 +432,85 @@ dialogue (대화문) : metadata: participants 배열, content: { speaker: '이�
 informational (정보성 양식) : content: title, paragraph, list, 그리고 key_value 쌍 (예: { key: '장소', value: '시청 앞' })
 review (리뷰/후기) : metadata: rating (별점), product_name 등"""
     
-    def _generate_subject_types_lines(self, subject_distribution: List[Dict], subject_details: Dict) -> List[str]:
-        """영역별 출제 유형 문자열을 생성합니다."""
+    def _generate_subject_types_lines(self, subject_distribution: List[Dict], subject_details: Dict, db: Session = None) -> List[str]:
+        """영역별 출제 유형 문자열을 DB에서 조회하여 생성합니다."""
         subject_types_lines = []
+
         for subj in subject_distribution:
             subject_name = subj['subject']
-            types = []
-            
-            if subject_name == '독해':
-                types = subject_details.get('reading_types', [])
-            elif subject_name == '문법':
-                categories = subject_details.get('grammar_categories', [])
-                topics = subject_details.get('grammar_topics', [])
-                types = categories + topics
-            elif subject_name == '어휘':
-                types = subject_details.get('vocabulary_categories', [])
-            
-            types_str = str(types) if types else "[]"
-            subject_types_lines.append(f"{subject_name} : {types_str}")
-        
+            types_str = ""
+
+            try:
+                if subject_name == '독해' and db:
+                    # DB에서 reading_types 조회
+                    from app.models.content import ReadingType
+                    reading_ids = subject_details.get('reading_types', [])
+                    if reading_ids:
+                        reading_types = db.query(ReadingType).filter(ReadingType.id.in_(reading_ids)).all()
+                        types_list = [f"{rt.name} : {rt.description}" for rt in reading_types]
+                        types_str = "\n".join([f"  {t}" for t in types_list])
+                    else:
+                        types_str = "  주제/제목/요지 추론, 세부 정보 파악, 내용 일치/불일치, 빈칸 추론 등"
+
+                elif subject_name == '어휘' and db:
+                    # DB에서 vocabulary_categories 조회
+                    from app.models.vocabulary import VocabularyCategory
+                    vocab_ids = subject_details.get('vocabulary_categories', [])
+                    if vocab_ids:
+                        vocab_categories = db.query(VocabularyCategory).filter(VocabularyCategory.id.in_(vocab_ids)).all()
+                        types_list = [f"{vc.name} : {vc.learning_objective}" for vc in vocab_categories]
+                        types_str = "\n".join([f"  {t}" for t in types_list])
+                    else:
+                        types_str = "  개인 및 주변 생활 어휘, 사회 및 공공 주제 어휘, 추상적 개념 및 감정 등"
+
+                elif subject_name == '문법' and db:
+                    # DB에서 grammar_categories로 해당 grammar_topics 조회
+                    from app.models.grammar import GrammarCategory, GrammarTopic
+
+                    category_ids = subject_details.get('grammar_categories', [])
+                    types_list = []
+
+                    if category_ids:
+                        categories = db.query(GrammarCategory).filter(GrammarCategory.id.in_(category_ids)).all()
+                        for category in categories:
+                            types_list.append(f"▶ {category.name}")
+
+                            # 해당 카테고리의 모든 토픽들 조회
+                            category_topics = db.query(GrammarTopic).filter(
+                                GrammarTopic.category_id == category.id
+                            ).all()
+
+                            for topic in category_topics:
+                                types_list.append(f"  • {topic.name} : {topic.learning_objective}")
+
+                    if types_list:
+                        types_str = "\n".join(types_list)
+                    else:
+                        types_str = "  ▶ 문장의 기초\n  • 영어의 8품사, 문장의 5요소, 문장의 5형식\n  ▶ 동사와 시제\n  • be동사, 일반동사, 현재완료시제 등"
+
+                else:
+                    # DB 없거나 기타 경우 기본값
+                    if subject_name == '독해':
+                        types_str = "  주제/제목/요지 추론, 세부 정보 파악, 내용 일치/불일치, 빈칸 추론 등"
+                    elif subject_name == '어휘':
+                        types_str = "  개인 및 주변 생활 어휘, 사회 및 공공 주제 어휘, 추상적 개념 및 감정 등"
+                    elif subject_name == '문법':
+                        types_str = "  ▶ 문장의 기초\n  • 영어의 8품사, 문장의 5요소, 문장의 5형식\n  ▶ 동사와 시제\n  • be동사, 일반동사, 현재완료시제 등"
+                    else:
+                        types_str = "  기본 유형"
+
+            except Exception as e:
+                print(f"DB 조회 오류 ({subject_name}): {e}")
+                # 오류 시 기본값
+                if subject_name == '독해':
+                    types_str = "  주제/제목/요지 추론, 세부 정보 파악, 내용 일치/불일치, 빈칸 추론 등"
+                elif subject_name == '어휘':
+                    types_str = "  개인 및 주변 생활 어휘, 사회 및 공공 주제 어휘, 추상적 개념 및 감정 등"
+                elif subject_name == '문법':
+                    types_str = "  ▶ 문장의 기초\n  • 영어의 8품사, 문장의 5요소, 문장의 5형식\n  ▶ 동사와 시제\n  • be동사, 일반동사, 현재완료시제 등"
+
+            subject_types_lines.append(f"- {subject_name} :\n{types_str}")
+
         return subject_types_lines
     
     def _get_vocabulary_list(self, db: Session, difficulty_distribution: List[Dict]) -> str:

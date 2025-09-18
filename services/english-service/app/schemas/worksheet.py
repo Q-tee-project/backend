@@ -3,9 +3,49 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
-# 문제지 저장 요청 스키마
+# 지문 저장 스키마
+class PassageSaveData(BaseModel):
+    passage_id: int
+    passage_type: str
+    passage_content: Dict[str, Any]  # JSON 객체
+    original_content: Dict[str, Any]  # JSON 객체
+    korean_translation: Dict[str, Any]  # JSON 객체
+    related_questions: List[int]
+
+
+# 문제 저장 스키마
+class QuestionSaveData(BaseModel):
+    question_id: int
+    question_type: str
+    question_subject: str
+    question_detail_type: str
+    question_difficulty: str
+    question_text: str
+    example_content: Optional[str] = None
+    example_original_content: Optional[str] = None
+    example_korean_translation: Optional[str] = None
+    related_question: Optional[int] = None
+    question_passage_id: Optional[int] = None
+    question_choices: Optional[List[str]] = None
+    correct_answer: Any  # int for 객관식, str for others
+    explanation: str
+    learning_point: str
+
+
+# 문제지 저장 요청 스키마 (프론트 형식에 맞춤)
 class WorksheetSaveRequest(BaseModel):
-    worksheet_data: Dict[str, Any] = Field(..., description="생성된 통합 문제지 JSON 데이터 (문제지+답안지)")
+    worksheet_id: str
+    teacher_id: int
+    worksheet_name: str
+    worksheet_date: str
+    worksheet_time: str
+    worksheet_duration: str
+    worksheet_subject: str
+    worksheet_level: str
+    worksheet_grade: int
+    total_questions: int
+    passages: List[PassageSaveData]
+    questions: List[QuestionSaveData]
 
 
 # 지문 스키마

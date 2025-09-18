@@ -1,5 +1,3 @@
-from .question_generator import QuestionGenerator
-from .prompt_builder import PromptBuilder
-from .distribution_calculator import DistributionCalculator
+from .question_generator import PromptGenerator, QuestionDistributionCalculator
 
-__all__ = ["QuestionGenerator", "PromptBuilder", "DistributionCalculator"]
+__all__ = ["PromptGenerator", "QuestionDistributionCalculator"]

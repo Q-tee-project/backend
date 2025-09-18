@@ -46,16 +46,14 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
             print("\n📋 세부 영역 선택:")
             
             if request.subject_details.reading_types:
-                print(f"  📖 독해 유형: {', '.join(request.subject_details.reading_types)}")
+                print(f"  📖 독해 유형: {', '.join(map(str, request.subject_details.reading_types))}")
             
             if request.subject_details.grammar_categories:
-                print(f"  📝 문법 카테고리: {', '.join(request.subject_details.grammar_categories)}")
+                print(f"  📝 문법 카테고리: {', '.join(map(str, request.subject_details.grammar_categories))}")
                 
-            if request.subject_details.grammar_topics:
-                print(f"  📝 문법 토픽: {', '.join(request.subject_details.grammar_topics)}")
             
             if request.subject_details.vocabulary_categories:
-                print(f"  📚 어휘 카테고리: {', '.join(request.subject_details.vocabulary_categories)}")
+                print(f"  📚 어휘 카테고리: {', '.join(map(str, request.subject_details.vocabulary_categories))}")
         
         # 영역별 비율 출력
         if request.subject_ratios:
@@ -198,22 +196,20 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
             "status": "error"
         }
 
-@router.post("/worksheets", response_model=Dict[str, Any])
+@router.post("/worksheet-save", response_model=Dict[str, Any])
 async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(get_db)):
     """생성된 문제지를 데이터베이스에 저장합니다."""
     print("🚨 저장 요청 시작!")
     try:
-        worksheet_data = request.worksheet_data
-        
-        # 문제지 메타데이터 추출
-        worksheet_id = str(uuid.uuid4())  # UUID로 자동 생성
-        teacher_id = worksheet_data.get('teacher_id')
-        worksheet_name = worksheet_data.get('worksheet_name')
-        school_level = worksheet_data.get('worksheet_level')
-        grade = str(worksheet_data.get('worksheet_grade'))
-        subject = worksheet_data.get('worksheet_subject', '영어')
-        total_questions = worksheet_data.get('total_questions')
-        duration = worksheet_data.get('worksheet_duration')
+        # 문제지 메타데이터는 이제 직접 접근 가능
+        worksheet_id = request.worksheet_id
+        teacher_id = request.teacher_id
+        worksheet_name = request.worksheet_name
+        school_level = request.worksheet_level
+        grade = str(request.worksheet_grade)
+        subject = request.worksheet_subject
+        total_questions = request.total_questions
+        duration = request.worksheet_duration
         
         print(f"🆔 생성된 워크시트 UUID: {worksheet_id}")
         
@@ -227,6 +223,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         # 1. Worksheet 생성
         db_worksheet = Worksheet(
             worksheet_id=worksheet_id,
+            teacher_id=teacher_id,
             worksheet_name=worksheet_name,
             school_level=school_level,
             grade=grade,
@@ -239,16 +236,15 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         db.flush()
         
         # 2. Passages 저장
-        passages_data = worksheet_data.get('passages', [])
-        for passage_data in passages_data:
+        for passage_data in request.passages:
             db_passage = Passage(
                 worksheet_id=db_worksheet.worksheet_id,
-                passage_id=passage_data.get('passage_id'),
-                passage_type=passage_data.get('passage_type'),
-                passage_content=passage_data.get('passage_content'),
-                original_content=passage_data.get('original_content'),
-                korean_translation=passage_data.get('korean_translation'),
-                related_questions=passage_data.get('related_questions', []),
+                passage_id=passage_data.passage_id,
+                passage_type=passage_data.passage_type,
+                passage_content=passage_data.passage_content,
+                original_content=passage_data.original_content,
+                korean_translation=passage_data.korean_translation,
+                related_questions=passage_data.related_questions,
                 created_at=datetime.now()
             )
             db.add(db_passage)
@@ -256,24 +252,23 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         # 3. Examples는 이제 Question 모델에 포함됨 (별도 저장 불필요)
         
         # 4. Questions 저장
-        questions_data = worksheet_data.get('questions', [])
-        for question_data in questions_data:
+        for question_data in request.questions:
             db_question = Question(
                 worksheet_id=db_worksheet.worksheet_id,
-                question_id=question_data.get('question_id'),
-                question_text=question_data.get('question_text'),
-                question_type=question_data.get('question_type'),
-                question_subject=question_data.get('question_subject'),
-                question_difficulty=question_data.get('question_difficulty'),
-                question_detail_type=question_data.get('question_detail_type'),
-                question_choices=question_data.get('question_choices'),
-                passage_id=question_data.get('question_passage_id'),
-                correct_answer=question_data.get('correct_answer'),
-                example_content=question_data.get('example_content', ''),
-                example_original_content=question_data.get('example_original_content'),
-                example_korean_translation=question_data.get('example_korean_translation'),
-                explanation=question_data.get('explanation'),
-                learning_point=question_data.get('learning_point'),
+                question_id=question_data.question_id,
+                question_text=question_data.question_text,
+                question_type=question_data.question_type,
+                question_subject=question_data.question_subject,
+                question_difficulty=question_data.question_difficulty,
+                question_detail_type=question_data.question_detail_type,
+                question_choices=question_data.question_choices,
+                passage_id=question_data.question_passage_id,
+                correct_answer=question_data.correct_answer,
+                example_content=question_data.example_content,
+                example_original_content=question_data.example_original_content,
+                example_korean_translation=question_data.example_korean_translation,
+                explanation=question_data.explanation,
+                learning_point=question_data.learning_point,
                 created_at=datetime.now()
             )
             db.add(db_question)

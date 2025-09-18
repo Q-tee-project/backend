@@ -11,7 +11,7 @@ from app.schemas import (
 from app.models import (
     Worksheet, GradingResult, QuestionResult, Passage
 )
-from app.services.grading.grading_service import grade_worksheet_submission, review_ai_grading
+from app.services.grading.grading_service import GradingService
 
 router = APIRouter(tags=["Grading"])
 
@@ -33,8 +33,9 @@ async def submit_answers_and_grade(
         completion_time = submission_data.completion_time
         
         # 새로운 채점 서비스로 채점 수행
-        grading_result = await grade_worksheet_submission(
-            db, worksheet_id, student_name, answers, completion_time
+        grading_service = GradingService(db)
+        grading_result = await grading_service.grade_worksheet(
+            worksheet_id, student_name, answers, completion_time
         )
         
         # 결과 반환 (grading_result 내용을 직접 반환)
@@ -198,10 +199,22 @@ async def update_grading_review(
 ):
     """AI 채점 결과의 검수를 업데이트합니다."""
     try:
-        # 새로운 검수 서비스 사용
-        review_result = await review_ai_grading(
-            db, result_id, review_data.question_results, review_data.reviewed_by
-        )
+        # 검수 기능 (임시 구현)
+        grading_result = db.query(GradingResult).filter(
+            GradingResult.result_id == result_id
+        ).first()
+
+        if not grading_result:
+            raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
+
+        # 검수 완료 상태로 업데이트
+        grading_result.is_reviewed = True
+        grading_result.reviewed_by = review_data.reviewed_by
+        grading_result.reviewed_at = datetime.now()
+
+        db.commit()
+
+        review_result = {"status": "success", "message": "검수가 완료되었습니다."}
         
         return review_result
         

@@ -19,7 +19,7 @@ app = FastAPI(
     version=settings.app_version,
     docs_url="/docs",  # Swagger UI 경로
     redoc_url="/redoc",  # ReDoc 경로
-    openapi_url="/api/v1/openapi.json",  # OpenAPI JSON 경로
+    openapi_url="/api/openapi.json",  # OpenAPI JSON 경로
     openapi_tags=[
         {
             "name": "Health",
@@ -49,14 +49,16 @@ app.add_middleware(
     allow_headers=settings.allowed_headers,
 )
 
-# 정적 파일 서빙 (HTML, CSS, JS 등)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# 정적 파일 서빙 (HTML, CSS, JS 등) - static 폴더가 있을 때만
+import os
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# API v1 라우터 등록 (깔끔한 단일 버전)
-app.include_router(health_router, prefix="/api/v1")
-app.include_router(category_router, prefix="/api/v1")
-app.include_router(worksheet_router, prefix="/api/v1")
-app.include_router(grading_router, prefix="/api/v1")
+# API 라우터 등록
+app.include_router(health_router, prefix="/api/english")
+app.include_router(category_router, prefix="/api/english")
+app.include_router(worksheet_router, prefix="/api/english")
+app.include_router(grading_router, prefix="/api/english")
 
 # 루트 경로에서 HTML 페이지 제공
 @app.get("/")
