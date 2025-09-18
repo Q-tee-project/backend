@@ -8,6 +8,7 @@ import asyncio
 import json
 
 from ..database import get_db
+from ..core.auth import get_current_user, get_current_teacher, get_current_student
 from ..schemas.math_generation import (
     MathProblemGenerationRequest,
     SchoolLevel,
@@ -76,12 +77,13 @@ async def get_chapters_by_unit(unit_name: str = Query(..., description="대단�
 @router.post("/generate")
 async def generate_math_problems(
     request: MathProblemGenerationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         task = generate_math_problems_task.delay(
             request.model_dump(),
-            1
+            current_user["id"]
         )
         
         return {
@@ -106,10 +108,11 @@ async def generate_math_problems(
 async def get_generation_history(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        history = math_service.get_generation_history(db, user_id=1, skip=skip, limit=limit)
+        history = math_service.get_generation_history(db, current_user["id"]=current_user["id"], skip=skip, limit=limit)
         
         result = []
         for session in history:
@@ -136,10 +139,11 @@ async def get_generation_history(
 @router.get("/generation/{generation_id}")
 async def get_generation_detail(
     generation_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        session = math_service.get_generation_detail(db, generation_id, user_id=1)
+        session = math_service.get_generation_detail(db, generation_id, current_user["id"]=current_user["id"])
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -334,14 +338,14 @@ async def stream_task_status(task_id: str):
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.teacher_id == current_user["id"])\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -379,15 +383,15 @@ async def get_worksheets(
 @router.get("/worksheets/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -455,7 +459,8 @@ async def get_worksheet_detail(
 async def grade_worksheet(
     worksheet_id: int,
     answer_sheet: UploadFile = File(..., description="답안지 이미지 파일"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         from ..models.worksheet import Worksheet
@@ -484,7 +489,7 @@ async def grade_worksheet(
         task = grade_problems_task.delay(
             worksheet_id=worksheet_id,
             image_data=image_data,
-            user_id=1
+            current_user["id"]=current_user["id"]
         )
         
         return {
@@ -507,7 +512,8 @@ async def grade_worksheet(
 async def grade_worksheet_canvas(
     worksheet_id: int,
     request: dict,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         print(f"🔍 채점 요청 시작: worksheet_id={worksheet_id}")
@@ -532,7 +538,7 @@ async def grade_worksheet_canvas(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
             canvas_answers=canvas_answers,
-            user_id=1
+            current_user["id"]=current_user["id"]
         )
         
         print(f"✅ Celery 태스크 시작: {task.id}")
@@ -561,7 +567,8 @@ async def grade_worksheet_mixed(
     worksheet_id: int,
     multiple_choice_answers: dict = {},
     handwritten_answer_sheet: Optional[UploadFile] = File(None, description="손글씨 답안지 이미지 (서술형/단답형)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         from ..models.worksheet import Worksheet
@@ -586,7 +593,7 @@ async def grade_worksheet_mixed(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
             handwritten_image_data=handwritten_image_data,
-            user_id=1
+            current_user["id"]=current_user["id"]
         )
         
         return {
@@ -611,15 +618,15 @@ async def grade_worksheet_mixed(
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -981,8 +988,8 @@ async def regenerate_single_problem(
 @router.delete("/worksheets/{worksheet_id}")
 async def delete_worksheet(
     worksheet_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """워크시트 삭제"""
     try:
@@ -992,7 +999,7 @@ async def delete_worksheet(
         
         # 워크시트 조회
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -1042,8 +1049,8 @@ async def delete_worksheet(
 @router.delete("/problems/{problem_id}")
 async def delete_problem(
     problem_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """개별 문제 삭제"""
     try:
@@ -1060,7 +1067,7 @@ async def delete_problem(
         
         # 워크시트 조회 (권한 확인)
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -1363,7 +1370,8 @@ async def get_assignment_detail_for_student(
 @router.post("/test-sessions", response_model=TestSessionResponse)
 async def create_test_session(
     request: TestSessionCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_student)
 ):
     """테스트 세션 생성"""
     try:
@@ -1381,8 +1389,7 @@ async def create_test_session(
         # 세션 ID 생성
         session_id = str(uuid.uuid4())
 
-        # TODO: 현재는 하드코딩된 student_id 사용, 실제로는 JWT 토큰에서 추출해야 함
-        student_id = 1
+        student_id = current_user["id"]
 
         # 테스트 세션 생성
         test_session = TestSession(

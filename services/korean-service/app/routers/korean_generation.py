@@ -9,6 +9,7 @@ import json
 import uuid
 
 from ..database import get_db
+from ..core.auth import get_current_user, get_current_teacher, get_current_student
 from ..schemas.korean_generation import (
     KoreanProblemGenerationRequest,
     KoreanWorksheetCreate,
@@ -32,14 +33,14 @@ korean_service = KoreanGenerationService()
 @router.post("/generate")
 async def generate_korean_problems(
     request: KoreanProblemGenerationRequest,
-    user_id: int = Query(..., description="사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 문제 생성"""
     try:
         task = generate_korean_problems_task.delay(
             request_data=request.model_dump(),
-            user_id=user_id
+            user_id=current_user["id"]
         )
 
         return {
@@ -64,12 +65,12 @@ async def generate_korean_problems(
 async def get_generation_history(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    user_id: int = Query(..., description="사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 문제 생성 이력 조회"""
     try:
-        history = korean_service.get_generation_history(db, user_id=user_id, skip=skip, limit=limit)
+        history = korean_service.get_generation_history(db, user_id=current_user["id"], skip=skip, limit=limit)
 
         result = []
         for session in history:
@@ -96,12 +97,12 @@ async def get_generation_history(
 @router.get("/generation/{generation_id}")
 async def get_generation_detail(
     generation_id: str,
-    user_id: int = Query(..., description="사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 문제 생성 세션 상세 조회"""
     try:
-        session = korean_service.get_generation_detail(db, generation_id, user_id=user_id)
+        session = korean_service.get_generation_detail(db, generation_id, user_id=current_user["id"])
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -220,15 +221,15 @@ async def get_task_status(task_id: str):
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 워크시트 목록 조회"""
     try:
         from ..models.worksheet import Worksheet
 
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.teacher_id == current_user["id"])\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -267,8 +268,8 @@ async def get_worksheets(
 @router.get("/worksheets/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 워크시트 상세 조회"""
     try:
@@ -276,7 +277,7 @@ async def get_worksheet_detail(
         from ..models.problem import Problem
 
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
 
         if not worksheet:
@@ -344,15 +345,15 @@ async def get_worksheet_detail(
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """국어 워크시트 업데이트"""
     try:
         from ..models.worksheet import Worksheet
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:

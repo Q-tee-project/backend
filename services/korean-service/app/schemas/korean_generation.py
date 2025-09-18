@@ -15,8 +15,6 @@ class KoreanType(str, Enum):
 
 class QuestionType(str, Enum):
     MULTIPLE_CHOICE = "객관식"
-    ESSAY = "서술형"
-    SHORT_ANSWER = "단답형"
 
 class Difficulty(str, Enum):
     HIGH = "상"
@@ -33,7 +31,7 @@ class KoreanProblemGenerationRequest(BaseModel):
     user_text: Optional[str] = Field(None, max_length=500, description="사용자 요구사항")
 
     # 비율 설정 (단일 도메인 내에서만)
-    question_type_ratio: Optional[Dict[str, int]] = Field(None, description="문제 형식별 비율")
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = Field(None, description="난이도별 비율")
 
 class KoreanWorksheetCreate(BaseModel):
@@ -45,7 +43,7 @@ class KoreanWorksheetCreate(BaseModel):
     difficulty: Difficulty
     problem_count: int
     user_text: Optional[str] = None
-    question_type_ratio: Optional[Dict[str, int]] = None
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = None
 
 class KoreanWorksheetResponse(BaseModel):

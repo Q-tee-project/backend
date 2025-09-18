@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import korean_generation
+from app.routers import korean_generation, market_integration
 from app.database import engine
 from app.models import Base
 # Import all models to ensure they are registered with Base.metadata
@@ -15,13 +15,14 @@ app = FastAPI(title="Korean Problem Generation API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "file://", "*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "file://", "*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 app.include_router(korean_generation.router, prefix="/api/korean-generation", tags=["korean-generation"])
+app.include_router(market_integration.router, tags=["market-integration"])
 
 @app.get("/")
 async def root():
@@ -29,4 +30,6 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8004)
+    import os
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -6,12 +6,14 @@ CREATE SCHEMA IF NOT EXISTS math_service;
 CREATE SCHEMA IF NOT EXISTS english_service;
 CREATE SCHEMA IF NOT EXISTS auth_service;
 CREATE SCHEMA IF NOT EXISTS korean_service;
+CREATE SCHEMA IF NOT EXISTS market_service;
 
 -- 스키마 권한 설정
 GRANT USAGE ON SCHEMA math_service TO PUBLIC;
 GRANT USAGE ON SCHEMA english_service TO PUBLIC;
 GRANT USAGE ON SCHEMA auth_service TO PUBLIC;
 GRANT USAGE ON SCHEMA korean_service TO PUBLIC;
+GRANT USAGE ON SCHEMA market_service TO PUBLIC;
 
 -- 기존 public 스키마의 테이블들을 적절한 스키마로 이동
 -- (테이블이 존재할 때만 실행)
@@ -93,3 +95,4 @@ COMMENT ON SCHEMA math_service IS '수학 문제 생성 및 채점 관련 테이
 COMMENT ON SCHEMA english_service IS '영어 문법, 어휘, 독해 관련 테이블들';
 COMMENT ON SCHEMA auth_service IS '사용자 인증 및 계정 관리 관련 테이블들';
 COMMENT ON SCHEMA korean_service IS '국어 문제 생성 및 채점 관련 테이블들';
+COMMENT ON SCHEMA market_service IS '마켓플레이스 상품 및 거래 관련 테이블들';

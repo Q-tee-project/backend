@@ -100,14 +100,41 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - PORT=8004
+      - PORT=8000
     ports:
-      - "8004:8004"
+      - "8004:8000"
     depends_on:
       - postgres
       - redis
     volumes:
       - ./services/korean-service:/app
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
+  # Market Service
+  market-service:
+    build:
+      context: ./services/market-service
+      dockerfile: Dockerfile
+    container_name: market_service
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
+      - KOREAN_SERVICE_URL=http://korean-service:8000
+      - MATH_SERVICE_URL=http://math-service:8000
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - PORT=8000
+    ports:
+      - "8005:8000"
+    depends_on:
+      - postgres
+      - korean-service
+      - math-service
+      - auth-service
+    volumes:
+      - ./services/market-service:/app
+      - ./uploads:/app/uploads
     networks:
       - qt_project_network
     restart: unless-stopped
