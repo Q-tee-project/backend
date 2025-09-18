@@ -297,10 +297,13 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=f"문제지 저장 중 오류: {str(e)}")
 
 @router.get("/worksheets", response_model=List[WorksheetSummary])
-async def get_worksheets(db: Session = Depends(get_db)):
-    """저장된 문제지 목록을 조회합니다."""
+async def get_worksheets(teacher_id: int, db: Session = Depends(get_db)):
+    """특정 교사의 저장된 문제지 목록을 조회합니다."""
     try:
-        worksheets = db.query(Worksheet).order_by(Worksheet.created_at.desc()).all()
+        worksheets = db.query(Worksheet).filter(
+            Worksheet.teacher_id == teacher_id
+        ).order_by(Worksheet.created_at.desc()).all()
+
         return [
             WorksheetSummary(
                 id=worksheet.worksheet_id,
