@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import Teacher, Student, ClassRoom, StudentJoinRequest
 from app.schemas.classroom import (
-    ClassroomCreate, ClassroomResponse, StudentJoinRequestCreate,
-    StudentJoinRequestResponse, StudentDirectRegister, JoinRequestApproval
+    ClassroomCreate, ClassroomResponse, ClassroomUpdate, StudentJoinRequestCreate,
+    StudentJoinRequestResponse, StudentDirectRegister, JoinRequestApproval,
+    ClassroomWithTeacherResponse
 )
 from app.schemas.auth import StudentResponse
 from app.routers.auth import get_current_teacher, get_current_student
@@ -231,4 +232,156 @@ async def get_classroom_students(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal error: {str(e)}"
+        )
+
+
+# ===== 새로운 클래스룸 관리 API =====
+
+@router.put("/{classroom_id}", response_model=ClassroomResponse)
+async def update_classroom(
+    classroom_id: int,
+    classroom_update: ClassroomUpdate,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher)
+):
+    """클래스룸 정보 수정 (교사만 가능)"""
+    try:
+        # 클래스룸 존재 확인
+        classroom = db.query(ClassRoom).filter(ClassRoom.id == classroom_id).first()
+        if not classroom:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="클래스룸을 찾을 수 없습니다"
+            )
+
+        # 교사 권한 확인
+        if classroom.teacher_id != current_teacher.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 클래스룸을 수정할 권한이 없습니다"
+            )
+
+        # 클래스룸 정보 업데이트
+        update_data = classroom_update.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(classroom, field, value)
+
+        db.commit()
+        db.refresh(classroom)
+
+        logger.info(f"Teacher {current_teacher.id} updated classroom {classroom_id}")
+        return classroom
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating classroom {classroom_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"클래스룸 수정 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.delete("/{classroom_id}")
+async def delete_classroom(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher)
+):
+    """클래스룸 삭제 (교사만 가능)"""
+    try:
+        # 클래스룸 존재 확인
+        classroom = db.query(ClassRoom).filter(ClassRoom.id == classroom_id).first()
+        if not classroom:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="클래스룸을 찾을 수 없습니다"
+            )
+
+        # 교사 권한 확인
+        if classroom.teacher_id != current_teacher.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 클래스룸을 삭제할 권한이 없습니다"
+            )
+
+        # 소프트 삭제 (is_active = False)
+        classroom.is_active = False
+        db.commit()
+
+        logger.info(f"Teacher {current_teacher.id} deleted classroom {classroom_id}")
+        return {"message": "클래스룸이 삭제되었습니다"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting classroom {classroom_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"클래스룸 삭제 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.get("/student/{student_id}/classrooms-with-teachers", response_model=List[ClassroomWithTeacherResponse])
+async def get_student_classrooms_with_teachers(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student)
+):
+    """학생의 클래스룸 목록과 교사 정보 조회 (본인만 가능)"""
+    try:
+        # 본인 확인
+        if current_student.id != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="본인의 정보만 조회할 수 있습니다"
+            )
+
+        # 학생이 승인된 클래스룸 목록 조회 (교사 정보 포함)
+        classrooms = db.query(ClassRoom).join(
+            StudentJoinRequest,
+            ClassRoom.id == StudentJoinRequest.classroom_id
+        ).join(
+            Teacher,
+            ClassRoom.teacher_id == Teacher.id
+        ).filter(
+            StudentJoinRequest.student_id == student_id,
+            StudentJoinRequest.status == "approved",
+            ClassRoom.is_active == True
+        ).all()
+
+        # 각 클래스룸에 교사 정보 포함하여 응답
+        result = []
+        for classroom in classrooms:
+            classroom_data = {
+                "id": classroom.id,
+                "name": classroom.name,
+                "school_level": classroom.school_level,
+                "grade": classroom.grade,
+                "class_code": classroom.class_code,
+                "is_active": classroom.is_active,
+                "created_at": classroom.created_at,
+                "teacher": {
+                    "id": classroom.teacher.id,
+                    "username": classroom.teacher.username,
+                    "name": classroom.teacher.name,
+                    "email": classroom.teacher.email,
+                    "phone": classroom.teacher.phone,
+                    "is_active": classroom.teacher.is_active,
+                    "created_at": classroom.teacher.created_at
+                }
+            }
+            result.append(classroom_data)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting classrooms for student {student_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"클래스룸 정보 조회 중 오류가 발생했습니다: {str(e)}"
         )
