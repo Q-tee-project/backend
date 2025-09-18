@@ -9,16 +9,21 @@ import json
 
 from ..database import get_db
 from ..schemas.math_generation import (
-    MathProblemGenerationRequest, 
+    MathProblemGenerationRequest,
     SchoolLevel,
     AssignmentCreate,
     AssignmentResponse,
     AssignmentDeployRequest,
     AssignmentDeploymentResponse,
-    StudentAssignmentResponse
+    StudentAssignmentResponse,
+    TestSessionCreateRequest,
+    TestSessionResponse,
+    TestAnswerRequest,
+    TestSubmissionRequest,
+    TestSubmissionResponse
 )
 from ..services.math_generation_service import MathGenerationService
-from ..models.math_generation import Assignment, AssignmentDeployment
+from ..models.math_generation import Assignment, AssignmentDeployment, TestSession, TestAnswer
 from ..tasks import generate_math_problems_task, grade_problems_task, grade_problems_mixed_task
 from ..celery_app import celery_app
 
@@ -75,8 +80,8 @@ async def generate_math_problems(
 ):
     try:
         task = generate_math_problems_task.delay(
-            request_data=request.model_dump(),
-            user_id=1
+            request.model_dump(),
+            1
         )
         
         return {
@@ -1202,19 +1207,24 @@ async def get_student_assignments(
     try:
         print(f"🔍 학생 과제 목록 조회 - student_id: {student_id}")
         
-        # 학생이 속한 클래스룸 확인
-        from ..models.user import StudentJoinRequest
-        student_classrooms = db.query(StudentJoinRequest).filter(
-            StudentJoinRequest.student_id == student_id,
-            StudentJoinRequest.status == "approved"
-        ).all()
+        # 학생이 속한 클래스룸 확인 (auth_service 스키마의 테이블 직접 접근)
+        from sqlalchemy import text
+        query = text("""
+            SELECT classroom_id
+            FROM auth_service.student_join_requests
+            WHERE student_id = :student_id AND status = 'approved'
+        """)
+        result = db.execute(query, {"student_id": student_id})
+        student_classrooms = result.fetchall()
+
+        # classroom_id 목록 추출
+        classroom_ids = [row[0] for row in student_classrooms]
         
         print(f"📚 학생이 속한 클래스룸 수: {len(student_classrooms)}")
-        for classroom in student_classrooms:
-            print(f"  - 클래스룸 ID: {classroom.classroom_id}")
-        
+        for classroom_id in classroom_ids:
+            print(f"  - 클래스룸 ID: {classroom_id}")
+
         # 학생이 속한 클래스룸의 과제 배포 정보 조회
-        classroom_ids = [c.classroom_id for c in student_classrooms]
         print(f"📚 조회할 클래스룸 ID 목록: {classroom_ids}")
         
         if not classroom_ids:
@@ -1345,4 +1355,178 @@ async def get_assignment_detail_for_student(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"과제 상세 정보 조회 중 오류 발생: {str(e)}"
+        )
+
+
+# ===== 테스트 세션 관련 라우터 =====
+
+@router.post("/test-sessions", response_model=TestSessionResponse)
+async def create_test_session(
+    request: TestSessionCreateRequest,
+    db: Session = Depends(get_db)
+):
+    """테스트 세션 생성"""
+    try:
+        import uuid
+        from datetime import datetime
+
+        # 과제 존재 확인
+        assignment = db.query(Assignment).filter(Assignment.id == request.assignment_id).first()
+        if not assignment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="과제를 찾을 수 없습니다"
+            )
+
+        # 세션 ID 생성
+        session_id = str(uuid.uuid4())
+
+        # TODO: 현재는 하드코딩된 student_id 사용, 실제로는 JWT 토큰에서 추출해야 함
+        student_id = 1
+
+        # 테스트 세션 생성
+        test_session = TestSession(
+            session_id=session_id,
+            assignment_id=request.assignment_id,
+            student_id=student_id,
+            status="started"
+        )
+
+        db.add(test_session)
+        db.commit()
+        db.refresh(test_session)
+
+        return TestSessionResponse(
+            session_id=test_session.session_id,
+            assignment_id=test_session.assignment_id,
+            student_id=test_session.student_id,
+            started_at=test_session.started_at.isoformat(),
+            status=test_session.status
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"테스트 세션 생성 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/test-answers")
+async def save_test_answer(
+    request: TestAnswerRequest,
+    db: Session = Depends(get_db)
+):
+    """테스트 답안 저장"""
+    try:
+        # 세션 존재 확인
+        test_session = db.query(TestSession).filter(
+            TestSession.session_id == request.session_id
+        ).first()
+
+        if not test_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="테스트 세션을 찾을 수 없습니다"
+            )
+
+        # 기존 답안이 있는지 확인
+        existing_answer = db.query(TestAnswer).filter(
+            TestAnswer.session_id == request.session_id,
+            TestAnswer.problem_id == request.problem_id
+        ).first()
+
+        if existing_answer:
+            # 기존 답안 업데이트
+            existing_answer.answer = request.answer
+            existing_answer.updated_at = func.now()
+        else:
+            # 새 답안 생성
+            test_answer = TestAnswer(
+                session_id=request.session_id,
+                problem_id=request.problem_id,
+                answer=request.answer
+            )
+            db.add(test_answer)
+
+        db.commit()
+
+        return {"message": "답안이 저장되었습니다", "success": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"답안 저장 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/test-sessions/{session_id}/submit", response_model=TestSubmissionResponse)
+async def submit_test(
+    session_id: str,
+    request: TestSubmissionRequest,
+    db: Session = Depends(get_db)
+):
+    """테스트 제출"""
+    try:
+        from datetime import datetime
+
+        # 세션 존재 확인
+        test_session = db.query(TestSession).filter(
+            TestSession.session_id == session_id
+        ).first()
+
+        if not test_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="테스트 세션을 찾을 수 없습니다"
+            )
+
+        # 답안들 저장
+        for problem_id, answer in request.answers.items():
+            existing_answer = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session_id,
+                TestAnswer.problem_id == int(problem_id)
+            ).first()
+
+            if existing_answer:
+                existing_answer.answer = answer
+                existing_answer.updated_at = func.now()
+            else:
+                test_answer = TestAnswer(
+                    session_id=session_id,
+                    problem_id=int(problem_id),
+                    answer=answer
+                )
+                db.add(test_answer)
+
+        # 세션 상태 업데이트
+        test_session.status = "submitted"
+        test_session.submitted_at = func.now()
+
+        db.commit()
+
+        # 답안 통계 계산
+        total_answers = db.query(TestAnswer).filter(
+            TestAnswer.session_id == session_id
+        ).count()
+
+        return TestSubmissionResponse(
+            session_id=session_id,
+            submitted_at=datetime.now().isoformat(),
+            total_problems=len(request.answers),
+            answered_problems=total_answers
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"테스트 제출 중 오류 발생: {str(e)}"
         )

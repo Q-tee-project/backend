@@ -173,3 +173,35 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: str
     assignment_id: int
+
+
+# ===== 테스트 세션 관련 스키마 =====
+
+class TestSessionCreateRequest(BaseModel):
+    """테스트 세션 생성 요청"""
+    assignment_id: int
+
+class TestSessionResponse(BaseModel):
+    """테스트 세션 응답"""
+    session_id: str
+    assignment_id: int
+    student_id: int
+    started_at: str
+    status: str  # started, completed, submitted
+
+class TestAnswerRequest(BaseModel):
+    """테스트 답안 저장 요청"""
+    session_id: str
+    problem_id: int
+    answer: str
+
+class TestSubmissionRequest(BaseModel):
+    """테스트 제출 요청"""
+    answers: Dict[int, str]
+
+class TestSubmissionResponse(BaseModel):
+    """테스트 제출 응답"""
+    session_id: str
+    submitted_at: str
+    total_problems: int
+    answered_problems: int
