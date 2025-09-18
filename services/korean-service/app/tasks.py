@@ -39,7 +39,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio'),
             user_text=request_data.get('user_text', ''),
@@ -55,7 +54,9 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             meta={'current': 20, 'total': 100, 'status': '국어 문제 생성 중...'}
         )
 
-        # AI를 통한 문제 생성
+        # 새로운 단일 도메인 문제 생성 시스템 사용
+        from .services.korean_problem_generator import KoreanProblemGenerator
+
         korean_data = {
             'school_level': request_data['school_level'],
             'grade': request_data['grade'],
@@ -64,11 +65,13 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             'difficulty': request_data['difficulty']
         }
 
-        problems = ai_service.generate_korean_problem(
+        # 새로운 생성기 사용
+        generator = KoreanProblemGenerator()
+        problems = generator.generate_problems(
             korean_data=korean_data,
             user_prompt=request_data.get('user_text', ''),
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
+            korean_type_ratio=None,  # 단일 도메인이므로 제거
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio')
         )
@@ -101,7 +104,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio'),
             user_text=request_data.get('user_text', ''),
@@ -146,7 +148,7 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
                 source_text=problem_data.get('source_text', ''),
                 source_title=problem_data.get('source_title', ''),
                 source_author=problem_data.get('source_author', ''),
-                ai_model_used='gemini-2.5-flash'
+                ai_model_used='gemini-2.5-pro'
             )
             db.add(problem)
             saved_problems.append(problem)
