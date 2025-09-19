@@ -137,6 +137,18 @@ class PromptGenerator:
             total_questions, request_data.get('difficulty_distribution', [])
         )
         
+        # problem_type 계산 (영역별 비율에 따라)
+        subjects_with_count = [subj for subj in subject_distribution if subj['count'] > 0]
+        print(f"🔍 영역별 분배: {subject_distribution}")
+        print(f"🔍 문제 수가 있는 영역: {subjects_with_count}")
+
+        if len(subjects_with_count) == 1:
+            problem_type = subjects_with_count[0]['subject']
+            print(f"✅ 단일 영역: {problem_type}")
+        else:
+            problem_type = "혼합형"
+            print(f"✅ 혼합형: {len(subjects_with_count)}개 영역")
+
         # 동적 내용 생성
         format_lines = [f"{fmt['format']} : {fmt['count']}문제" for fmt in format_distribution]
         difficulty_lines = [f"난이도 {diff['difficulty']} 문제 : {diff['count']}문제" for diff in difficulty_distribution]
@@ -145,51 +157,52 @@ class PromptGenerator:
         vocabulary_list = self._get_vocabulary_list(db, difficulty_distribution)
         
         # JSON 응답 템플릿 정의
-        json_template = """
-    {
-        "worksheet_id": 1,
-        "worksheet_name": "", 
-        "worksheet_date": "2025-01-01",
-        "worksheet_time": "10:00",
-        "worksheet_duration": "60",
-        "worksheet_subject": "english",
-        "worksheet_level": "{school_level}",
-        "worksheet_grade": {grade},
-        "total_questions": {total_questions},
-        "passages": [
-            {
-                "passage_id": 1,
-                "passage_type": "article",
-                "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-                "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
-                "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
-                "related_questions": [1, 2]
-            }
-        ],
-        "questions": [
-            {
-                "question_id": 1,
-                "question_type": "객관식|단답형|서술형",
-                "question_subject": "독해|문법|어휘",
-                "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
-                "question_difficulty": "상|중|하",
-                "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
-                "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-                "example_original_content": "완전한 형태의 원본 예문",
-                "example_korean_translation": "원본 예문의 자연스러운 한글 번역",
-                "related_question": 1,
-                "question_passage_id": 1,
-                "question_choices": [
-                    "선택지 1",
-                    "선택지 2",
-                    "선택지 3"
-                ],
-                "correct_answer": 1 | "정답 텍스트",
-                "explanation": "정답에 대한 상세한 해설 (한국어)",
-                "learning_point": "문제와 관련된 핵심 학습 포인트"
-            }
-        ]
-    }"""
+        json_template = f"""
+        {{
+            "worksheet_id": 1,
+            "worksheet_name": "",
+            "worksheet_date": "2025-01-01",
+            "worksheet_time": "10:00",
+            "worksheet_duration": "60",
+            "worksheet_subject": "english",
+            "worksheet_level": "{school_level}",
+            "worksheet_grade": {grade},
+            "problem_type": "{problem_type}",
+            "total_questions": {total_questions},
+            "passages": [
+                {{
+                    "passage_id": 1,
+                    "passage_type": "article",
+                    "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+                    "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
+                    "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
+                    "related_questions": [1, 2]
+                }}
+            ],
+            "questions": [
+                {{
+                    "question_id": 1,
+                    "question_type": "객관식|단답형|서술형",
+                    "question_subject": "독해|문법|어휘",
+                    "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
+                    "question_difficulty": "상|중|하",
+                    "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
+                    "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
+                    "example_original_content": "완전한 형태의 원본 예문",
+                    "example_korean_translation": "원본 예문의 자연스러운 한글 번역",
+                    "related_question": 1,
+                    "question_passage_id": 1,
+                    "question_choices": [
+                        "선택지 1",
+                        "선택지 2",
+                        "선택지 3"
+                    ],
+                    "correct_answer": 1 | "정답 텍스트",
+                    "explanation": "정답에 대한 상세한 해설 (한국어)",
+                    "learning_point": "문제와 관련된 핵심 학습 포인트"
+                }}
+            ]
+        }}"""
         
         # 프롬프트 구성
         prompt = f"""당신은 영어 교육 전문가이자 숙련된 문제 출제자입니다. 
@@ -341,14 +354,20 @@ review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
 # 응답 형식 - 절대 준수해야 함
 {json_template}
 
+# 문제와 지문 및 예문 생성 규칙
+- 독해 문제는 반드시 한 문제 당 하나의 지문을 생성해야 함
+- 어휘와 문법 문제는 문제 영역에 독해가 없다면 세부영역을 고려하여 필요하다면 지문을 생성해야 함
+- 어휘와 문법 문제는 문제 영역에 독해 문제가 있을 경우 독해 지문과 연계된 문제를 출제하여도 되고, 독해 지문과 연계되지 않은 문제를 출제하여도 됨
+
 # 문제 배치 및 순서 규칙
 - 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
 - 같은 지문을 사용하는 문제들은 반드시 연속 번호로 배치
 - 문제 번호와 related_questions 배열이 정확히 일치해야 함
 - 각 지문의 related_questions는 연속된 숫자여야 함
-- 각 예문의 related_question은 해당하는 문제 번호여야 함
 - 문제 총 개수와 questions 배열 길이가 일치해야 함 
 - 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 
+
+
 
 # ID 참조 규칙
 - question_text에서 지문이나 예문의 ID(P1, E1, 지문1, 예문1 등)를 절대 언급하지 마세요.

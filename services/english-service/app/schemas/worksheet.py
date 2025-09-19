@@ -43,6 +43,7 @@ class WorksheetSaveRequest(BaseModel):
     worksheet_subject: str
     worksheet_level: str
     worksheet_grade: int
+    problem_type: Optional[str] = "혼합형"
     total_questions: int
     passages: List[PassageSaveData]
     questions: List[QuestionSaveData]
@@ -110,11 +111,12 @@ class WorksheetResponse(BaseModel):
 # 문제지 목록 조회용 간단한 스키마
 class WorksheetSummary(BaseModel):
     worksheet_id: str  # worksheet_id와 동일한 값
-    teacher_id: str
+    teacher_id: int
     worksheet_name: str
     school_level: str
     grade: str
     subject: str
+    problem_type: str
     total_questions: int
     duration: Optional[int]
     created_at: datetime

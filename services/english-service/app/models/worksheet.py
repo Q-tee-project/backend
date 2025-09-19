@@ -14,6 +14,7 @@ class Worksheet(Base):
     school_level = Column(String(20), nullable=False)  # 중학교, 고등학교 등
     grade = Column(String(10), nullable=False)  # 1, 2, 3 등
     subject = Column(String(50), nullable=False, default="영어")  # 과목
+    problem_type = Column(String(20), nullable=False, default="혼합형")  # 문제 유형: 독해, 문법, 어휘, 혼합형
     total_questions = Column(Integer, nullable=False)  # 총 문제 수
     duration = Column(Integer, nullable=True)  # 시험 시간(분)
     created_at = Column(DateTime, nullable=False)  # 생성 시간

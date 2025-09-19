@@ -180,6 +180,7 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
             print(f"📄 문제지 ID: {parsed_llm_response.get('worksheet_id', 'N/A')}")
             print(f"📝 문제지 제목: {parsed_llm_response.get('worksheet_name', 'N/A')}")
             print(f"📊 총 문제 수: {parsed_llm_response.get('total_questions', 'N/A')}개")
+            print(f"🔍 문제 유형: {parsed_llm_response.get('problem_type', 'N/A')}")
         print("=" * 80)
 
         return {
@@ -208,6 +209,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         school_level = request.worksheet_level
         grade = str(request.worksheet_grade)
         subject = request.worksheet_subject
+        problem_type = request.problem_type
         total_questions = request.total_questions
         duration = request.worksheet_duration
         
@@ -228,6 +230,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
             school_level=school_level,
             grade=grade,
             subject=subject,
+            problem_type=problem_type,
             total_questions=total_questions,
             duration=int(duration) if duration else None,
             created_at=datetime.now()
@@ -297,21 +300,25 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=f"문제지 저장 중 오류: {str(e)}")
 
 @router.get("/worksheets", response_model=List[WorksheetSummary])
-async def get_worksheets(teacher_id: int, db: Session = Depends(get_db)):
+async def get_worksheets(user_id: int, limit: int = 100, db: Session = Depends(get_db)):
     """특정 교사의 저장된 문제지 목록을 조회합니다."""
     try:
+        # limit 값을 100으로 제한
+        actual_limit = min(limit, 100)
+
         worksheets = db.query(Worksheet).filter(
-            Worksheet.teacher_id == teacher_id
-        ).order_by(Worksheet.created_at.desc()).all()
+            Worksheet.teacher_id == user_id
+        ).order_by(Worksheet.created_at.desc()).limit(actual_limit).all()
 
         return [
             WorksheetSummary(
-                id=worksheet.worksheet_id,
                 worksheet_id=worksheet.worksheet_id,
+                teacher_id=worksheet.teacher_id,
                 worksheet_name=worksheet.worksheet_name,
                 school_level=worksheet.school_level,
                 grade=worksheet.grade,
                 subject=worksheet.subject,
+                problem_type=worksheet.problem_type,
                 total_questions=worksheet.total_questions,
                 duration=worksheet.duration,
                 created_at=worksheet.created_at
@@ -321,25 +328,29 @@ async def get_worksheets(teacher_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"문제지 목록 조회 중 오류: {str(e)}")
 
-@router.get("/worksheets/{worksheet_id}/edit")
-async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get_db)):
-    """문제지 편집용 워크시트를 조회합니다 (정답 및 해설 포함)."""
+@router.get("/worksheets/{worksheet_id}")
+async def get_worksheet_for_editing(worksheet_id: str, user_id: int, db: Session = Depends(get_db)):
+    """문제지 편집용 워크시트를 조회합니다"""
     try:
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        worksheet = db.query(Worksheet).filter(
+            Worksheet.worksheet_id == worksheet_id,
+            Worksheet.teacher_id == user_id
+        ).first()
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
         
         # 문제지 데이터를 딕셔너리로 변환
         worksheet_data = {
             "worksheet_id": worksheet.worksheet_id,
+            "teacher_id": worksheet.teacher_id,
             "worksheet_name": worksheet.worksheet_name,
             "worksheet_level": worksheet.school_level,
             "worksheet_grade": worksheet.grade,
             "worksheet_subject": worksheet.subject,
+            "problem_type": worksheet.problem_type,
             "total_questions": worksheet.total_questions,
             "worksheet_duration": worksheet.duration,
             "passages": [],
-            "examples": [],
             "questions": []
         }
         
@@ -355,17 +366,6 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
             }
             worksheet_data["passages"].append(passage_data)
         
-        # 예문 데이터 추가
-        for example in worksheet.examples:
-            example_data = {
-                "example_id": example.example_id,
-                "example_content": example.example_content,
-                "original_content": example.original_content,
-                "korean_translation": example.korean_translation,
-                "related_question": example.related_question
-            }
-            worksheet_data["examples"].append(example_data)
-        
         # 문제 데이터 추가 (정답/해설 포함)
         for question in worksheet.questions:
             question_data = {
@@ -377,8 +377,10 @@ async def get_worksheet_for_editing(worksheet_id: str, db: Session = Depends(get
                 "question_detail_type": question.question_detail_type,
                 "question_choices": question.question_choices,
                 "question_passage_id": question.passage_id,
-                "question_example_id": question.example_id,
                 "correct_answer": question.correct_answer,
+                "example_content": question.example_content,
+                "example_original_content": question.example_original_content,
+                "example_korean_translation": question.example_korean_translation,
                 "explanation": question.explanation,
                 "learning_point": question.learning_point
             }
@@ -471,142 +473,99 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"문제지 조회 중 오류: {str(e)}")
 
-@router.put("/worksheets/{worksheet_id}/questions/{question_id}/text")
-async def update_question_text(worksheet_id: str, question_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
-    """문제 텍스트를 업데이트합니다."""
-    try:
-        question = db.query(Question).filter(
-            Question.worksheet_id == worksheet_id,
-            Question.question_id == question_id
-        ).first()
-        
-        if not question:
-            raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
-        
-        question.question_text = request.get("question_text")
-        db.commit()
-        
-        return {"status": "success", "message": "문제 텍스트가 업데이트되었습니다."}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"문제 텍스트 업데이트 중 오류: {str(e)}")
+# === CRUD 엔드포인트들 ===
 
-@router.put("/worksheets/{worksheet_id}/questions/{question_id}/choice")
-async def update_question_choice(worksheet_id: str, question_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
-    """문제 선택지를 업데이트합니다."""
+@router.put("/worksheets/{worksheet_id}/questions/{question_id}")
+async def update_question(
+    worksheet_id: str,
+    question_id: int,
+    request: Dict[str, Any],
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """문제를 수정합니다."""
     try:
-        question = db.query(Question).filter(
-            Question.worksheet_id == worksheet_id,
-            Question.question_id == question_id
-        ).first()
-        
-        if not question:
-            raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
-        
-        choice_index = request.get("choice_index")
-        choice_text = request.get("choice_text")
-        
-        if question.question_choices and isinstance(question.question_choices, list):
-            if 0 <= choice_index < len(question.question_choices):
-                question.question_choices[choice_index] = choice_text
-                db.commit()
-                
-                return {"status": "success", "message": "선택지가 업데이트되었습니다."}
-        
-        raise HTTPException(status_code=400, detail="유효하지 않은 선택지 인덱스입니다.")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"선택지 업데이트 중 오류: {str(e)}")
+        from app.services.worksheet_crud.question_service import QuestionService
 
-@router.put("/worksheets/{worksheet_id}/questions/{question_id}/answer")
-async def update_question_answer(worksheet_id: str, question_id: int, request: Dict[str, str], db: Session = Depends(get_db)):
-    """문제 정답을 업데이트합니다."""
-    try:
-        question = db.query(Question).filter(
-            Question.worksheet_id == worksheet_id,
-            Question.question_id == question_id
-        ).first()
-        
-        if not question:
-            raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
-        
-        question.correct_answer = request.get("correct_answer")
-        db.commit()
-        
-        return {"status": "success", "message": "정답이 업데이트되었습니다."}
-        
-    except HTTPException:
-        raise
+        service = QuestionService(db)
+        updated_question = service.update_question(worksheet_id, question_id, request)
+
+        return {
+            "status": "success",
+            "message": "문제가 수정되었습니다.",
+            "question": {
+                "question_id": updated_question.question_id,
+                "question_text": updated_question.question_text,
+                "question_type": updated_question.question_type,
+                "question_subject": updated_question.question_subject,
+                "question_difficulty": updated_question.question_difficulty,
+                "correct_answer": updated_question.correct_answer
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"정답 업데이트 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"문제 수정 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/passages/{passage_id}")
-async def update_passage(worksheet_id: str, passage_id: int, request: Dict[str, Any], db: Session = Depends(get_db)):
-    """지문을 업데이트합니다."""
+async def update_passage(
+    worksheet_id: str,
+    passage_id: int,
+    request: Dict[str, Any],
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """지문을 수정합니다."""
     try:
-        passage = db.query(Passage).filter(
-            Passage.worksheet_id == worksheet_id,
-            Passage.passage_id == passage_id
-        ).first()
-        
-        if not passage:
-            raise HTTPException(status_code=404, detail="지문을 찾을 수 없습니다.")
-        
-        # JSON 형식 유지하면서 업데이트
-        passage_content = request.get("passage_content")
-        if isinstance(passage_content, str):
-            # 문자열인 경우 JSON으로 파싱 시도
-            try:
-                import json
-                passage_content = json.loads(passage_content)
-            except json.JSONDecodeError:
-                # JSON이 아닌 경우 기존 구조 유지하면서 내용만 업데이트
-                if isinstance(passage.passage_content, dict):
-                    passage.passage_content["content"] = passage_content
-                else:
-                    passage.passage_content = {"content": passage_content}
-        else:
-            passage.passage_content = passage_content
-        
-        db.commit()
-        
-        return {"status": "success", "message": "지문이 업데이트되었습니다."}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"지문 업데이트 중 오류: {str(e)}")
+        from app.services.worksheet_crud.passage_service import PassageService
 
-@router.put("/worksheets/{worksheet_id}/examples/{example_id}")
-# 예문 업데이트는 이제 Question 모델을 통해 처리됨
+        service = PassageService(db)
+        updated_passage = service.update_passage(worksheet_id, passage_id, request)
+
+        return {
+            "status": "success",
+            "message": "지문이 수정되었습니다.",
+            "passage": {
+                "passage_id": updated_passage.passage_id,
+                "passage_type": updated_passage.passage_type
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"지문 수정 중 오류: {str(e)}")
 
 @router.put("/worksheets/{worksheet_id}/title")
-async def update_worksheet_title(worksheet_id: str, request: Dict[str, str], db: Session = Depends(get_db)):
-    """문제지 제목을 업데이트합니다."""
+async def update_worksheet_title(
+    worksheet_id: str,
+    request: Dict[str, str],
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """워크시트 제목을 수정합니다."""
     try:
-        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
-        
-        if not worksheet:
-            raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
-        
-        worksheet.worksheet_name = request.get("worksheet_name")
-        db.commit()
-        
-        return {"status": "success", "message": "문제지 제목이 업데이트되었습니다."}
-        
-    except HTTPException:
-        raise
+        from app.services.worksheet_crud.worksheet_service import WorksheetService
+
+        service = WorksheetService(db)
+        new_title = request.get("worksheet_name")
+
+        if not new_title:
+            raise HTTPException(status_code=400, detail="worksheet_name이 필요합니다.")
+
+        updated_worksheet = service.update_worksheet_title(worksheet_id, new_title)
+
+        return {
+            "status": "success",
+            "message": "제목이 수정되었습니다.",
+            "worksheet": {
+                "worksheet_id": updated_worksheet.worksheet_id,
+                "worksheet_name": updated_worksheet.worksheet_name
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"문제지 제목 업데이트 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"제목 수정 중 오류: {str(e)}")
 
 @router.delete("/worksheets/{worksheet_id}", response_model=Dict[str, Any])
 async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):

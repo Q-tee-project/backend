@@ -1,0 +1,341 @@
+[
+    {
+      "passage_id": "2",
+      "passage_type": "correspondence",
+      "passage_content": {
+        "metadata": {
+          "sender": "HR Department",
+          "recipient": "All Employees",
+          "subject": "Office Reopening Update",
+          "date": "2025-09-18"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "Please be advised that the main office will reopen next Monday. The new entry protocol will be explained in the main lobby. All team meetings will be held in the [ B ] conference room."
+          }
+        ]
+      },
+      "original_content": {
+        "metadata": {
+          "sender": "HR Department",
+          "recipient": "All Employees",
+          "subject": "Office Reopening Update",
+          "date": "2025-09-18"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "Please be advised that the main office will reopen next Monday. The new entry protocol will be explained in the main lobby. All team meetings will be held in the Blue conference room."
+          }
+        ]
+      },
+      "korean_translation": {
+        "metadata": {
+          "sender": "인사팀",
+          "recipient": "전 직원",
+          "subject": "사무실 재개장 안내",
+          "date": "2025-09-18"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "본사 사무실이 다음 주 월요일에 다시 문을 연다는 점을 알려드립니다. 새로운 출입 절차는 중앙 로비에서 설명될 예정입니다. 모든 팀 회의는 블루 컨퍼런스 룸에서 열릴 것입니다."
+          }
+        ]
+      },
+      "related_questions": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "passage_id": "3",
+      "passage_type": "dialogue",
+      "passage_content": {
+        "metadata": {
+          "participants": [
+            "Jane",
+            "Mike"
+          ]
+        },
+        "content": [
+          {
+            "speaker": "Jane",
+            "line": "Hey Mike, are you free for dinner tonight?"
+          },
+          {
+            "speaker": "Mike",
+            "line": "Sure! I get off work at 6 PM. How about we meet at [ C ]?"
+          },
+          {
+            "speaker": "Jane",
+            "line": "Sounds good. See you then!"
+          }
+        ]
+      },
+      "original_content": {
+        "metadata": {
+          "participants": [
+            "Jane",
+            "Mike"
+          ]
+        },
+        "content": [
+          {
+            "speaker": "Jane",
+            "line": "Hey Mike, are you free for dinner tonight?"
+          },
+          {
+            "speaker": "Mike",
+            "line": "Sure! I get off work at 6 PM. How about we meet at 7 PM?"
+          },
+          {
+            "speaker": "Jane",
+            "line": "Sounds good. See you then!"
+          }
+        ]
+      },
+      "korean_translation": {
+        "metadata": {
+          "participants": [
+            "제인",
+            "마이크"
+          ]
+        },
+        "content": [
+          {
+            "speaker": "제인",
+            "line": "안녕 마이크, 오늘 저녁에 시간 괜찮아?"
+          },
+          {
+            "speaker": "마이크",
+            "line": "물론이지! 나 6시에 퇴근해. 우리 7시에 만나는 거 어때?"
+          },
+          {
+            "speaker": "제인",
+            "line": "좋아. 그때 보자!"
+          }
+        ]
+      },
+      "related_questions": [
+        "8",
+        "9",
+        "10"
+      ]
+    },
+    {
+      "passage_id": "4",
+      "passage_type": "informational",
+      "passage_content": {
+        "content": [
+          {
+            "type": "title",
+            "value": "Community Book Fair"
+          },
+          {
+            "type": "paragraph",
+            "value": "Join us for a day of books, fun, and community spirit!"
+          },
+          {
+            "type": "list",
+            "items": [
+              "Used book sale",
+              "Author meet & greet",
+              "Kids' story time"
+            ]
+          },
+          {
+            "type": "key_value",
+            "pairs": [
+              {
+                "key": "Date",
+                "value": "October 26, 2025"
+              },
+              {
+                "key": "Location",
+                "value": "[ D ]"
+              }
+            ]
+          }
+        ]
+      },
+      "original_content": {
+        "content": [
+          {
+            "type": "title",
+            "value": "Community Book Fair"
+          },
+          {
+            "type": "paragraph",
+            "value": "Join us for a day of books, fun, and community spirit!"
+          },
+          {
+            "type": "list",
+            "items": [
+              "Used book sale",
+              "Author meet & greet",
+              "Kids' story time"
+            ]
+          },
+          {
+            "type": "key_value",
+            "pairs": [
+              {
+                "key": "Date",
+                "value": "October 26, 2025"
+              },
+              {
+                "key": "Location",
+                "value": "City Central Library"
+              }
+            ]
+          }
+        ]
+      },
+      "korean_translation": {
+        "content": [
+          {
+            "type": "title",
+            "value": "커뮤니티 도서 박람회"
+          },
+          {
+            "type": "paragraph",
+            "value": "책, 재미, 그리고 공동체 정신이 함께하는 하루에 동참하세요!"
+          },
+          {
+            "type": "list",
+            "items": [
+              "중고 도서 판매",
+              "작가와의 만남",
+              "어린이 이야기 시간"
+            ]
+          },
+          {
+            "type": "key_value",
+            "pairs": [
+              {
+                "key": "날짜",
+                "value": "2025년 10월 26일"
+              },
+              {
+                "key": "장소",
+                "value": "시립 중앙 도서관"
+              }
+            ]
+          }
+        ]
+      },
+      "related_questions": [
+        "11",
+        "12"
+      ]
+    },
+    {
+      "passage_id": "5",
+      "passage_type": "review",
+      "passage_content": {
+        "metadata": {
+          "rating": 5,
+          "product_name": "The Morning Brew Cafe",
+          "reviewer": "Alex",
+          "date": "2025-07-12"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "I visited this cafe for the first time today. The atmosphere is very cozy and perfect for reading. I ordered an Americano, and it was [ E ]. The staff was also very friendly. I will definitely come back again."
+          }
+        ]
+      },
+      "original_content": {
+        "metadata": {
+          "rating": 5,
+          "product_name": "The Morning Brew Cafe",
+          "reviewer": "Alex",
+          "date": "2025-07-12"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "I visited this cafe for the first time today. The atmosphere is very cozy and perfect for reading. I ordered an Americano, and it was rich and flavorful. The staff was also very friendly. I will definitely come back again."
+          }
+        ]
+      },
+      "korean_translation": {
+        "metadata": {
+          "rating": 5,
+          "product_name": "더 모닝 브루 카페",
+          "reviewer": "알렉스",
+          "date": "2025-07-12"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "value": "오늘 이 카페에 처음 방문했습니다. 분위기가 매우 아늑해서 독서하기에 완벽합니다. 저는 아메리카노를 주문했는데, 맛이 진하고 풍미가 있었습니다. 직원들도 매우 친절했습니다. 꼭 다시 방문할 겁니다."
+          }
+        ]
+      },
+      "related_questions": [
+        "13",
+        "14",
+        "15"
+      ]
+    },
+    {
+      "passage_id": "6",
+      "passage_type": "article",
+      "passage_content": {
+        "content": [
+          {
+            "type": "title",
+            "value": "The Importance of Sleep"
+          },
+          {
+            "type": "paragraph",
+            "value": "Getting enough quality sleep is crucial for our physical and mental health. During sleep, our bodies work to repair muscles, consolidate memories, and regulate hormones. A lack of sleep can lead to various problems."
+          },
+          {
+            "type": "paragraph",
+            "value": "For adults, 7-9 hours of sleep per night is generally recommended. Creating a relaxing bedtime routine and ensuring your bedroom is dark and quiet can improve your [ F ]."
+          }
+        ]
+      },
+      "original_content": {
+        "content": [
+          {
+            "type": "title",
+            "value": "The Importance of Sleep"
+          },
+          {
+            "type": "paragraph",
+            "value": "Getting enough quality sleep is crucial for our physical and mental health. During sleep, our bodies work to repair muscles, consolidate memories, and regulate hormones. A lack of sleep can lead to various problems."
+          },
+          {
+            "type": "paragraph",
+            "value": "For adults, 7-9 hours of sleep per night is generally recommended. Creating a relaxing bedtime routine and ensuring your bedroom is dark and quiet can improve your sleep quality."
+          }
+        ]
+      },
+      "korean_translation": {
+        "content": [
+          {
+            "type": "title",
+            "value": "수면의 중요성"
+          },
+          {
+            "type": "paragraph",
+            "value": "충분한 양질의 수면을 취하는 것은 우리의 신체적, 정신적 건강에 매우 중요합니다. 잠을 자는 동안 우리 몸은 근육을 회복하고, 기억을 공고히 하며, 호르몬을 조절합니다. 수면 부족은 다양한 문제로 이어질 수 있습니다."
+          },
+          {
+            "type": "paragraph",
+            "value": "성인의 경우, 일반적으로 하룻밤에 7-9시간의 수면이 권장됩니다. 편안한 취침 루틴을 만들고 침실을 어둡고 조용하게 유지하는 것은 수면의 질을 향상시킬 수 있습니다."
+          }
+        ]
+      },
+      "related_questions": [
+        "16",
+        "17"
+      ]
+    }
+  ]
