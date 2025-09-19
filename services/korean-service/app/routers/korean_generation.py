@@ -39,9 +39,9 @@ async def generate_korean_problems(
 ):
     """국어 문제 생성"""
     try:
-        task = generate_korean_problems_task.delay(
-            request_data=request.model_dump(),
-            user_id=current_user["id"]
+        task = generate_korean_problems_task.apply_async(
+            args=[request.model_dump(), current_user["id"]],
+            queue='korean_queue'
         )
 
         return {
@@ -540,10 +540,13 @@ async def regenerate_problem_async(
             )
 
         # Celery 태스크 시작
-        task = regenerate_korean_problem_task.delay(
-            problem_id=problem_id,
-            requirements=requirements,
-            current_problem=current_problem
+        task = regenerate_korean_problem_task.apply_async(
+            kwargs={
+                "problem_id": problem_id,
+                "requirements": requirements,
+                "current_problem": current_problem
+            },
+            queue='korean_queue'
         )
 
         return {
@@ -558,49 +561,4 @@ async def regenerate_problem_async(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"비동기 국어 문제 재생성 요청 중 오류 발생: {str(e)}"
-        )
-
-
-@router.get("/tasks/{task_id}")
-async def get_task_status(task_id: str):
-    """Celery 작업 상태 확인"""
-    try:
-        result = AsyncResult(task_id, app=celery_app)
-
-        if result.state == 'PENDING':
-            return {
-                "task_id": task_id,
-                "status": "PENDING",
-                "message": "태스크가 대기 중입니다."
-            }
-        elif result.state == 'PROGRESS':
-            return {
-                "task_id": task_id,
-                "status": "PROGRESS",
-                "current": result.info.get('current', 0),
-                "total": result.info.get('total', 100),
-                "message": result.info.get('status', '처리 중...')
-            }
-        elif result.state == 'SUCCESS':
-            return {
-                "task_id": task_id,
-                "status": "SUCCESS",
-                "result": result.result
-            }
-        elif result.state == 'FAILURE':
-            return {
-                "task_id": task_id,
-                "status": "FAILURE",
-                "error": str(result.info) if result.info else "알 수 없는 오류가 발생했습니다."
-            }
-        else:
-            return {
-                "task_id": task_id,
-                "status": result.state,
-                "info": result.info
-            }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"태스크 상태 조회 중 오류: {str(e)}"
         )

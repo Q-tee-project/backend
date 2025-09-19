@@ -15,30 +15,17 @@ from sqlalchemy.orm import Session
 @celery_app.task(bind=True, name="app.tasks.generate_math_problems_task")
 def generate_math_problems_task(self, request_data: dict, user_id: int):
     """비동기 수학 문제 생성 태스크"""
-
-    # 태스크 ID 생성
     task_id = self.request.id
     generation_id = str(uuid.uuid4())
-
-    # 로깅 추가
     print(f"🚀 Math problems generation task started: {task_id}")
-    print(f"📝 Generation ID: {generation_id}")
-    print(f"👤 User ID: {user_id}")
-    
-    # 데이터베이스 세션 생성
+
     db = SessionLocal()
-    
+    worksheet = None
     try:
-        # 진행률 업데이트
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': 0, 'total': 100, 'status': '문제 생성 준비 중...'}
-        )
-        
-        # 요청 데이터를 Pydantic 모델로 변환
+        self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100, 'status': '요청 처리 중...'})
         request = MathProblemGenerationRequest.model_validate(request_data)
-        
-        # 워크시트 초기 생성 (PROCESSING 상태)
+
+        # 1. 워크시트 초기 생성 (PROCESSING 상태)
         worksheet_title = f"{request.chapter.chapter_name} - {request.problem_count.value}"
         worksheet = Worksheet(
             title=worksheet_title,
@@ -59,88 +46,37 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
             created_by=user_id,
             celery_task_id=task_id
         )
-        
         db.add(worksheet)
-        db.flush()
-        
-        # 진행률 업데이트
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': 20, 'total': 100, 'status': '교육과정 데이터 로드 중...'}
-        )
-        
-        # MathGenerationService 초기화
+        db.commit()
+        db.refresh(worksheet)
+
+        self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'AI 문제 생성 중...'})
         math_service = MathGenerationService()
-        
-        # 교육과정 데이터 가져오기
         curriculum_data = math_service._get_curriculum_data(request)
         
-        # 진행률 업데이트
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': 40, 'total': 100, 'status': '문제 유형 분석 중...'}
-        )
-        
-        # 문제 유형 데이터 가져오기
-        problem_types = math_service._get_problem_types(request.chapter.chapter_name)
-        
-        # 진행률 업데이트
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': 60, 'total': 100, 'status': 'AI로 문제 생성 중...'}
-        )
-        
-        # ProblemGenerator 직접 호출 (Task에서는 직접 실행)
         from .services.problem_generator import ProblemGenerator
         problem_generator = ProblemGenerator()
-
         generated_problems = problem_generator.generate_problems(
             curriculum_data=curriculum_data,
             user_prompt=request.user_text,
             problem_count=request.problem_count.value_int,
             difficulty_ratio=request.difficulty_ratio.model_dump()
         )
-        
-        # 진행률 업데이트
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': 80, 'total': 100, 'status': '문제 데이터베이스 저장 중...'}
-        )
-        
-        # 생성 세션 저장
-        generation_session = MathProblemGeneration(
-            generation_id=generation_id,
-            school_level=request.school_level.value,
-            grade=request.grade,
-            semester=request.semester.value,
-            unit_number=request.unit_number,
-            unit_name=request.chapter.unit_name,
-            chapter_number=request.chapter.chapter_number,
-            chapter_name=request.chapter.chapter_name,
-            problem_count=request.problem_count.value_int,
-            difficulty_ratio=request.difficulty_ratio.model_dump(),
-            problem_type_ratio=request.problem_type_ratio.model_dump(),
-            user_text=request.user_text,
-            actual_difficulty_distribution=math_service._calculate_difficulty_distribution(generated_problems),
-            actual_type_distribution=math_service._calculate_type_distribution(generated_problems),
-            total_generated=len(generated_problems),
-            created_by=user_id
-        )
-        
-        db.add(generation_session)
-        db.flush()
-        
-        # 생성된 문제들을 워크시트에 연결하여 저장
-        problem_responses = []
-        saved_problems_count = 0
 
-        # 배치 저장을 위한 문제 객체들 준비
-        print(f"💾 문제 {len(generated_problems)}개 배치 저장 시작...")
-        problems_to_save = []
+        # 2. AI 응답 검증
+        if not isinstance(generated_problems, list):
+            raise ValueError(f"AI 응답이 잘못된 형식입니다. 리스트가 아닌 {type(generated_problems)} 타입을 받았습니다.")
 
-        # 1단계: Problem 객체들 생성
-        for i, problem_data in enumerate(generated_problems):
-            try:
+        self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': '문제 저장 중...'})
+
+        # 3. 문제 저장 및 워크시트 상태 업데이트 (원자적 트랜잭션)
+        try:
+            problems_to_save = []
+            for i, problem_data in enumerate(generated_problems):
+                if not isinstance(problem_data, dict):
+                    print(f"⚠️ 경고: 생성된 문제 목록에 잘못된 항목이 있습니다. {type(problem_data)} 타입.")
+                    continue
+                
                 problem = Problem(
                     worksheet_id=worksheet.id,
                     sequence_order=i + 1,
@@ -157,111 +93,58 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
                 )
                 problems_to_save.append(problem)
 
-            except Exception as e:
-                print(f"❌ 문제 {i+1} 객체 생성 실패: {str(e)}")
-                continue
+            if not problems_to_save:
+                raise ValueError("AI가 유효한 문제를 생성하지 못했습니다.")
 
-        # 2단계: 배치 저장
-        try:
             db.add_all(problems_to_save)
-            db.flush()  # ID 생성을 위한 flush
-            saved_problems_count = len(problems_to_save)
-            print(f"✅ 문제 {saved_problems_count}개 배치 저장 성공!")
 
-            # 3단계: 응답 데이터 생성
-            for problem in problems_to_save:
-                problem_responses.append({
-                    "id": problem.id,
-                    "sequence_order": problem.sequence_order,
-                    "problem_type": problem.problem_type,
-                    "difficulty": problem.difficulty,
-                    "question": problem.question,
-                    "choices": json.loads(problem.choices) if problem.choices else None,
-                    "correct_answer": problem.correct_answer,
-                    "explanation": problem.explanation,
-                    "latex_content": problem.latex_content,
-                    "has_diagram": problem.has_diagram == "true",
-                    "diagram_type": problem.diagram_type,
-                    "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
-                })
+            # 워크시트 상태 업데이트
+            worksheet.status = WorksheetStatus.COMPLETED
+            worksheet.completed_at = datetime.now()
+            worksheet.actual_difficulty_distribution = math_service._calculate_difficulty_distribution(generated_problems)
+            worksheet.actual_type_distribution = math_service._calculate_type_distribution(generated_problems)
+            
+            db.commit()
+            print(f"✅ 워크시트 {worksheet.id}와 문제 {len(problems_to_save)}개 저장 완료.")
 
         except Exception as e:
-            print(f"❌ 배치 저장 실패: {str(e)}")
-            # 실패 시 개별 저장으로 폴백
-            print("🔄 개별 저장으로 폴백...")
-            saved_problems_count = 0
-            for i, problem in enumerate(problems_to_save):
-                try:
-                    db.add(problem)
-                    db.flush()
-                    saved_problems_count += 1
-                    print(f"✅ 문제 {i+1} 개별 저장 성공")
+            db.rollback()
+            print(f"❌ 문제 저장 실패: {e}. 워크시트 상태를 FAILED로 변경합니다.")
+            worksheet.status = WorksheetStatus.FAILED
+            worksheet.error_message = f"문제 저장 중 오류 발생: {str(e)}"
+            db.commit()
+            raise  # Celery 태스크를 실패로 만들기 위해 예외를 다시 발생
 
-                    problem_responses.append({
-                        "id": problem.id,
-                        "sequence_order": problem.sequence_order,
-                        "problem_type": problem.problem_type,
-                        "difficulty": problem.difficulty,
-                        "question": problem.question,
-                        "choices": json.loads(problem.choices) if problem.choices else None,
-                        "correct_answer": problem.correct_answer,
-                        "explanation": problem.explanation,
-                        "latex_content": problem.latex_content,
-                        "has_diagram": problem.has_diagram == "true",
-                        "diagram_type": problem.diagram_type,
-                        "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
-                    })
-                except Exception as individual_error:
-                    print(f"❌ 문제 {i+1} 개별 저장도 실패: {str(individual_error)}")
-        
-        # 저장 통계 로그
-        print(f"📊 문제 저장 완료: {saved_problems_count}/{len(generated_problems)}개 성공")
-
-        # 워크시트 완료 상태로 업데이트
-        worksheet.actual_difficulty_distribution = math_service._calculate_difficulty_distribution(generated_problems)
-        worksheet.actual_type_distribution = math_service._calculate_type_distribution(generated_problems)
-        worksheet.status = WorksheetStatus.COMPLETED
-        worksheet.completed_at = datetime.now()
-
-        db.commit()
-        print(f"✅ 워크시트 {worksheet.id} 커밋 완료")
-        
         # 성공 결과 반환
-        result = {
+        problem_responses = [{
+            "id": p.id,
+            "sequence_order": p.sequence_order,
+            "question": p.question
+        } for p in problems_to_save]
+
+        return {
             "generation_id": generation_id,
             "worksheet_id": worksheet.id,
-            "school_level": request.school_level.value,
-            "grade": request.grade,
-            "semester": request.semester.value,
-            "unit_name": request.chapter.unit_name,
-            "chapter_name": request.chapter.chapter_name,
-            "problem_count": request.problem_count.value_int,
-            "difficulty_ratio": request.difficulty_ratio.model_dump(),
-            "problem_type_ratio": request.problem_type_ratio.model_dump(),
-            "user_prompt": request.user_text,
-            "actual_difficulty_distribution": math_service._calculate_difficulty_distribution(generated_problems),
-            "actual_type_distribution": math_service._calculate_type_distribution(generated_problems),
-            "problems": problem_responses,
-            "total_generated": len(generated_problems),
-            "created_at": datetime.now().isoformat()
+            "total_generated": len(problems_to_save),
+            "problems": problem_responses
         }
-        
-        return result
-        
+
     except Exception as e:
-        # 오류 발생 시 워크시트 상태를 FAILED로 변경
-        if 'worksheet' in locals():
-            worksheet.status = WorksheetStatus.FAILED
-            worksheet.error_message = str(e)
-            db.commit()
+        print(f"❌ 태스크 실패: {e}")
+        db.rollback()
+        if worksheet and worksheet.id:
+            try:
+                # 이미 FAILED로 설정되지 않았다면 업데이트
+                if worksheet.status != WorksheetStatus.FAILED:
+                    worksheet.status = WorksheetStatus.FAILED
+                    worksheet.error_message = str(e)
+                    db.commit()
+            except Exception as update_err:
+                print(f"❌ 실패 상태 업데이트 중 추가 오류: {update_err}")
         
-        # 태스크 실패 상태로 업데이트
-        self.update_state(
-            state='FAILURE',
-            meta={'error': str(e), 'status': '문제 생성 실패'}
-        )
+        self.update_state(state='FAILURE', meta={'error': str(e), 'status': '문제 생성 실패'})
         raise
-        
+
     finally:
         db.close()
 
