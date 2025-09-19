@@ -35,12 +35,10 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             user_id=user_id,
             school_level=request_data['school_level'],
             grade=request_data['grade'],
-            semester=request_data['semester'],
             korean_type=request_data['korean_type'],
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio'),
             user_text=request_data.get('user_text', ''),
@@ -56,21 +54,24 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             meta={'current': 20, 'total': 100, 'status': '국어 문제 생성 중...'}
         )
 
-        # AI를 통한 문제 생성
+        # 새로운 단일 도메인 문제 생성 시스템 사용
+        from .services.korean_problem_generator import KoreanProblemGenerator
+
         korean_data = {
             'school_level': request_data['school_level'],
             'grade': request_data['grade'],
-            'semester': request_data['semester'],
             'korean_type': request_data['korean_type'],
             'question_type': request_data['question_type'],
             'difficulty': request_data['difficulty']
         }
 
-        problems = ai_service.generate_korean_problem(
+        # 새로운 생성기 사용
+        generator = KoreanProblemGenerator()
+        problems = generator.generate_problems(
             korean_data=korean_data,
             user_prompt=request_data.get('user_text', ''),
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
+            korean_type_ratio=None,  # 단일 도메인이므로 제거
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio')
         )
@@ -81,19 +82,28 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             meta={'current': 60, 'total': 100, 'status': '워크시트 생성 중...'}
         )
 
-        # 워크시트 생성
-        worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
+        # 워크시트 생성 - 지문 정보 포함
+        if problems and len(problems) > 0:
+            # 첫 번째 문제에서 지문 정보 추출
+            first_problem = problems[0]
+            source_title = first_problem.get('source_title', '')
+            source_author = first_problem.get('source_author', '')
+            
+            if source_title and source_author:
+                worksheet_title = f"{source_title} - {source_author} ({request_data['problem_count']}문제)"
+            else:
+                worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
+        else:
+            worksheet_title = f"{request_data['korean_type']} - {request_data['question_type']} ({request_data['problem_count']}문제)"
 
         worksheet = Worksheet(
             title=worksheet_title,
             school_level=request_data['school_level'],
             grade=request_data['grade'],
-            semester=request_data['semester'],
             korean_type=request_data['korean_type'],
             question_type=request_data['question_type'],
             difficulty=request_data['difficulty'],
             problem_count=request_data['problem_count'],
-            korean_type_ratio=request_data.get('korean_type_ratio'),
             question_type_ratio=request_data.get('question_type_ratio'),
             difficulty_ratio=request_data.get('difficulty_ratio'),
             user_text=request_data.get('user_text', ''),
@@ -138,7 +148,7 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
                 source_text=problem_data.get('source_text', ''),
                 source_title=problem_data.get('source_title', ''),
                 source_author=problem_data.get('source_author', ''),
-                ai_model_used='gemini-2.5-flash'
+                ai_model_used='gemini-2.5-pro'
             )
             db.add(problem)
             saved_problems.append(problem)

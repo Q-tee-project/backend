@@ -1,5 +1,7 @@
 from celery import Celery
+from celery.signals import after_setup_logger
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,6 +17,19 @@ celery_app = Celery(
     include=["app.tasks"]
 )
 
+@after_setup_logger.connect
+def setup_loggers(logger, *args, **kwargs):
+    """Celery 로거 설정"""
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # 콘솔 핸들러 추가
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.INFO)
+
 # Celery 설정
 celery_app.conf.update(
     task_serializer="json",
@@ -27,7 +42,16 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     worker_max_tasks_per_child=1000,
-    # task_routes 제거 - 모든 태스크를 기본 celery 큐로 전송
+    # 로깅 설정
+    worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
+    worker_task_log_format='[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s',
+    # 수학 서비스 전용 큐 설정
+    task_routes={
+        'app.tasks.generate_math_problems_task': {'queue': 'math_queue'},
+        'app.tasks.grade_problems_task': {'queue': 'math_queue'},
+        'app.tasks.grade_problems_mixed_task': {'queue': 'math_queue'},
+        'app.tasks.get_task_status': {'queue': 'math_queue'},
+    },
 )
 
 # 태스크 발견을 위한 autodiscover

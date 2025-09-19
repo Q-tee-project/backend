@@ -17,7 +17,6 @@ class KoreanGeneration(Base):
     # 교육과정 정보
     school_level = Column(String, nullable=False)  # "중학교", "고등학교"
     grade = Column(Integer, nullable=False)
-    semester = Column(String, nullable=False)
 
     # 국어 과목 정보
     korean_type = Column(String, nullable=False)  # "시", "소설", "수필/비문학", "문법"
@@ -26,7 +25,6 @@ class KoreanGeneration(Base):
 
     # 요청 설정
     problem_count = Column(Integer, nullable=False)
-    korean_type_ratio = Column(JSON, nullable=True)  # {"시": 30, "소설": 40, "수필/비문학": 30}
     question_type_ratio = Column(JSON, nullable=True)  # {"객관식": 50, "서술형": 30, "단답형": 20}
     difficulty_ratio = Column(JSON, nullable=True)  # {"상": 30, "중": 40, "하": 30}
     user_text = Column(Text, nullable=True)

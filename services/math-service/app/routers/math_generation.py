@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional, AsyncGenerator, List
 from celery.result import AsyncResult
 from datetime import datetime
@@ -8,17 +9,23 @@ import asyncio
 import json
 
 from ..database import get_db
+from ..core.auth import get_current_user, get_current_teacher, get_current_student
 from ..schemas.math_generation import (
-    MathProblemGenerationRequest, 
+    MathProblemGenerationRequest,
     SchoolLevel,
     AssignmentCreate,
     AssignmentResponse,
     AssignmentDeployRequest,
     AssignmentDeploymentResponse,
-    StudentAssignmentResponse
+    StudentAssignmentResponse,
+    TestSessionCreateRequest,
+    TestSessionResponse,
+    TestAnswerRequest,
+    TestSubmissionRequest,
+    TestSubmissionResponse
 )
 from ..services.math_generation_service import MathGenerationService
-from ..models.math_generation import Assignment, AssignmentDeployment
+from ..models.math_generation import Assignment, AssignmentDeployment, TestSession, TestAnswer
 from ..tasks import generate_math_problems_task, grade_problems_task, grade_problems_mixed_task
 from ..celery_app import celery_app
 
@@ -71,12 +78,13 @@ async def get_chapters_by_unit(unit_name: str = Query(..., description="대단�
 @router.post("/generate")
 async def generate_math_problems(
     request: MathProblemGenerationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         task = generate_math_problems_task.delay(
-            request_data=request.model_dump(),
-            user_id=1
+            request.model_dump(),
+            current_user["id"]
         )
         
         return {
@@ -101,10 +109,11 @@ async def generate_math_problems(
 async def get_generation_history(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        history = math_service.get_generation_history(db, user_id=1, skip=skip, limit=limit)
+        history = math_service.get_generation_history(db, user_id=current_user["id"], skip=skip, limit=limit)
         
         result = []
         for session in history:
@@ -131,10 +140,11 @@ async def get_generation_history(
 @router.get("/generation/{generation_id}")
 async def get_generation_detail(
     generation_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
-        session = math_service.get_generation_detail(db, generation_id, user_id=1)
+        session = math_service.get_generation_detail(db, generation_id, user_id=current_user["id"])
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -329,14 +339,14 @@ async def stream_task_status(task_id: str):
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.teacher_id == current_user["id"])\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -374,15 +384,15 @@ async def get_worksheets(
 @router.get("/worksheets/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -450,7 +460,8 @@ async def get_worksheet_detail(
 async def grade_worksheet(
     worksheet_id: int,
     answer_sheet: UploadFile = File(..., description="답안지 이미지 파일"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         from ..models.worksheet import Worksheet
@@ -479,7 +490,7 @@ async def grade_worksheet(
         task = grade_problems_task.delay(
             worksheet_id=worksheet_id,
             image_data=image_data,
-            user_id=1
+            user_id=current_user["id"]
         )
         
         return {
@@ -502,7 +513,8 @@ async def grade_worksheet(
 async def grade_worksheet_canvas(
     worksheet_id: int,
     request: dict,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         print(f"🔍 채점 요청 시작: worksheet_id={worksheet_id}")
@@ -527,7 +539,7 @@ async def grade_worksheet_canvas(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
             canvas_answers=canvas_answers,
-            user_id=1
+            user_id=current_user["id"]
         )
         
         print(f"✅ Celery 태스크 시작: {task.id}")
@@ -556,7 +568,8 @@ async def grade_worksheet_mixed(
     worksheet_id: int,
     multiple_choice_answers: dict = {},
     handwritten_answer_sheet: Optional[UploadFile] = File(None, description="손글씨 답안지 이미지 (서술형/단답형)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         from ..models.worksheet import Worksheet
@@ -580,8 +593,9 @@ async def grade_worksheet_mixed(
         task = grade_problems_mixed_task.delay(
             worksheet_id=worksheet_id,
             multiple_choice_answers=multiple_choice_answers,
-            handwritten_image_data=handwritten_image_data,
-            user_id=1
+            canvas_answers={},
+            user_id=current_user["id"],
+            handwritten_image_data=handwritten_image_data
         )
         
         return {
@@ -606,15 +620,15 @@ async def grade_worksheet_mixed(
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     try:
         from ..models.worksheet import Worksheet
         from ..models.problem import Problem
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -976,8 +990,8 @@ async def regenerate_single_problem(
 @router.delete("/worksheets/{worksheet_id}")
 async def delete_worksheet(
     worksheet_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """워크시트 삭제"""
     try:
@@ -987,7 +1001,7 @@ async def delete_worksheet(
         
         # 워크시트 조회
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -1037,8 +1051,8 @@ async def delete_worksheet(
 @router.delete("/problems/{problem_id}")
 async def delete_problem(
     problem_id: int,
-    user_id: int = Query(..., description="로그인한 사용자 ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_teacher)
 ):
     """개별 문제 삭제"""
     try:
@@ -1055,7 +1069,7 @@ async def delete_problem(
         
         # 워크시트 조회 (권한 확인)
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == user_id)\
+            .filter(Worksheet.id == problem.worksheet_id, Worksheet.teacher_id == current_user["id"])\
             .first()
         
         if not worksheet:
@@ -1202,19 +1216,24 @@ async def get_student_assignments(
     try:
         print(f"🔍 학생 과제 목록 조회 - student_id: {student_id}")
         
-        # 학생이 속한 클래스룸 확인
-        from ..models.user import StudentJoinRequest
-        student_classrooms = db.query(StudentJoinRequest).filter(
-            StudentJoinRequest.student_id == student_id,
-            StudentJoinRequest.status == "approved"
-        ).all()
+        # 학생이 속한 클래스룸 확인 (auth_service 스키마의 테이블 직접 접근)
+        from sqlalchemy import text
+        query = text("""
+            SELECT classroom_id
+            FROM auth_service.student_join_requests
+            WHERE student_id = :student_id AND status = 'approved'
+        """)
+        result = db.execute(query, {"student_id": student_id})
+        student_classrooms = result.fetchall()
+
+        # classroom_id 목록 추출
+        classroom_ids = [row[0] for row in student_classrooms]
         
         print(f"📚 학생이 속한 클래스룸 수: {len(student_classrooms)}")
-        for classroom in student_classrooms:
-            print(f"  - 클래스룸 ID: {classroom.classroom_id}")
-        
+        for classroom_id in classroom_ids:
+            print(f"  - 클래스룸 ID: {classroom_id}")
+
         # 학생이 속한 클래스룸의 과제 배포 정보 조회
-        classroom_ids = [c.classroom_id for c in student_classrooms]
         print(f"📚 조회할 클래스룸 ID 목록: {classroom_ids}")
         
         if not classroom_ids:
@@ -1345,4 +1364,178 @@ async def get_assignment_detail_for_student(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"과제 상세 정보 조회 중 오류 발생: {str(e)}"
+        )
+
+
+# ===== 테스트 세션 관련 라우터 =====
+
+@router.post("/test-sessions", response_model=TestSessionResponse)
+async def create_test_session(
+    request: TestSessionCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_student)
+):
+    """테스트 세션 생성"""
+    try:
+        import uuid
+        from datetime import datetime
+
+        # 과제 존재 확인
+        assignment = db.query(Assignment).filter(Assignment.id == request.assignment_id).first()
+        if not assignment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="과제를 찾을 수 없습니다"
+            )
+
+        # 세션 ID 생성
+        session_id = str(uuid.uuid4())
+
+        student_id = current_user["id"]
+
+        # 테스트 세션 생성
+        test_session = TestSession(
+            session_id=session_id,
+            assignment_id=request.assignment_id,
+            student_id=student_id,
+            status="started"
+        )
+
+        db.add(test_session)
+        db.commit()
+        db.refresh(test_session)
+
+        return TestSessionResponse(
+            session_id=test_session.session_id,
+            assignment_id=test_session.assignment_id,
+            student_id=test_session.student_id,
+            started_at=test_session.started_at.isoformat(),
+            status=test_session.status
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"테스트 세션 생성 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/test-answers")
+async def save_test_answer(
+    request: TestAnswerRequest,
+    db: Session = Depends(get_db)
+):
+    """테스트 답안 저장"""
+    try:
+        # 세션 존재 확인
+        test_session = db.query(TestSession).filter(
+            TestSession.session_id == request.session_id
+        ).first()
+
+        if not test_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="테스트 세션을 찾을 수 없습니다"
+            )
+
+        # 기존 답안이 있는지 확인
+        existing_answer = db.query(TestAnswer).filter(
+            TestAnswer.session_id == request.session_id,
+            TestAnswer.problem_id == request.problem_id
+        ).first()
+
+        if existing_answer:
+            # 기존 답안 업데이트
+            existing_answer.answer = request.answer
+            existing_answer.updated_at = func.now()
+        else:
+            # 새 답안 생성
+            test_answer = TestAnswer(
+                session_id=request.session_id,
+                problem_id=request.problem_id,
+                answer=request.answer
+            )
+            db.add(test_answer)
+
+        db.commit()
+
+        return {"message": "답안이 저장되었습니다", "success": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"답안 저장 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/test-sessions/{session_id}/submit", response_model=TestSubmissionResponse)
+async def submit_test(
+    session_id: str,
+    request: TestSubmissionRequest,
+    db: Session = Depends(get_db)
+):
+    """테스트 제출"""
+    try:
+        from datetime import datetime
+
+        # 세션 존재 확인
+        test_session = db.query(TestSession).filter(
+            TestSession.session_id == session_id
+        ).first()
+
+        if not test_session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="테스트 세션을 찾을 수 없습니다"
+            )
+
+        # 답안들 저장
+        for problem_id, answer in request.answers.items():
+            existing_answer = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session_id,
+                TestAnswer.problem_id == int(problem_id)
+            ).first()
+
+            if existing_answer:
+                existing_answer.answer = answer
+                existing_answer.updated_at = func.now()
+            else:
+                test_answer = TestAnswer(
+                    session_id=session_id,
+                    problem_id=int(problem_id),
+                    answer=answer
+                )
+                db.add(test_answer)
+
+        # 세션 상태 업데이트
+        test_session.status = "submitted"
+        test_session.submitted_at = func.now()
+
+        db.commit()
+
+        # 답안 통계 계산
+        total_answers = db.query(TestAnswer).filter(
+            TestAnswer.session_id == session_id
+        ).count()
+
+        return TestSubmissionResponse(
+            session_id=session_id,
+            submitted_at=datetime.now().isoformat(),
+            total_problems=len(request.answers),
+            answered_problems=total_answers
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"테스트 제출 중 오류 발생: {str(e)}"
         )

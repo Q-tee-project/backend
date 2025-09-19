@@ -130,25 +130,25 @@ class ProblemGenerator:
             return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
     
     def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
-        """AI 호출 및 응답 파싱 - 개선된 버전"""
+        """AI 호출 및 응답 파싱 - 단순화된 버전"""
         try:
             response = self.model.generate_content(
                 prompt,
                 request_options={'timeout': 1200}  # 20분 타임아웃
             )
             content = response.text
-            
+
             # JSON 추출 및 파싱
             problems = self._extract_and_parse_json(content)
-            
-            # LaTeX 검증 및 수정
+
+            # 기본 구조 검증만 수행 (LaTeX 후처리 제거)
             validated_problems = []
             for problem in problems:
-                validated_problem = self._validate_and_fix_problem(problem)
+                validated_problem = self._validate_basic_structure(problem)
                 validated_problems.append(validated_problem)
-            
+
             return validated_problems
-            
+
         except Exception as e:
             import traceback
             error_msg = f"문제 생성 오류: {str(e)}\n{traceback.format_exc()}"
@@ -399,17 +399,14 @@ class ProblemGenerator:
         required_fields = ['question', 'correct_answer']
         return all(field in obj for field in required_fields)
     
-    def _validate_and_fix_problem(self, problem: Dict) -> Dict:
-        """문제 검증 및 수정 - 완전 개선"""
+    def _validate_basic_structure(self, problem: Dict) -> Dict:
+        """기본 구조 검증만 수행 - LaTeX는 Gemini가 완벽하게 생성"""
         # 1. 필수 필드 확인 및 기본값 설정
         problem = self._ensure_required_fields(problem)
-        
-        # 2. LaTeX 수식 검증 및 수정
-        problem = self._fix_latex_in_problem(problem)
-        
-        # 3. 데이터 타입 검증
+
+        # 2. 데이터 타입 검증만 수행
         problem = self._validate_data_types(problem)
-        
+
         return problem
     
     def _ensure_required_fields(self, problem: Dict) -> Dict:
@@ -435,70 +432,9 @@ class ProblemGenerator:
         
         return problem
     
-    def _fix_latex_in_problem(self, problem: Dict) -> Dict:
-        """LaTeX 수식 수정 - KaTeX 호환"""
-        # LaTeX 수정 패턴
-        latex_fixes = [
-            # 잘못된 명령어 수정
-            (r'(?<!\\)frac\{', r'\\frac{'),
-            (r'(?<!\\)sqrt\{', r'\\sqrt{'),
-            (r'(?<!\\)sin(?!\w)', r'\\sin'),
-            (r'(?<!\\)cos(?!\w)', r'\\cos'),
-            (r'(?<!\\)tan(?!\w)', r'\\tan'),
-            (r'(?<!\\)log(?!\w)', r'\\log'),
-            (r'(?<!\\)ln(?!\w)', r'\\ln'),
-            (r'(?<!\\)pi(?!\w)', r'\\pi'),
-            (r'(?<!\\)alpha(?!\w)', r'\\alpha'),
-            (r'(?<!\\)beta(?!\w)', r'\\beta'),
-            (r'(?<!\\)theta(?!\w)', r'\\theta'),
-            (r'(?<!\\)times(?!\w)', r'\\times'),
-            (r'(?<!\\)div(?!\w)', r'\\div'),
-            (r'(?<!\\)leq(?!\w)', r'\\leq'),
-            (r'(?<!\\)geq(?!\w)', r'\\geq'),
-            (r'(?<!\\)neq(?!\w)', r'\\neq'),
-            
-            # 단독 백슬래시 문자 제거
-            (r'\\([fnglts])(?![a-zA-Z])', r''),
-            
-            # 중괄호 누락 수정
-            (r'\^(\d{2,})', r'^{\1}'),  # 두 자리 이상 지수
-            (r'_(\d{2,})', r'_{\1}'),   # 두 자리 이상 아래첨자
-        ]
-        
-        # 텍스트 필드 처리
-        text_fields = ['question', 'correct_answer', 'explanation']
-        for field in text_fields:
-            if field in problem and isinstance(problem[field], str):
-                problem[field] = self._apply_latex_fixes(problem[field], latex_fixes)
-        
-        # choices 배열 처리
-        if 'choices' in problem and isinstance(problem['choices'], list):
-            problem['choices'] = [
-                self._apply_latex_fixes(choice, latex_fixes) 
-                if isinstance(choice, str) else choice
-                for choice in problem['choices']
-            ]
-        
-        return problem
-    
-    def _apply_latex_fixes(self, text: str, fixes: List[tuple]) -> str:
-        """LaTeX 수정 규칙 적용"""
-        if not text:
-            return text
-        
-        fixed = text
-        for pattern, replacement in fixes:
-            fixed = re.sub(pattern, replacement, fixed)
-        
-        # $ 기호 확인 (수식이 제대로 감싸져 있는지)
-        # 백슬래시로 시작하는 명령어가 $ 밖에 있으면 감싸기
-        fixed = re.sub(r'(?<!\$)(\\(?:frac|sqrt|sin|cos|tan|log|pi|alpha|beta|theta)[^$]*?)(?!\$)', 
-                      r'$\1$', fixed)
-        
-        return fixed
     
     def _validate_data_types(self, problem: Dict) -> Dict:
-        """데이터 타입 검증 및 수정"""
+        """기본 데이터 타입 검증만 수행"""
         # difficulty는 대문자로
         if 'difficulty' in problem:
             difficulty = str(problem['difficulty']).upper()
@@ -506,39 +442,22 @@ class ProblemGenerator:
                 problem['difficulty'] = 'B'
             else:
                 problem['difficulty'] = difficulty
-        
-        # problem_type 검증
+
+        # problem_type 기본 검증
         valid_types = ['multiple_choice', 'short_answer', 'essay']
         if 'problem_type' in problem:
             if problem['problem_type'] not in valid_types:
-                # 추측
+                # 객관식 여부로 자동 판단
                 if 'choices' in problem and problem['choices']:
                     problem['problem_type'] = 'multiple_choice'
                 else:
                     problem['problem_type'] = 'short_answer'
-        
+
         # has_diagram은 boolean으로
         if 'has_diagram' in problem:
             if isinstance(problem['has_diagram'], str):
                 problem['has_diagram'] = problem['has_diagram'].lower() == 'true'
             elif not isinstance(problem['has_diagram'], bool):
                 problem['has_diagram'] = False
-        
-        # 객관식 correct_answer 검증
-        if problem.get('problem_type') == 'multiple_choice':
-            if 'correct_answer' in problem:
-                answer = str(problem['correct_answer']).upper()
-                if answer not in ['A', 'B', 'C', 'D']:
-                    # 숫자로 되어 있으면 변환
-                    if answer in ['1', '2', '3', '4']:
-                        problem['correct_answer'] = chr(ord('A') + int(answer) - 1)
-                    # ①②③④로 되어 있으면 변환
-                    elif answer in ['①', '②', '③', '④']:
-                        mapping = {'①': 'A', '②': 'B', '③': 'C', '④': 'D'}
-                        problem['correct_answer'] = mapping.get(answer, 'A')
-                    else:
-                        problem['correct_answer'] = 'A'  # 기본값
-                else:
-                    problem['correct_answer'] = answer
-        
+
         return problem

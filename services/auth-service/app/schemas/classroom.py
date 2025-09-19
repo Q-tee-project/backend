@@ -8,6 +8,11 @@ class ClassroomCreate(BaseModel):
     school_level: SchoolLevel
     grade: int
 
+class ClassroomUpdate(BaseModel):
+    name: Optional[str] = None
+    school_level: Optional[SchoolLevel] = None
+    grade: Optional[int] = None
+
 class ClassroomResponse(BaseModel):
     id: int
     name: str
@@ -45,3 +50,17 @@ class StudentDirectRegister(BaseModel):
 
 class JoinRequestApproval(BaseModel):
     status: str  # "approved" or "rejected"
+
+class ClassroomWithTeacherResponse(BaseModel):
+    """학생용 클래스룸 정보 (교사 정보 포함)"""
+    id: int
+    name: str
+    school_level: SchoolLevel
+    grade: int
+    class_code: str
+    is_active: bool
+    created_at: datetime
+    teacher: TeacherResponse
+
+    class Config:
+        from_attributes = True

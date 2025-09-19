@@ -89,4 +89,47 @@ class AssignmentDeployment(Base):
     assignment = relationship("Assignment", backref="deployments")
 
 
+# ===== 테스트 세션 관련 모델 =====
+
+class TestSession(Base):
+    """테스트 세션 모델"""
+    __tablename__ = "test_sessions"
+    __table_args__ = {"schema": "math_service"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, index=True, nullable=False)  # UUID
+    assignment_id = Column(Integer, ForeignKey("math_service.assignments.id"), nullable=False)
+    student_id = Column(Integer, nullable=False)  # 학생 ID
+
+    # 세션 상태
+    status = Column(String, default="started")  # started, completed, submitted
+
+    # 시간 정보
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    submitted_at = Column(DateTime(timezone=True))
+
+    # 관계
+    assignment = relationship("Assignment", backref="test_sessions")
+    test_answers = relationship("TestAnswer", back_populates="test_session")
+
+
+class TestAnswer(Base):
+    """테스트 답안 모델"""
+    __tablename__ = "test_answers"
+    __table_args__ = {"schema": "math_service"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, ForeignKey("math_service.test_sessions.session_id"), nullable=False)
+    problem_id = Column(Integer, nullable=False)  # 문제 ID
+    answer = Column(Text)  # 학생 답안
+
+    # 시간 정보
+    answered_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 관계
+    test_session = relationship("TestSession", back_populates="test_answers")
+
+
 # GeneratedProblemSet 모델 제거됨 - Problem 테이블의 sequence_order와 worksheet_id로 대체

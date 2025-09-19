@@ -16,7 +16,7 @@ class OCRService:
             image = Image.open(io.BytesIO(image_data))
 
             # Gemini Vision API를 사용한 OCR
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-pro')
 
             prompt = """
 이 이미지에서 한글 텍스트를 추출해주세요.

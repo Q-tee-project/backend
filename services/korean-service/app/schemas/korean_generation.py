@@ -15,8 +15,6 @@ class KoreanType(str, Enum):
 
 class QuestionType(str, Enum):
     MULTIPLE_CHOICE = "객관식"
-    ESSAY = "서술형"
-    SHORT_ANSWER = "단답형"
 
 class Difficulty(str, Enum):
     HIGH = "상"
@@ -26,30 +24,26 @@ class Difficulty(str, Enum):
 class KoreanProblemGenerationRequest(BaseModel):
     school_level: SchoolLevel
     grade: int = Field(..., ge=1, le=3, description="학년 (1-3)")
-    semester: str = Field(..., description="학기 (1학기, 2학기)")
-    korean_type: KoreanType = Field(..., description="국어 문제 유형")
+    korean_type: KoreanType = Field(..., description="국어 문제 유형 (단일 도메인)")
     question_type: QuestionType = Field(..., description="문제 형식")
     difficulty: Difficulty = Field(..., description="난이도")
     problem_count: int = Field(..., ge=1, le=20, description="문제 수")
     user_text: Optional[str] = Field(None, max_length=500, description="사용자 요구사항")
 
-    # 비율 설정 (전체 선택 시)
-    korean_type_ratio: Optional[Dict[str, int]] = Field(None, description="국어 유형별 비율")
-    question_type_ratio: Optional[Dict[str, int]] = Field(None, description="문제 형식별 비율")
+    # 비율 설정 (단일 도메인 내에서만)
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = Field(None, description="난이도별 비율")
 
 class KoreanWorksheetCreate(BaseModel):
     title: str = Field(..., max_length=200, description="워크시트 제목")
     school_level: SchoolLevel
     grade: int = Field(..., ge=1, le=3)
-    semester: str
     korean_type: KoreanType
     question_type: QuestionType
     difficulty: Difficulty
     problem_count: int
     user_text: Optional[str] = None
-    korean_type_ratio: Optional[Dict[str, int]] = None
-    question_type_ratio: Optional[Dict[str, int]] = None
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = None
 
 class KoreanWorksheetResponse(BaseModel):
@@ -57,7 +51,6 @@ class KoreanWorksheetResponse(BaseModel):
     title: str
     school_level: str
     grade: int
-    semester: str
     korean_type: str
     question_type: str
     difficulty: str

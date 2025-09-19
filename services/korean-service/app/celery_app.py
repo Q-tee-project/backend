@@ -25,4 +25,8 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # 국어 서비스 전용 큐 설정
+    task_routes={
+        'app.tasks.generate_korean_problems_task': {'queue': 'korean_queue'},
+    },
 )

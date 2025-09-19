@@ -316,26 +316,14 @@ class MathGenerationService:
             return []
     
     def _generate_problems_with_ai(self, curriculum_data: Dict, problem_types: List[str], request: MathProblemGenerationRequest) -> List[Dict]:
-        """AI를 통한 문제 생성"""
-        
+        """AI를 통한 문제 생성 - Celery task 사용"""
+
         # 사용자 프롬프트 그대로 전달 (ProblemGenerator에서 모든 처리)
         enhanced_prompt = request.user_text
-        
-        try:
-            # ProblemGenerator 직접 호출 - 난이도 비율 정보 추가로 전달
-            problems = self.problem_generator.generate_problems(
-                curriculum_data=curriculum_data,
-                user_prompt=enhanced_prompt,
-                problem_count=request.problem_count.value_int,
-                difficulty_ratio=request.difficulty_ratio.model_dump()
-            )
-            
-            return problems if isinstance(problems, list) else [problems]
-            
-        except Exception as e:
-            print(f"AI 문제 생성 오류: {str(e)}")
-            # 기본 문제 생성
-            return self._generate_fallback_problems(request.problem_count.value_int, curriculum_data)
+
+        # MathGenerationService는 더 이상 직접 문제 생성하지 않음
+        # 모든 문제 생성은 Celery Task를 통해서만 수행
+        raise Exception("이 메서드는 더 이상 사용되지 않습니다. API 엔드포인트에서 직접 Task를 호출하세요.")
     
     def _generate_fallback_problems(self, count: int, curriculum_data: Dict) -> List[Dict]:
         """AI 오류시 기본 문제 생성"""
