@@ -335,3 +335,110 @@ def grade_korean_problems_task(self, worksheet_id: int, image_data: bytes = None
 
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, name="app.tasks.regenerate_korean_problem_task")
+def regenerate_korean_problem_task(self, problem_id: int, requirements: str, current_problem: dict):
+    """국어 문제 재생성 태스크"""
+    try:
+        db = SessionLocal()
+
+        # 진행 상황 업데이트
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 10, 'total': 100, 'status': '문제 재생성 준비 중...'}
+        )
+
+        # 기존 문제 조회
+        problem = db.query(Problem).filter(Problem.id == problem_id).first()
+        if not problem:
+            raise Exception(f"문제를 찾을 수 없습니다: {problem_id}")
+
+        # 워크시트 정보 조회
+        worksheet = db.query(Worksheet).filter(Worksheet.id == problem.worksheet_id).first()
+        if not worksheet:
+            raise Exception("워크시트를 찾을 수 없습니다.")
+
+        # 진행 상황 업데이트
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 30, 'total': 100, 'status': '새 문제 생성 중...'}
+        )
+
+        # 빠른 재생성을 위한 AI 서비스 사용
+        from .services.ai_service import AIService
+        ai_service = AIService()
+
+        # 기존 문제와 요구사항을 포함한 프롬프트 생성
+        enhanced_prompt = f"""
+다음 문제를 개선해주세요:
+
+기존 문제:
+질문: {current_problem.get('question', '')}
+선택지: {current_problem.get('choices', [])}
+정답: {current_problem.get('correct_answer', '')}
+해설: {current_problem.get('explanation', '')}
+
+개선 요구사항:
+{requirements}
+
+위 요구사항을 반영하여 더 나은 문제로 재생성해주세요.
+"""
+
+        # 빠른 재생성 메서드 사용 (복잡한 파이프라인 없이)
+        new_problem_data = ai_service.regenerate_single_problem(
+            current_problem=current_problem,
+            requirements=enhanced_prompt
+        )
+
+        if not new_problem_data:
+            raise Exception("새 문제 생성에 실패했습니다.")
+
+        # 진행 상황 업데이트
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 80, 'total': 100, 'status': '문제 업데이트 중...'}
+        )
+
+        # 기존 문제 업데이트
+        problem.question = new_problem_data.get('question', problem.question)
+        problem.choices = json.dumps(new_problem_data.get('choices'), ensure_ascii=False) if new_problem_data.get('choices') else problem.choices
+        problem.correct_answer = new_problem_data.get('correct_answer', problem.correct_answer)
+        problem.explanation = new_problem_data.get('explanation', problem.explanation)
+        problem.source_text = new_problem_data.get('source_text', problem.source_text)
+        problem.source_title = new_problem_data.get('source_title', problem.source_title)
+        problem.source_author = new_problem_data.get('source_author', problem.source_author)
+
+        db.commit()
+
+        # 진행 상황 업데이트
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 100, 'total': 100, 'status': '재생성 완료!'}
+        )
+
+        return {
+            'success': True,
+            'problem_id': problem_id,
+            'updated_problem': {
+                'question': problem.question,
+                'choices': json.loads(problem.choices) if problem.choices else None,
+                'correct_answer': problem.correct_answer,
+                'explanation': problem.explanation,
+                'source_text': problem.source_text,
+                'source_title': problem.source_title,
+                'source_author': problem.source_author
+            }
+        }
+
+    except Exception as e:
+        # 오류 로깅
+        current_task.update_state(
+            state='FAILURE',
+            meta={'error': str(e)}
+        )
+        db.close()
+        raise Exception(f"국어 문제 재생성 중 오류: {str(e)}")
+
+    finally:
+        db.close()

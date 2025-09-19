@@ -22,4 +22,4 @@ RUN useradd -m -u 1000 celeryuser && chown -R celeryuser:celeryuser /app
 USER celeryuser
 
 # Celery worker 명령어 - 수학 서비스 전용 큐 지정
-CMD ["celery", "-A", "celery_worker", "worker", "--loglevel=info", "--concurrency=4", "--queues=math_queue"]
+CMD ["celery", "-A", "celery_worker", "worker", "--loglevel=info", "--concurrency=4", "--queues=math_queue,celery"]

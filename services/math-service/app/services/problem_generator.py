@@ -132,10 +132,7 @@ class ProblemGenerator:
     def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
         """AI 호출 및 응답 파싱 - 단순화된 버전"""
         try:
-            response = self.model.generate_content(
-                prompt,
-                request_options={'timeout': 1200}  # 20분 타임아웃
-            )
+            response = self.model.generate_content(prompt)
             content = response.text
 
             # JSON 추출 및 파싱

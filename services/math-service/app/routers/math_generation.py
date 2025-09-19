@@ -868,12 +868,12 @@ async def regenerate_single_problem(
     request: dict,
     db: Session = Depends(get_db)
 ):
-    """개별 문제 재생성"""
+    """개별 문제 재생성 (동기)"""
     try:
         from ..models.problem import Problem
         from ..models.worksheet import Worksheet
         from ..services.ai_service import AIService
-        
+
         # 기존 문제 조회
         problem = db.query(Problem).filter(Problem.id == problem_id).first()
         if not problem:
@@ -881,7 +881,7 @@ async def regenerate_single_problem(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="문제를 찾을 수 없습니다."
             )
-        
+
         # 워크시트 정보 조회 (교육과정 정보 필요)
         worksheet = db.query(Worksheet).filter(Worksheet.id == problem.worksheet_id).first()
         if not worksheet:
@@ -889,7 +889,7 @@ async def regenerate_single_problem(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="워크시트를 찾을 수 없습니다."
             )
-        
+
         # 사용자 프롬프트 추출
         user_prompt = request.get("user_prompt", "")
         if not user_prompt:
@@ -897,7 +897,7 @@ async def regenerate_single_problem(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="문제 재생성을 위한 사용자 프롬프트가 필요합니다."
             )
-        
+
         # 교육과정 정보 구성
         curriculum_data = {
             "grade": worksheet.grade,
@@ -905,15 +905,15 @@ async def regenerate_single_problem(
             "unit_name": worksheet.unit_name,
             "chapter_name": worksheet.chapter_name
         }
-        
+
         # 기존 문제의 난이도와 타입 유지하거나 요청에서 받기
         target_difficulty = request.get("difficulty", problem.difficulty)
         target_type = request.get("problem_type", problem.problem_type)
-        
+
         # 난이도 비율 설정 (단일 문제이므로 해당 난이도 100%)
         difficulty_ratio = {"A": 0, "B": 0, "C": 0}
         difficulty_ratio[target_difficulty] = 100
-        
+
         # AI 서비스를 통한 문제 재생성
         ai_service = AIService()
         new_problems = ai_service.generate_math_problem(
@@ -922,27 +922,27 @@ async def regenerate_single_problem(
             problem_count=1,
             difficulty_ratio=difficulty_ratio
         )
-        
+
         if not new_problems or len(new_problems) == 0:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="문제 재생성에 실패했습니다."
             )
-        
+
         new_problem_data = new_problems[0]
-        
+
         # 기존 문제 정보 업데이트
         problem.question = new_problem_data.get("question", problem.question)
         problem.correct_answer = new_problem_data.get("correct_answer", problem.correct_answer)
         problem.explanation = new_problem_data.get("explanation", problem.explanation)
         problem.difficulty = new_problem_data.get("difficulty", target_difficulty)
         problem.problem_type = new_problem_data.get("problem_type", target_type)
-        
+
         # 객관식인 경우 선택지 업데이트
         if new_problem_data.get("choices"):
             import json
             problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
-        
+
         # 다이어그램 정보 업데이트
         if "has_diagram" in new_problem_data:
             problem.has_diagram = str(new_problem_data["has_diagram"]).lower()
@@ -951,10 +951,10 @@ async def regenerate_single_problem(
         if "diagram_elements" in new_problem_data:
             import json
             problem.diagram_elements = json.dumps(new_problem_data["diagram_elements"], ensure_ascii=False)
-        
+
         db.commit()
         db.refresh(problem)
-        
+
         return {
             "message": f"{problem.sequence_order}번 문제가 성공적으로 재생성되었습니다.",
             "problem_id": problem_id,
@@ -973,7 +973,7 @@ async def regenerate_single_problem(
             },
             "updated_at": problem.updated_at.isoformat() if problem.updated_at else None
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -984,6 +984,57 @@ async def regenerate_single_problem(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"문제 재생성 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/problems/regenerate-async")
+async def regenerate_problem_async(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """개별 문제 재생성 (비동기 - Celery)"""
+    try:
+        from ..tasks import regenerate_single_problem_task
+
+        # 필수 데이터 검증
+        problem_id = request.get("problem_id")
+        requirements = request.get("requirements", "")
+        current_problem = request.get("current_problem", {})
+
+        if not problem_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="problem_id가 필요합니다."
+            )
+
+        # 문제 존재 확인
+        from ..models.problem import Problem
+        problem = db.query(Problem).filter(Problem.id == problem_id).first()
+        if not problem:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="문제를 찾을 수 없습니다."
+            )
+
+        # Celery 태스크 시작
+        task = regenerate_single_problem_task.delay(
+            problem_id=problem_id,
+            requirements=requirements,
+            current_problem=current_problem
+        )
+
+        return {
+            "task_id": task.id,
+            "status": "PENDING",
+            "message": "문제 재생성이 시작되었습니다. /tasks/{task_id} 엔드포인트로 진행 상황을 확인하세요."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"비동기 문제 재생성 요청 중 오류 발생: {str(e)}"
         )
 
 
@@ -1538,4 +1589,47 @@ async def submit_test(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"테스트 제출 중 오류 발생: {str(e)}"
+        )
+
+
+@router.get("/tasks/{task_id}/status")
+async def get_task_status(task_id: str):
+    """Celery 작업 상태 확인"""
+    try:
+        task_result = AsyncResult(task_id, app=celery_app)
+
+        if task_result.state == 'PENDING':
+            response = {
+                'status': 'PENDING',
+                'message': '작업이 대기 중입니다.'
+            }
+        elif task_result.state == 'PROGRESS':
+            response = {
+                'status': 'PROGRESS',
+                'progress': task_result.info.get('current', 0),
+                'total': task_result.info.get('total', 100),
+                'message': task_result.info.get('status', '처리 중...')
+            }
+        elif task_result.state == 'SUCCESS':
+            response = {
+                'status': 'SUCCESS',
+                'result': task_result.result
+            }
+        elif task_result.state == 'FAILURE':
+            response = {
+                'status': 'FAILURE',
+                'error': str(task_result.info)
+            }
+        else:
+            response = {
+                'status': task_result.state,
+                'message': f'알 수 없는 상태: {task_result.state}'
+            }
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"작업 상태 확인 중 오류 발생: {str(e)}"
         )

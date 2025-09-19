@@ -669,12 +669,145 @@ def _grade_objective_problem(problem: Problem, user_answer: str, points_per_prob
 def get_task_status(self, task_id: str):
     """태스크 상태 조회"""
     from celery.result import AsyncResult
-    
+
     result = AsyncResult(task_id, app=celery_app)
-    
+
     return {
         "task_id": task_id,
         "status": result.status,
         "result": result.result if result.successful() else None,
         "info": result.info
     }
+
+
+@celery_app.task(bind=True, name="app.tasks.regenerate_single_problem_task")
+def regenerate_single_problem_task(self, problem_id: int, requirements: str, current_problem: dict):
+    """비동기 개별 문제 재생성 태스크"""
+
+    task_id = self.request.id
+    print(f"🔄 Problem regeneration task started: {task_id}")
+    print(f"📝 Problem ID: {problem_id}")
+    print(f"💬 Requirements: {requirements}")
+
+    # 데이터베이스 세션 생성
+    db = SessionLocal()
+
+    try:
+        # 진행률 업데이트
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 10, 'total': 100, 'status': '문제 정보 조회 중...'}
+        )
+
+        # 기존 문제 조회
+        problem = db.query(Problem).filter(Problem.id == problem_id).first()
+        if not problem:
+            raise Exception("문제를 찾을 수 없습니다.")
+
+        # 워크시트 정보 조회 (교육과정 정보 필요)
+        worksheet = db.query(Worksheet).filter(Worksheet.id == problem.worksheet_id).first()
+        if not worksheet:
+            raise Exception("워크시트를 찾을 수 없습니다.")
+
+        # 진행률 업데이트
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 30, 'total': 100, 'status': 'AI 문제 생성 중...'}
+        )
+
+        # 교육과정 정보 구성
+        curriculum_data = {
+            "grade": worksheet.grade,
+            "semester": worksheet.semester,
+            "unit_name": worksheet.unit_name,
+            "chapter_name": worksheet.chapter_name
+        }
+
+        # 기존 문제의 난이도와 타입 유지
+        target_difficulty = problem.difficulty
+        target_type = problem.problem_type
+
+        # 난이도 비율 설정 (단일 문제이므로 해당 난이도 100%)
+        difficulty_ratio = {"A": 0, "B": 0, "C": 0}
+        difficulty_ratio[target_difficulty] = 100
+
+        # 사용자 요구사항을 포함한 프롬프트 구성
+        user_prompt = requirements if requirements else "기존 문제와 유사하지만 다른 내용으로 재생성해주세요."
+        enhanced_prompt = f"{user_prompt} (난이도: {target_difficulty}단계, 유형: {target_type})"
+
+        # AI 서비스를 통한 문제 재생성
+        from .services.ai_service import AIService
+        ai_service = AIService()
+
+        # 진행률 업데이트
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 70, 'total': 100, 'status': 'AI 응답 처리 중...'}
+        )
+
+        # 빠른 재생성 메서드 사용 (복잡한 파이프라인 없이)
+        new_problem_data = ai_service.regenerate_single_problem(
+            current_problem=current_problem,
+            requirements=enhanced_prompt
+        )
+
+        if not new_problem_data:
+            raise Exception("문제 재생성에 실패했습니다.")
+
+        # 진행률 업데이트
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 90, 'total': 100, 'status': '문제 정보 업데이트 중...'}
+        )
+
+        # 기존 문제 정보 업데이트
+        problem.question = new_problem_data.get("question", problem.question)
+        problem.correct_answer = new_problem_data.get("correct_answer", problem.correct_answer)
+        problem.explanation = new_problem_data.get("explanation", problem.explanation)
+        problem.difficulty = new_problem_data.get("difficulty", target_difficulty)
+        problem.problem_type = new_problem_data.get("problem_type", target_type)
+
+        # 객관식인 경우 선택지 업데이트
+        if new_problem_data.get("choices"):
+            problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
+
+        # 다이어그램 정보 업데이트
+        if "has_diagram" in new_problem_data:
+            problem.has_diagram = str(new_problem_data["has_diagram"]).lower()
+        if "diagram_type" in new_problem_data:
+            problem.diagram_type = new_problem_data.get("diagram_type")
+        if "diagram_elements" in new_problem_data:
+            problem.diagram_elements = json.dumps(new_problem_data["diagram_elements"], ensure_ascii=False)
+
+        db.commit()
+        db.refresh(problem)
+
+        # 결과 데이터 구성
+        result = {
+            "message": f"{problem.sequence_order}번 문제가 성공적으로 재생성되었습니다.",
+            "problem_id": problem_id,
+            "question": problem.question,
+            "choices": json.loads(problem.choices) if problem.choices else None,
+            "correct_answer": problem.correct_answer,
+            "explanation": problem.explanation,
+            "difficulty": problem.difficulty,
+            "problem_type": problem.problem_type,
+            "has_diagram": problem.has_diagram == "true",
+            "diagram_type": problem.diagram_type,
+            "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None,
+            "updated_at": problem.updated_at.isoformat() if problem.updated_at else datetime.now().isoformat()
+        }
+
+        print(f"✅ Problem regeneration completed: {problem_id}")
+        return result
+
+    except Exception as e:
+        print(f"❌ Problem regeneration failed: {str(e)}")
+        self.update_state(
+            state='FAILURE',
+            meta={'error': str(e), 'status': '문제 재생성 실패'}
+        )
+        raise
+
+    finally:
+        db.close()
