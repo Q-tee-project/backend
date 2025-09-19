@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from app.routers import math_generation, market_integration
 from app.database import engine
 from app.models import Base
+from app.routers import curriculum, worksheet, grading, assignment, problem, task, market_integration
+
 # Import all models to ensure they are registered with Base.metadata
 import app.models.worksheet
 import app.models.problem
@@ -24,9 +24,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-app.include_router(math_generation.router, prefix="/api/math-generation", tags=["math-generation"])
+app.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
+app.include_router(worksheet.router, tags=["worksheets"])
+app.include_router(grading.router, prefix="/grading", tags=["grading"])
+app.include_router(assignment.router, prefix="/assignments", tags=["assignments"])
+app.include_router(problem.router, prefix="/problems", tags=["problems"])
+app.include_router(task.router, prefix="/tasks", tags=["tasks"])
 app.include_router(market_integration.router, tags=["market-integration"])
 
 @app.get("/")
