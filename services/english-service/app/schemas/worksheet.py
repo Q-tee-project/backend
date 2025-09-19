@@ -109,8 +109,8 @@ class WorksheetResponse(BaseModel):
 
 # 문제지 목록 조회용 간단한 스키마
 class WorksheetSummary(BaseModel):
-    id: str  # worksheet_id와 동일한 값
-    worksheet_id: str
+    worksheet_id: str  # worksheet_id와 동일한 값
+    teacher_id: str
     worksheet_name: str
     school_level: str
     grade: str
