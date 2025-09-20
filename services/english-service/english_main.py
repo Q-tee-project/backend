@@ -8,6 +8,7 @@ from app.routers.health_router import router as health_router
 from app.routers.category_router import router as category_router
 from app.routers.worksheet_router import router as worksheet_router
 from app.routers.grading_router import router as grading_router
+from app.routers.regeneration_router import router as regeneration_router
 
 # 설정 인스턴스 가져오기
 settings = get_settings()
@@ -36,6 +37,10 @@ app = FastAPI(
         {
             "name": "Grading",
             "description": "답안 제출, 채점 및 결과 관리"
+        },
+        {
+            "name": "Question Regeneration",
+            "description": "문제 재생성 및 수정 기능"
         }
     ]
 )
@@ -59,6 +64,7 @@ app.include_router(health_router, prefix="/api/english")
 app.include_router(category_router, prefix="/api/english")
 app.include_router(worksheet_router, prefix="/api/english")
 app.include_router(grading_router, prefix="/api/english")
+app.include_router(regeneration_router, prefix="/api/english")
 
 # 루트 경로에서 HTML 페이지 제공
 @app.get("/")
