@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import Optional, Literal, Dict, Any
+from typing import Optional, Literal, Dict, Any, List
 from enum import Enum
 
 
@@ -47,6 +47,7 @@ class QuestionRegenerationRequest(BaseModel):
 
     # 기본 제약조건
     keep_passage: bool = Field(default=True, description="지문 유지 여부")
+    regenerate_related_questions: bool = Field(default=False, description="연계된 문제들도 함께 재생성 여부")
     keep_question_type: bool = Field(default=True, description="문제 유형(객관식/단답형/서술형) 유지 여부")
     keep_difficulty: bool = Field(default=True, description="난이도 유지 여부")
     keep_subject: bool = Field(default=True, description="문제 영역(독해/문법/어휘) 유지 여부")
@@ -103,9 +104,17 @@ class RegenerationResponse(BaseModel):
     # 성공시 반환 정보
     regenerated_question: Optional[Dict[str, Any]] = Field(default=None, description="재생성된 문제 정보")
     regenerated_passage: Optional[Dict[str, Any]] = Field(default=None, description="재생성된 지문 정보 (지문도 변경된 경우)")
+    regenerated_related_questions: Optional[List[Dict[str, Any]]] = Field(default=None, description="연계된 문제들 재생성 정보")
 
     # 오류시 반환 정보
     error_details: Optional[str] = Field(default=None, description="오류 상세 정보")
+
+
+class QuestionDataRegenerationRequest(BaseModel):
+    """데이터 기반 문제 재생성 요청"""
+    question_data: Dict[str, Any] = Field(..., description="원본 문제 데이터")
+    passage_data: Optional[Dict[str, Any]] = Field(None, description="원본 지문 데이터")
+    regeneration_request: QuestionRegenerationRequest = Field(..., description="재생성 조건")
 
 
 class RegenerationPromptData(BaseModel):
