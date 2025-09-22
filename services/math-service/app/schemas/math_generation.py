@@ -162,6 +162,21 @@ class AssignmentDeploymentResponse(BaseModel):
     status: str
     deployed_at: str
 
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """ORM 객체에서 deployed_at을 문자열로 변환"""
+        return cls(
+            id=deployment.id,
+            assignment_id=deployment.assignment_id,
+            student_id=deployment.student_id,
+            classroom_id=deployment.classroom_id,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat() if deployment.deployed_at else ""
+        )
+
 
 class StudentAssignmentResponse(BaseModel):
     """학생용 과제 응답"""
@@ -173,6 +188,24 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: str
     assignment_id: int
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """AssignmentDeployment 객체에서 필요한 정보 추출"""
+        assignment = deployment.assignment
+        return cls(
+            id=deployment.id,
+            title=assignment.title,
+            unit_name=assignment.unit_name,
+            chapter_name=assignment.chapter_name,
+            problem_count=assignment.problem_count,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat() if deployment.deployed_at else "",
+            assignment_id=assignment.id
+        )
 
 
 # ===== 테스트 세션 관련 스키마 =====

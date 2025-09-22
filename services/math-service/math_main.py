@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.models import Base
-from app.routers import curriculum, worksheet, grading, assignment, problem, task, market_integration
+from app.routers import curriculum, worksheet, grading, assignment, problem, task, market_integration, problem_validation, test_session
 
 # Import all models to ensure they are registered with Base.metadata
 import app.models.worksheet
@@ -11,6 +11,7 @@ import app.models.math_generation
 import app.models.grading_result
 import app.models.curriculum
 import app.models.user
+import app.models.problem_validation
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,6 +32,8 @@ app.include_router(assignment.router, prefix="/assignments", tags=["assignments"
 app.include_router(problem.router, prefix="/problems", tags=["problems"])
 app.include_router(task.router, prefix="/tasks", tags=["tasks"])
 app.include_router(market_integration.router, tags=["market-integration"])
+app.include_router(problem_validation.router, tags=["validation"])
+app.include_router(test_session.router, tags=["test-sessions"])
 
 @app.get("/")
 async def root():

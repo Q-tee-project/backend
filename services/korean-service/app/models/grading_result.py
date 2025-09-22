@@ -32,6 +32,13 @@ class KoreanGradingSession(Base):
     # 비동기 처리
     celery_task_id = Column(String, nullable=True)
 
+    # 상태
+    status = Column(String, default="pending_approval") # pending_approval, approved, rejected
+
+    # 승인 정보
+    teacher_id = Column(Integer, nullable=True)  # 승인한 선생님 ID
+    approved_at = Column(DateTime(timezone=True), nullable=True) # 승인 시간
+
     # 시간 관리
     graded_at = Column(DateTime(timezone=True), server_default=func.now())
 

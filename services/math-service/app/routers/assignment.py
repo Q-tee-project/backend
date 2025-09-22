@@ -1,14 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import logging
+import uuid
+import json
+from datetime import datetime
 
 from ..database import get_db
 from ..core.auth import get_current_student
-from ..schemas.math_generation import AssignmentDeployRequest, AssignmentDeploymentResponse, StudentAssignmentResponse
+from ..schemas.math_generation import AssignmentDeployRequest, AssignmentDeploymentResponse, StudentAssignmentResponse, TestSessionResponse
 from ..services.math_generation_service import MathGenerationService
+from ..models.math_generation import TestSession
 
 router = APIRouter()
 math_service = MathGenerationService()
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 @router.post("/deploy", response_model=List[AssignmentDeploymentResponse])
 async def deploy_assignment(
@@ -56,7 +66,7 @@ async def deploy_assignment(
             deployments.append(existing_deployment)
     
     db.commit()
-    return [d for d in deployments]
+    return [AssignmentDeploymentResponse.from_orm(d) for d in deployments]
 
 @router.get("/student/{student_id}", response_model=List[StudentAssignmentResponse])
 async def get_student_assignments(
@@ -80,3 +90,132 @@ async def get_student_assignments(
     ).all()
     
     return [StudentAssignmentResponse.from_orm(d) for d in deployments]
+
+@router.get("/{assignment_id}/student/{student_id}")
+async def get_assignment_detail(
+    assignment_id: int,
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    """학생용 과제 상세 정보 조회"""
+    logger.info(f"[MATH_SERVICE] get_assignment_detail 호출됨. assignment_id: {assignment_id}, student_id: {student_id}")
+
+    from ..models.math_generation import Assignment, AssignmentDeployment
+    from ..models.worksheet import Worksheet
+    from ..models.problem import Problem
+
+    # 배포 정보 확인
+    try:
+        deployment = db.query(AssignmentDeployment).join(Assignment).filter(
+            Assignment.id == assignment_id,
+            AssignmentDeployment.student_id == student_id
+        ).first()
+        logger.info(f"[MATH_SERVICE] DB 쿼리 결과 (deployment): {deployment}")
+
+        if not deployment:
+            logger.warning(f"[MATH_SERVICE] 배포 정보를 찾을 수 없음. assignment_id: {assignment_id}, student_id: {student_id}")
+            raise HTTPException(status_code=404, detail="Assignment not found or not assigned to student")
+
+        assignment = deployment.assignment
+        worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
+
+        if not worksheet:
+            logger.warning(f"[MATH_SERVICE] 워크시트를 찾을 수 없음. worksheet_id: {assignment.worksheet_id}")
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        # 문제들 조회
+        problems = db.query(Problem).filter(Problem.worksheet_id == worksheet.id).all()
+        logger.info(f"[MATH_SERVICE] {len(problems)}개의 문제를 찾음.")
+
+    except HTTPException:
+        raise  # HTTPException은 그대로 전달
+    except Exception as e:
+        logger.error(f"[MATH_SERVICE] 데이터베이스 조회 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error")
+
+    # 응답 구성
+    return {
+        "assignment": {
+            "id": assignment.id,
+            "title": assignment.title,
+            "unit_name": assignment.unit_name,
+            "chapter_name": assignment.chapter_name,
+            "problem_count": assignment.problem_count,
+            "status": assignment.is_deployed
+        },
+        "deployment": {
+            "id": deployment.id,
+            "status": deployment.status,
+            "deployed_at": deployment.deployed_at.isoformat() if deployment.deployed_at else None
+        },
+        "problems": [
+            {
+                "id": problem.id,
+                "sequence_order": problem.sequence_order,
+                "problem_type": problem.problem_type,
+                "difficulty": problem.difficulty,
+                "question": problem.question,
+                "choices": json.loads(problem.choices) if problem.choices else [],
+                "correct_answer": problem.correct_answer,
+                "explanation": problem.explanation,
+                "latex_content": problem.latex_content,
+                "image_url": problem.image_url,
+                "has_diagram": problem.has_diagram,
+                "diagram_type": problem.diagram_type,
+                "diagram_elements": problem.diagram_elements
+            }
+            for problem in problems
+        ]
+    }
+
+@router.post("/{assignment_id}/start", response_model=TestSessionResponse)
+async def start_test_session(
+    assignment_id: int,
+    request_body: dict, # { "student_id": int }
+    db: Session = Depends(get_db)
+):
+    """테스트 세션 시작"""
+    student_id = request_body.get("student_id")
+    if not student_id:
+        raise HTTPException(status_code=400, detail="student_id is required")
+
+    logger.info(f"[MATH_SERVICE] start_test_session 호출됨. assignment_id: {assignment_id}, student_id: {student_id}")
+
+    # 기존에 진행중인 세션이 있는지 확인
+    existing_session = db.query(TestSession).filter(
+        TestSession.assignment_id == assignment_id,
+        TestSession.student_id == student_id,
+        TestSession.status == 'started'
+    ).first()
+
+    if existing_session:
+        logger.info(f"[MATH_SERVICE] 기존 세션을 반환합니다: {existing_session.session_id}")
+        return TestSessionResponse(
+            session_id=existing_session.session_id,
+            assignment_id=existing_session.assignment_id,
+            student_id=existing_session.student_id,
+            started_at=existing_session.started_at.isoformat(),
+            status=existing_session.status
+        )
+
+    # 새 세션 생성
+    new_session = TestSession(
+        session_id=str(uuid.uuid4()),
+        assignment_id=assignment_id,
+        student_id=student_id,
+        status="started",
+        started_at=datetime.utcnow()
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    logger.info(f"[MATH_SERVICE] 새 세션을 생성했습니다: {new_session.session_id}")
+
+    return TestSessionResponse(
+        session_id=new_session.session_id,
+        assignment_id=new_session.assignment_id,
+        student_id=new_session.student_id,
+        started_at=new_session.started_at.isoformat(),
+        status=new_session.status
+    )
