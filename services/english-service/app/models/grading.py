@@ -9,7 +9,7 @@ class GradingResult(Base):
     __table_args__ = {"schema": "english_service"}
 
     result_id = Column(String(50), primary_key=True, index=True)  # UUID 기본키
-    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
+    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     student_name = Column(String(100), nullable=False)
     completion_time = Column(Integer, nullable=False)  # 소요 시간 (초)
     total_score = Column(Integer, nullable=False)

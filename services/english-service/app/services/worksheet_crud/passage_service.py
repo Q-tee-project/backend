@@ -14,7 +14,7 @@ class PassageService:
     def __init__(self, db: Session):
         self.db = db
 
-    def update_passage(self, worksheet_id: str, passage_id: int, update_data: Dict[str, Any]) -> Passage:
+    def update_passage(self, worksheet_id: int, passage_id: int, update_data: Dict[str, Any]) -> Passage:
         """지문 정보를 업데이트합니다 (구조 유지, 내용만 수정)"""
         passage = self._get_passage_or_404(worksheet_id, passage_id)
 
@@ -42,7 +42,7 @@ class PassageService:
         self.db.refresh(passage)
         return passage
 
-    def _get_passage_or_404(self, worksheet_id: str, passage_id: int) -> Passage:
+    def _get_passage_or_404(self, worksheet_id: int, passage_id: int) -> Passage:
         """지문을 조회하거나 404 에러 발생"""
         passage = self.db.query(Passage).filter(
             Passage.worksheet_id == worksheet_id,

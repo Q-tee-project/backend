@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
 import json
-import uuid
+import random
 
 from app.database import get_db
 from app.core.config import get_settings
@@ -215,12 +215,12 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         
         print(f"🆔 생성된 워크시트 UUID: {worksheet_id}")
         
-        # 중복 확인 (UUID는 거의 중복될 가능성이 없지만 안전장치로 유지)
+        # 중복 확인 (정수 ID 중복 체크)
         existing = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
         if existing:
-            # 만약 UUID가 중복되면 새로 생성
-            worksheet_id = str(uuid.uuid4())
-            print(f"🔄 UUID 중복으로 재생성: {worksheet_id}")
+            # 만약 ID가 중복되면 새로 생성
+            worksheet_id = random.randint(1000000000, 9999999999)
+            print(f"🔄 ID 중복으로 재생성: {worksheet_id}")
         
         # 1. Worksheet 생성
         db_worksheet = Worksheet(
@@ -329,7 +329,7 @@ async def get_worksheets(user_id: int, limit: int = 100, db: Session = Depends(g
         raise HTTPException(status_code=500, detail=f"문제지 목록 조회 중 오류: {str(e)}")
 
 @router.get("/worksheets/{worksheet_id}")
-async def get_worksheet_for_editing(worksheet_id: str, user_id: int, db: Session = Depends(get_db)):
+async def get_worksheet_for_editing(worksheet_id: int, user_id: int, db: Session = Depends(get_db)):
     """문제지 편집용 워크시트를 조회합니다"""
     try:
         worksheet = db.query(Worksheet).filter(
@@ -398,7 +398,7 @@ async def get_worksheet_for_editing(worksheet_id: str, user_id: int, db: Session
         raise HTTPException(status_code=500, detail=f"편집용 문제지 조회 중 오류: {str(e)}")
 
 @router.get("/worksheets/{worksheet_id}/solve")
-async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get_db)):
+async def get_worksheet_for_solving(worksheet_id: int, db: Session = Depends(get_db)):
     """문제 풀이용 문제지를 조회합니다 (답안 제외)."""
     try:
         worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
@@ -477,7 +477,7 @@ async def get_worksheet_for_solving(worksheet_id: str, db: Session = Depends(get
 
 @router.put("/worksheets/{worksheet_id}/questions/{question_id}")
 async def update_question(
-    worksheet_id: str,
+    worksheet_id: int,
     question_id: int,
     request: Dict[str, Any],
     user_id: int,
@@ -509,7 +509,7 @@ async def update_question(
 
 @router.put("/worksheets/{worksheet_id}/passages/{passage_id}")
 async def update_passage(
-    worksheet_id: str,
+    worksheet_id: int,
     passage_id: int,
     request: Dict[str, Any],
     user_id: int,
@@ -537,7 +537,7 @@ async def update_passage(
 
 @router.put("/worksheets/{worksheet_id}/title")
 async def update_worksheet_title(
-    worksheet_id: str,
+    worksheet_id: int,
     request: Dict[str, str],
     user_id: int,
     db: Session = Depends(get_db)
@@ -568,7 +568,7 @@ async def update_worksheet_title(
         raise HTTPException(status_code=500, detail=f"제목 수정 중 오류: {str(e)}")
 
 @router.delete("/worksheets/{worksheet_id}", response_model=Dict[str, Any])
-async def delete_worksheet(worksheet_id: str, db: Session = Depends(get_db)):
+async def delete_worksheet(worksheet_id: int, db: Session = Depends(get_db)):
     """문제지와 관련된 모든 데이터를 삭제합니다."""
     try:
         # 문제지 존재 확인

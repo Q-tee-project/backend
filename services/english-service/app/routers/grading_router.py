@@ -17,7 +17,7 @@ router = APIRouter(tags=["Grading"])
 
 @router.post("/worksheets/{worksheet_id}/submit")
 async def submit_answers_and_grade(
-    worksheet_id: str,
+    worksheet_id: int,
     submission_data: SubmissionRequest,
     db: Session = Depends(get_db)
 ):

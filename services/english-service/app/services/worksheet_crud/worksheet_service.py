@@ -14,7 +14,7 @@ class WorksheetService:
     def __init__(self, db: Session):
         self.db = db
 
-    def update_worksheet_title(self, worksheet_id: str, new_title: str) -> Worksheet:
+    def update_worksheet_title(self, worksheet_id: int, new_title: str) -> Worksheet:
         """워크시트 제목을 업데이트합니다"""
         worksheet = self._get_worksheet_or_404(worksheet_id)
 
@@ -26,7 +26,7 @@ class WorksheetService:
         self.db.refresh(worksheet)
         return worksheet
 
-    def _get_worksheet_or_404(self, worksheet_id: str) -> Worksheet:
+    def _get_worksheet_or_404(self, worksheet_id: int) -> Worksheet:
         """워크시트를 조회하거나 404 에러 발생"""
         worksheet = self.db.query(Worksheet).filter(
             Worksheet.worksheet_id == worksheet_id

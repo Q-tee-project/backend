@@ -4,7 +4,7 @@ from datetime import datetime
 
 class AssignmentDeployRequest(BaseModel):
     """과제 배포 요청"""
-    worksheet_id: str = Field(..., description="배포할 문제지 ID")
+    worksheet_id: int = Field(..., description="배포할 문제지 ID")
     classroom_id: int = Field(..., description="배포할 클래스룸 ID")
     student_ids: List[int] = Field(..., description="배포할 학생 ID 목록")
 

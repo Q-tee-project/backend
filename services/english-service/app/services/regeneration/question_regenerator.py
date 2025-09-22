@@ -95,7 +95,7 @@ class QuestionRegenerator:
     def regenerate_question(
         self,
         db: Session,
-        worksheet_id: str,
+        worksheet_id: int,
         question_id: int,
         request: QuestionRegenerationRequest
     ) -> Tuple[bool, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -564,7 +564,7 @@ class QuestionRegenerator:
     def _regenerate_related_questions(
         self,
         db: Session,
-        worksheet_id: str,
+        worksheet_id: int,
         original_passage: 'Passage',
         regenerated_passage_data: Dict[str, Any],
         request: QuestionRegenerationRequest

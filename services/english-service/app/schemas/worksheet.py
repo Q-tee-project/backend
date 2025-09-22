@@ -34,7 +34,7 @@ class QuestionSaveData(BaseModel):
 
 # 문제지 저장 요청 스키마 (프론트 형식에 맞춤)
 class WorksheetSaveRequest(BaseModel):
-    worksheet_id: str
+    worksheet_id: int
     teacher_id: int
     worksheet_name: str
     worksheet_date: str
@@ -93,7 +93,7 @@ class AnswerSheetResponse(BaseModel):
 
 # 문제지 전체 응답 스키마
 class WorksheetResponse(BaseModel):
-    worksheet_id: str
+    worksheet_id: int
     worksheet_name: str
     school_level: str
     grade: str
@@ -110,7 +110,7 @@ class WorksheetResponse(BaseModel):
 
 # 문제지 목록 조회용 간단한 스키마
 class WorksheetSummary(BaseModel):
-    worksheet_id: str  # worksheet_id와 동일한 값
+    worksheet_id: int  # worksheet_id와 동일한 값
     teacher_id: int
     worksheet_name: str
     school_level: str

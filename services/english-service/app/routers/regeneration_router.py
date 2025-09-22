@@ -18,7 +18,7 @@ router = APIRouter(tags=["Question Regeneration"])
     response_model=RegenerationResponse
 )
 async def regenerate_question(
-    worksheet_id: str = Path(..., description="워크시트 ID"),
+    worksheet_id: int = Path(..., description="워크시트 ID"),
     question_id: int = Path(..., description="문제 ID"),
     request: QuestionRegenerationRequest = ...,
     db: Session = Depends(get_db)
@@ -228,7 +228,7 @@ async def regenerate_question_from_data(
 
 @router.get("/worksheets/{worksheet_id}/questions/{question_id}/regeneration-info")
 async def get_regeneration_info(
-    worksheet_id: str = Path(..., description="워크시트 ID"),
+    worksheet_id: int = Path(..., description="워크시트 ID"),
     question_id: int = Path(..., description="문제 ID"),
     db: Session = Depends(get_db)
 ):

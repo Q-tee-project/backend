@@ -11,7 +11,7 @@ class Assignment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
+    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)
     classroom_id = Column(Integer, nullable=False)
     teacher_id = Column(Integer, nullable=False)
 

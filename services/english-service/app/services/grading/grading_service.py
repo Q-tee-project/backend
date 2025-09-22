@@ -19,7 +19,7 @@ class GradingService:
         self.objective_grader = ObjectiveGrader()
         self.subjective_grader = SubjectiveGrader()
 
-    async def grade_worksheet(self, worksheet_id: str, student_name: str,
+    async def grade_worksheet(self, worksheet_id: int, student_name: str,
                             answers: Dict[int, str], completion_time: int) -> Dict[str, Any]:
         """문제지 전체 채점"""
         try:
@@ -139,7 +139,7 @@ class GradingService:
 
         return question_result
 
-    def _get_passage_content(self, worksheet_id: str, passage_id: Optional[int]) -> Optional[str]:
+    def _get_passage_content(self, worksheet_id: int, passage_id: Optional[int]) -> Optional[str]:
         """지문 내용을 조회합니다."""
         if not passage_id:
             return None
@@ -151,7 +151,7 @@ class GradingService:
 
         return str(passage.passage_content) if passage else None
 
-    async def _save_grading_result(self, worksheet_id: str, student_name: str,
+    async def _save_grading_result(self, worksheet_id: int, student_name: str,
                                  completion_time: int, total_score: int, max_score: int,
                                  question_results: List[Dict[str, Any]]) -> GradingResult:
         """채점 결과를 데이터베이스에 저장합니다."""

@@ -8,7 +8,7 @@ class Worksheet(Base):
     __tablename__ = "worksheets"
     __table_args__ = {"schema": "english_service"}
 
-    worksheet_id = Column(String(50), primary_key=True, index=True)  # 문제지 ID
+    worksheet_id = Column(Integer, primary_key=True, index=True)  # 문제지 ID
     teacher_id = Column(Integer, nullable=False)    # 선생님 ID
     worksheet_name = Column(String(200), nullable=False)  # 문제지 제목
     school_level = Column(String(20), nullable=False)  # 중학교, 고등학교 등
@@ -30,7 +30,7 @@ class Passage(Base):
     __table_args__ = {"schema": "english_service"}
 
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)  # 문제지 ID
+    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)  # 문제지 ID
     passage_id = Column(Integer, nullable=False)  # "1", "2" 등
     passage_type = Column(String(50), nullable=False)  # article, dialogue 등
     passage_content = Column(JSON, nullable=False)  # 지문 내용 (JSON 형태)
@@ -50,7 +50,7 @@ class Question(Base):
     __table_args__ = {"schema": "english_service"}
 
     id = Column(Integer, primary_key=True, index=True)
-    worksheet_id = Column(String(50), ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)  # 문제지 ID
+    worksheet_id = Column(Integer, ForeignKey("english_service.worksheets.worksheet_id"), nullable=False)  # 문제지 ID
     question_id = Column(Integer, nullable=False)  # "1", "2" 등
     question_text = Column(Text, nullable=False)  # 문제 질문
     question_type = Column(String(20), nullable=False)  # 객관식, 단답형, 서술형

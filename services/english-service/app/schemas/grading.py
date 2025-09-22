@@ -38,7 +38,7 @@ class ExampleInfo(BaseModel):
 # 채점 결과 전체 스키마 (문제지 데이터 포함)
 class GradingResultResponse(BaseModel):
     result_id: str  # id 제거, result_id만 사용
-    worksheet_id: str
+    worksheet_id: int
     student_name: str
     completion_time: int
     total_score: int
@@ -57,7 +57,7 @@ class GradingResultResponse(BaseModel):
 class GradingResultSummary(BaseModel):
     id: str  # result_id가 UUID 문자열이므로 str로 변경
     result_id: str
-    worksheet_id: str
+    worksheet_id: int
     student_name: str
     completion_time: int
     total_score: int

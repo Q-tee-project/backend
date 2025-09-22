@@ -14,7 +14,7 @@ class QuestionService:
     def __init__(self, db: Session):
         self.db = db
 
-    def update_question(self, worksheet_id: str, question_id: int, update_data: Dict[str, Any]) -> Question:
+    def update_question(self, worksheet_id: int, question_id: int, update_data: Dict[str, Any]) -> Question:
         """문제 정보를 업데이트합니다"""
         question = self._get_question_or_404(worksheet_id, question_id)
 
@@ -40,7 +40,7 @@ class QuestionService:
         self.db.refresh(question)
         return question
 
-    def _get_question_or_404(self, worksheet_id: str, question_id: int) -> Question:
+    def _get_question_or_404(self, worksheet_id: int, question_id: int) -> Question:
         """문제를 조회하거나 404 에러 발생"""
         question = self.db.query(Question).filter(
             Question.worksheet_id == worksheet_id,
