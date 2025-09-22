@@ -7,7 +7,7 @@ from ..tasks import regenerate_single_problem_task
 
 router = APIRouter()
 
-@router.put("/{problem_id}")
+@router.patch("/{problem_id}")
 async def update_problem(
     problem_id: int,
     request: dict,

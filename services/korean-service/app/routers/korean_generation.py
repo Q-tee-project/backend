@@ -401,7 +401,7 @@ async def get_worksheet_detail(
         )
 
 
-@router.put("/worksheets/{worksheet_id}")
+@router.patch("/worksheets/{worksheet_id}")
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
@@ -449,7 +449,7 @@ async def update_worksheet(
         )
 
 
-@router.put("/problems/{problem_id}")
+@router.patch("/problems/{problem_id}")
 async def update_problem(
     problem_id: int,
     request: dict,
