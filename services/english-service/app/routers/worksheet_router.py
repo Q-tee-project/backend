@@ -274,6 +274,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         return {
             "message": "문제지가 성공적으로 저장되었습니다.",
             "worksheet_id": db_worksheet.worksheet_id,
+            "worksheet_id": db_worksheet.worksheet_id,
             "status": "success"
         }
         
