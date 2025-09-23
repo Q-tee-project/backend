@@ -10,6 +10,7 @@ class KoreanGradingSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     worksheet_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)  # 학생 ID
     graded_by = Column(Integer, nullable=False)  # 채점한 사용자 ID
 
     # 채점 정보
