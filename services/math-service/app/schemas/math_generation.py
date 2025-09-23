@@ -38,13 +38,12 @@ class DifficultyRatio(BaseModel):
 
 
 class ProblemTypeRatio(BaseModel):
-    """문제 유형 비율 설정 (객관식:주관식:단답형)"""
+    """문제 유형 비율 설정 (객관식:단답형)"""
     multiple_choice: int = Field(ge=0, le=100, description="객관식 비율")
-    essay: int = Field(ge=0, le=100, description="주관식 비율")
     short_answer: int = Field(ge=0, le=100, description="단답형 비율")
-    
+
     def model_post_init(self, __context):
-        total = self.multiple_choice + self.essay + self.short_answer
+        total = self.multiple_choice + self.short_answer
         if total != 100:
             raise ValueError("문제 유형 비율의 합은 100이어야 합니다")
 
@@ -97,7 +96,7 @@ class GenerationSummary(BaseModel):
     """생성 요약 정보"""
     total_problems: int
     difficulty_distribution: Dict[str, int]  # {"A": 3, "B": 4, "C": 3}
-    type_distribution: Dict[str, int]  # {"multiple_choice": 5, "essay": 3, "short_answer": 2}
+    type_distribution: Dict[str, int]  # {"multiple_choice": 5, "short_answer": 5}
 
 
 class MathProblemGenerationResponse(BaseModel):

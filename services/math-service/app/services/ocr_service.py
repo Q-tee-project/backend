@@ -74,8 +74,13 @@ class OCRService:
             
             if result:
                 detected_text = result.strip()
-                print(f"🔍 OCR 디버그: 인식된 텍스트: {detected_text[:50]}...")
-                return detected_text
+                print(f"🔍 OCR 디버그: 원본 인식 텍스트: {detected_text[:50]}...")
+
+                # 수학 답안 후처리: 비라틴 문자 제거
+                cleaned_text = self._clean_math_text(detected_text)
+                print(f"🔍 OCR 디버그: 후처리된 텍스트: {cleaned_text[:50]}...")
+
+                return cleaned_text if cleaned_text else detected_text
             else:
                 print("🔍 OCR 디버그: 텍스트 인식 실패")
                 return ""
@@ -106,7 +111,10 @@ class OCRService:
                                 "type": "TEXT_DETECTION",
                                 "maxResults": 10
                             }
-                        ]
+                        ],
+                        "imageContext": {
+                            "languageHints": ["en", "en-US"]  # 영어 우선 인식
+                        }
                     }
                 ]
             }
@@ -274,3 +282,39 @@ class OCRService:
         
         print(f"🔍 OCR 후처리: '{text[:30]}...' -> '{cleaned[:30]}...'")
         return cleaned.strip()
+
+    def _clean_math_text(self, text: str) -> str:
+        """수학 답안용 텍스트 정리 - 비라틴 문자 제거 및 기본 정리"""
+        import re
+
+        if not text or not text.strip():
+            return ""
+
+        cleaned = text.strip()
+
+        # 1. 비라틴 문자 제거 (한글, 일본어, 중국어 등)
+        # 수학 답안은 영어, 숫자, 기본 기호만 있어야 함
+        cleaned = re.sub(r'[^\x00-\x7F]', '', cleaned)
+
+        # 2. "메ーン 5" 같은 패턴에서 숫자만 추출
+        if re.search(r'\d+', cleaned):
+            # 숫자가 포함된 경우, 의미있는 패턴 찾기
+            # 공백으로 분리된 마지막 숫자를 분모로 가정
+            parts = cleaned.split()
+            numbers = [p for p in parts if re.match(r'^-?\d+\.?\d*$', p)]
+            letters = [p for p in parts if re.match(r'^[a-zA-Z\-\+]+$', p)]
+
+            if len(numbers) == 1 and len(letters) >= 1:
+                # "x-y 5" 패턴으로 해석
+                numerator = ''.join(letters).replace(' ', '')
+                denominator = numbers[0]
+                cleaned = f"{numerator}/{denominator}"
+            elif len(numbers) == 1 and not letters:
+                # 숫자만 남은 경우
+                cleaned = numbers[0]
+
+        # 3. 기본 정리
+        cleaned = re.sub(r'\s+', ' ', cleaned)  # 연속 공백 제거
+        cleaned = cleaned.strip()
+
+        return cleaned

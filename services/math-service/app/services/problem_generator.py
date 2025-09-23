@@ -37,11 +37,12 @@ class ProblemGenerator:
         self.prompt_templates = PromptTemplates()
     
     def generate_problems(
-        self, 
-        curriculum_data: Dict, 
-        user_prompt: str, 
-        problem_count: int = 1, 
-        difficulty_ratio: Dict = None
+        self,
+        curriculum_data: Dict,
+        user_prompt: str,
+        problem_count: int = 1,
+        difficulty_ratio: Dict = None,
+        problem_type: str = None
     ) -> List[Dict]:
         """수학 문제 생성 메인 로직"""
         
@@ -52,14 +53,41 @@ class ProblemGenerator:
         
         # 참고 문제 가져오기
         reference_problems = self._get_reference_problems(
-            curriculum_data.get('chapter_name', ''), 
+            curriculum_data.get('chapter_name', ''),
             difficulty_ratio
         )
-        
+
+        # problem_type이 지정된 경우 강제 제약 추가
+        enhanced_user_prompt = user_prompt
+        if problem_type:
+            if problem_type == "multiple_choice":
+                type_constraint = f"""
+
+**절대 준수 사항 - 위반 시 실패:**
+- 정확히 {problem_count}개의 객관식 문제만 생성
+- 모든 문제의 problem_type은 "multiple_choice"
+- 각 문제는 정답이 1개만 존재 (A, B, C, D 중 하나)
+- choices는 정확히 4개
+- 단답형이나 서술형 문제는 절대 생성 금지
+"""
+            elif problem_type == "short_answer":
+                type_constraint = f"""
+
+**절대 준수 사항 - 위반 시 실패:**
+- 정확히 {problem_count}개의 단답형 문제만 생성
+- 모든 문제의 problem_type은 "short_answer"
+- choices 필드는 null 또는 빈 배열
+- 객관식이나 서술형 문제는 절대 생성 금지
+"""
+            else:
+                type_constraint = ""
+
+            enhanced_user_prompt = f"{user_prompt}{type_constraint}"
+
         # 프롬프트 빌드
         prompt = self.prompt_templates.build_problem_generation_prompt(
             curriculum_data=curriculum_data,
-            user_prompt=user_prompt,
+            user_prompt=enhanced_user_prompt,
             problem_count=problem_count,
             difficulty_distribution=difficulty_distribution,
             reference_problems=reference_problems

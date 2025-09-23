@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from .problem_generator import ProblemGenerator
 from .grading_service import GradingService
 from .ocr_service import OCRService
-from .problem_validation_service import ProblemValidationService
 
 load_dotenv()
 
@@ -24,12 +23,11 @@ class AIService:
         self.problem_generator = ProblemGenerator()
         self.grading_service = GradingService()
         self.ocr_service = OCRService()
-        self.validation_service = ProblemValidationService()
 
-    def generate_math_problem(self, curriculum_data: Dict, user_prompt: str, problem_count: int = 1, difficulty_ratio: Dict = None, enable_validation: bool = True) -> Dict:
-        """수학 문제 생성 - 검증 단계 포함"""
+    def generate_math_problem(self, curriculum_data: Dict, user_prompt: str, problem_count: int = 1, difficulty_ratio: Dict = None) -> Dict:
+        """수학 문제 생성"""
         try:
-            # 1단계: 문제 생성
+            # 문제 생성
             print(f"📝 {problem_count}개 문제 생성 중...")
             generated_problems = self.problem_generator.generate_problems(
                 curriculum_data=curriculum_data,
@@ -38,33 +36,9 @@ class AIService:
                 difficulty_ratio=difficulty_ratio
             )
 
-            if not enable_validation:
-                return {
-                    "problems": generated_problems,
-                    "validation_results": [],
-                    "summary": {"validation_enabled": False}
-                }
-
-            # 2단계: AI 검증
-            print(f"🔍 생성된 {len(generated_problems)}개 문제 검증 중...")
-            validation_results = self.validation_service.validate_problem_batch(generated_problems)
-
-            # 3단계: 검증 결과 통합
-            validated_problems = []
-            for i, (problem, validation) in enumerate(zip(generated_problems, validation_results)):
-                problem['validation_result'] = validation
-                problem['validation_status'] = 'auto_approved' if validation.get('auto_approve', False) else 'manual_review_needed'
-                validated_problems.append(problem)
-
-            # 4단계: 검증 요약
-            validation_summary = self.validation_service.get_validation_summary(validation_results)
-
-            print(f"✅ 검증 완료: {validation_summary.get('auto_approved', 0)}개 자동승인, {validation_summary.get('manual_review_needed', 0)}개 수동검토필요")
-
             return {
-                "problems": validated_problems,
-                "validation_results": validation_results,
-                "summary": validation_summary
+                "problems": generated_problems,
+                "summary": {"total_problems": len(generated_problems)}
             }
 
         except Exception as e:

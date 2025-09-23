@@ -14,7 +14,7 @@ class Problem(Base):
     sequence_order = Column(Integer, nullable=False)  # 워크시트 내 순서 (1, 2, 3, ...)
     
     # 문제 기본 정보
-    problem_type = Column(String, nullable=False)  # "multiple_choice", "essay", "short_answer"
+    problem_type = Column(String, nullable=False)  # "multiple_choice", "short_answer" only
     difficulty = Column(String, nullable=False)  # "A", "B", "C"
     
     # 문제 내용

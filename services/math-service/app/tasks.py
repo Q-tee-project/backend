@@ -48,12 +48,8 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
         math_service = MathGenerationService()
         curriculum_data = math_service._get_curriculum_data(request)
         
-        from .services.problem_generator import ProblemGenerator
-        problem_generator = ProblemGenerator()
-        generated_problems = problem_generator.generate_problems(
-            curriculum_data=curriculum_data, user_prompt=request.user_text,
-            problem_count=request.problem_count.value_int, difficulty_ratio=request.difficulty_ratio.model_dump()
-        )
+        # MathGenerationService의 비율 기반 로직 사용
+        generated_problems = math_service._generate_problems_with_ratio(curriculum_data, request)
 
         if not isinstance(generated_problems, list):
             raise AIResponseError(f"AI 응답이 잘못된 형식입니다. 리스트가 아닌 {type(generated_problems)} 타입을 받았습니다.")
@@ -260,6 +256,7 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
 
         processed_count = 0
         total_answers = 0
+        ocr_processed_answers = set()  # OCR 처리된 답안 ID 추적
 
         # 모든 세션의 손글씨 답안 수 계산
         for session in submitted_sessions:
@@ -301,6 +298,7 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                         if ocr_text and ocr_text.strip():
                             # OCR 성공 시 텍스트로 업데이트
                             answer.answer = ocr_text.strip()
+                            ocr_processed_answers.add(answer.id)  # OCR 처리된 답안 추적
                             processed_count += 1
                             print(f"✅ OCR 처리 완료: 문제 {answer.problem_id} → {ocr_text[:50]}")
                         else:
@@ -322,15 +320,20 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
         from .models.problem import Problem
 
         for session in submitted_sessions:
-            # 해당 세션에 손글씨 답안이 있는지 확인
-            handwriting_answers = db.query(TestAnswer).filter(
-                TestAnswer.session_id == session.session_id,
-                TestAnswer.answer.like('data:image/%')
+            # 해당 세션에 OCR 처리된 답안이 있는지 확인
+            session_answers = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session.session_id
             ).all()
 
-            # 손글씨 답안이 없으면 스킵 (이미 채점된 객관식만 있음)
-            if not handwriting_answers:
+            # OCR 처리된 답안이 있는지 확인
+            has_ocr_answers = any(ans.id in ocr_processed_answers for ans in session_answers)
+
+            # OCR 처리된 답안이 없으면 스킵
+            if not has_ocr_answers:
+                print(f"📝 세션 {session.session_id}: OCR 처리된 답안 없음, 채점 스킵")
                 continue
+
+            print(f"📝 세션 {session.session_id}: OCR 처리된 답안 있음, 채점 진행")
 
             # 해당 세션의 기존 채점 결과가 있는지 확인
             existing_grading = db.query(GradingSession).filter(
@@ -358,7 +361,17 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                 # 모든 답안 다시 채점
                 for problem in problems:
                     student_answer = answer_map.get(str(problem.id), '')
-                    is_correct = student_answer == problem.correct_answer
+
+                    # 단답형 문제는 OCR 텍스트 정리 후 비교
+                    if problem.problem_type == "short_answer":
+                        cleaned_student = _normalize_math_answer(student_answer)
+                        cleaned_correct = _normalize_math_answer(problem.correct_answer)
+                        is_correct = cleaned_student == cleaned_correct
+                        print(f"📝 단답형 채점: 학생 '{student_answer}' → '{cleaned_student}', 정답 '{cleaned_correct}', 결과: {'✅' if is_correct else '❌'}")
+                    else:
+                        # 객관식은 기존 방식
+                        is_correct = student_answer == problem.correct_answer
+
                     if is_correct:
                         correct_count += 1
 
@@ -369,8 +382,9 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                     ).first()
 
                     if not existing_result:
-                        # 새로운 문제 결과 생성
-                        input_method = "ai_grading_ocr" if student_answer.startswith('data:image/') else "multiple_choice"
+                        # 새로운 문제 결과 생성 (OCR 처리된 답안 확인)
+                        original_answer = next((ans for ans in session_answers if ans.problem_id == problem.id), None)
+                        input_method = "ai_grading_ocr" if original_answer and original_answer.id in ocr_processed_answers else "multiple_choice"
                         problem_result = ProblemGradingResult(
                             grading_session_id=existing_grading.id,
                             problem_id=problem.id,
@@ -412,11 +426,23 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                 # 문제별 채점 결과 생성
                 for problem in problems:
                     student_answer = answer_map.get(str(problem.id), '')
-                    is_correct = student_answer == problem.correct_answer
+
+                    # 단답형 문제는 OCR 텍스트 정리 후 비교
+                    if problem.problem_type == "short_answer":
+                        cleaned_student = _normalize_math_answer(student_answer)
+                        cleaned_correct = _normalize_math_answer(problem.correct_answer)
+                        is_correct = cleaned_student == cleaned_correct
+                        print(f"📝 단답형 채점: 학생 '{student_answer}' → '{cleaned_student}', 정답 '{cleaned_correct}', 결과: {'✅' if is_correct else '❌'}")
+                    else:
+                        # 객관식은 기존 방식
+                        is_correct = student_answer == problem.correct_answer
+
                     if is_correct:
                         correct_count += 1
 
-                    input_method = "ai_grading_ocr" if student_answer.startswith('data:image/') else "multiple_choice"
+                    # OCR 처리된 답안 확인
+                    original_answer = next((ans for ans in session_answers if ans.problem_id == problem.id), None)
+                    input_method = "ai_grading_ocr" if original_answer and original_answer.id in ocr_processed_answers else "multiple_choice"
                     problem_result = ProblemGradingResult(
                         grading_session_id=new_grading_session.id,
                         problem_id=problem.id,
@@ -472,3 +498,104 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
         raise GradingError(f"AI 채점 태스크 실패: {error_msg}")
     finally:
         db.close()
+
+
+def _normalize_math_answer(answer: str) -> str:
+    """수학 답안을 표준화된 형태로 변환 (OCR 텍스트와 LaTeX 모두 처리)"""
+    import re
+
+    if not answer or not answer.strip():
+        return ""
+
+    # 1. 기본 정리
+    normalized = answer.strip()
+
+    # 2. LaTeX 명령어를 일반 표기법으로 변환
+    latex_conversions = {
+        # 분수
+        r'\\frac\{([^}]+)\}\{([^}]+)\}': r'\1/\2',  # \frac{a}{b} → a/b
+        r'\\frac\{([^}]*)\}\{([^}]*)\}': r'\1/\2',  # 빈 중괄호 처리
+
+        # 지수
+        r'\^(\d+)': r'^\1',  # x^2 → x^2 (그대로)
+        r'\^\{([^}]+)\}': r'^\1',  # x^{10} → x^10
+
+        # 기타 LaTeX 기호
+        r'\\cdot': '*',
+        r'\\times': '*',
+        r'\\div': '/',
+        r'\\pm': '±',
+        r'\\mp': '∓',
+
+        # 특수 기호
+        r'\$': '',  # $ 제거
+        r'\\': '',  # 남은 백슬래시 제거
+    }
+
+    for pattern, replacement in latex_conversions.items():
+        normalized = re.sub(pattern, replacement, normalized)
+
+    # 3. OCR 오인식 패턴 수정
+    ocr_corrections = {
+        r'obc': '-abc',  # o를 minus로 오인식
+        r'나': '-7',     # 한글 오인식
+        r'[Il1]': '1',   # I, l을 1로
+        r'[O0o]': '0',   # O, o를 0으로
+        r'[S5s]': '5',   # S를 5로
+        r'[Z2z]': '2',   # Z를 2로
+        r'[g9]': '9',    # g를 9로
+        r'[b6]': '6',    # b를 6로
+    }
+
+    for pattern, replacement in ocr_corrections.items():
+        normalized = re.sub(pattern, replacement, normalized)
+
+    # 4. 공백 정리 및 표준화
+    # "x - y 5" → "x-y/5" (분수로 해석)
+    if re.match(r'^[a-zA-Z\s\-\+]+\s+\d+$', normalized):
+        parts = normalized.split()
+        if len(parts) >= 2 and parts[-1].isdigit():
+            numerator = ''.join(parts[:-1]).replace(' ', '')
+            denominator = parts[-1]
+            normalized = f"{numerator}/{denominator}"
+
+    # 5. 대소문자 통일 (X-Y/5 → x-y/5)
+    normalized = normalized.lower()
+
+    # 6. 불필요한 문자 제거
+    normalized = re.sub(r'[^\w\-\+\*/\(\)\.^/]', '', normalized)
+
+    # 7. 연속된 점들 제거
+    normalized = re.sub(r'\.{2,}', '', normalized)
+
+    # 8. 앞뒤 불필요한 기호 제거
+    normalized = normalized.strip('.-+*/')
+
+    return normalized
+
+
+def _clean_ocr_answer(answer: str) -> str:
+    """레거시 함수 - 새로운 normalize 함수 호출"""
+    return _normalize_math_answer(answer)
+
+
+# 테스트용 로그 함수
+def _test_normalization():
+    """정규화 함수 테스트"""
+    test_cases = [
+        ("X-Y/5", r"\frac{x-y}{5}"),  # 실제 케이스: OCR vs LaTeX
+        ("10", "10"),                 # 숫자 매칭
+        ("-7", "-7"),                 # 음수 매칭
+        ("3x+3", "3x+3"),            # 대수식 매칭
+        ("x-y/5", "x-y/5"),          # 일반 분수 표기
+    ]
+
+    print("🧪 수학 답안 정규화 테스트:")
+    for student, correct in test_cases:
+        norm_student = _normalize_math_answer(student)
+        norm_correct = _normalize_math_answer(correct)
+        match = norm_student == norm_correct
+        print(f"   학생: '{student}' → '{norm_student}' vs 정답: '{correct}' → '{norm_correct}' {'✅' if match else '❌'}")
+
+# 서버 시작 시 테스트 실행
+_test_normalization()
