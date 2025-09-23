@@ -5,6 +5,21 @@ import os
 import requests
 import base64
 from typing import Dict, Optional
+try:
+    from PIL import Image, ImageEnhance, ImageFilter
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ PIL/Pillow not available - image preprocessing disabled")
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    print("⚠️ NumPy not available - advanced image processing disabled")
+
+import io
 
 class OCRService:
     """OCR 전용 클래스"""
@@ -19,10 +34,37 @@ class OCRService:
         try:
             print(f"🔍 OCR 디버그: image_data 타입: {type(image_data)}")
             print(f"🔍 OCR 디버그: image_data 크기: {len(image_data) if image_data else 'None'}")
-            
+
             if not image_data:
                 print("🔍 OCR 디버그: image_data가 비어있음")
                 return ""
+
+            # 디버깅용: 이미지를 파일로 저장
+            debug_path = f"/tmp/debug_ocr_{len(image_data)}.png"
+            try:
+                with open(debug_path, 'wb') as f:
+                    f.write(image_data)
+                print(f"🔍 OCR 디버그: 이미지 저장됨 - {debug_path}")
+            except Exception as save_error:
+                print(f"🔍 OCR 디버그: 이미지 저장 실패 - {save_error}")
+
+            # 이미지 크기가 너무 작으면 스킵
+            if len(image_data) < 50:  # 50 bytes 미만으로 크게 낮춤
+                print(f"🔍 OCR 디버그: 이미지가 너무 작음 ({len(image_data)} bytes)")
+                return ""
+
+            # 이미지 전처리 시도 (PIL 사용 가능한 경우만)
+            if PIL_AVAILABLE:
+                try:
+                    processed_image_data = self._preprocess_image(image_data)
+                    if processed_image_data and len(processed_image_data) > len(image_data):
+                        print(f"🔍 OCR 디버그: 이미지 전처리 완료 ({len(image_data)} → {len(processed_image_data)} bytes)")
+                        image_data = processed_image_data
+                except Exception as preprocess_error:
+                    print(f"🔍 OCR 디버그: 이미지 전처리 실패 - {preprocess_error}")
+                    # 원본 이미지 사용
+            else:
+                print(f"🔍 OCR 디버그: PIL 미설치로 이미지 전처리 건너뜀")
             
             # 이미지 데이터를 base64로 인코딩
             image_base64 = base64.b64encode(image_data).decode('utf-8')
@@ -57,8 +99,12 @@ class OCRService:
                         },
                         "features": [
                             {
+                                "type": "DOCUMENT_TEXT_DETECTION",
+                                "maxResults": 10
+                            },
+                            {
                                 "type": "TEXT_DETECTION",
-                                "maxResults": 1
+                                "maxResults": 10
                             }
                         ]
                     }
@@ -79,11 +125,24 @@ class OCRService:
                 
                 if 'responses' in result and result['responses']:
                     response_data = result['responses'][0]
+
+                    # DOCUMENT_TEXT_DETECTION 결과 먼저 확인
+                    if 'fullTextAnnotation' in response_data and response_data['fullTextAnnotation']:
+                        text = response_data['fullTextAnnotation'].get('text', '').strip()
+                        if text:
+                            print(f"🔍 OCR 디버그: DOCUMENT_TEXT_DETECTION 성공: {text[:50]}...")
+                            return text
+
+                    # TEXT_DETECTION 결과 확인
                     if 'textAnnotations' in response_data and response_data['textAnnotations']:
-                        return response_data['textAnnotations'][0]['description']
-                    else:
-                        print("🔍 OCR 디버그: textAnnotations가 비어있음")
-                        return None
+                        text = response_data['textAnnotations'][0]['description'].strip()
+                        if text:
+                            print(f"🔍 OCR 디버그: TEXT_DETECTION 성공: {text[:50]}...")
+                            return text
+
+                    print("🔍 OCR 디버그: 모든 텍스트 인식 결과가 비어있음")
+                    print(f"🔍 OCR 디버그: 전체 응답: {result}")
+                    return None
                 else:
                     print("🔍 OCR 디버그: responses가 비어있음")
                     return None
@@ -97,6 +156,76 @@ class OCRService:
             return None
         except Exception as e:
             print(f"❌ OCR API 처리 오류: {str(e)}")
+            return None
+
+    def _preprocess_image(self, image_data: bytes) -> Optional[bytes]:
+        """이미지 전처리로 OCR 인식률 향상"""
+        if not PIL_AVAILABLE:
+            return None
+
+        try:
+            # PIL Image로 변환
+            image = Image.open(io.BytesIO(image_data))
+            original_size = image.size
+            print(f"🔍 OCR 디버그: 원본 이미지 크기: {original_size}")
+
+            # RGBA를 RGB로 변환 (배경을 흰색으로)
+            if image.mode == 'RGBA':
+                # 흰색 배경 생성
+                white_bg = Image.new('RGB', image.size, (255, 255, 255))
+                white_bg.paste(image, mask=image.split()[-1])  # alpha 채널을 마스크로 사용
+                image = white_bg
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+
+            # 작은 이미지의 경우 더 적극적으로 확대
+            width, height = image.size
+            min_size = 800  # 최소 크기를 800픽셀로 설정
+
+            if width < min_size or height < min_size:
+                # 더 큰 배율로 확대
+                scale_factor = max(min_size/width, min_size/height, 4.0)  # 최소 4배 확대
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+
+                # 고품질 리샘플링 사용
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                print(f"🔍 OCR 디버그: 이미지 크기 확대 {width}x{height} → {new_width}x{new_height} (배율: {scale_factor:.1f})")
+
+            # 더 간단하고 안전한 처리 방식으로 변경
+            # 직접 대비와 선명도만 조정
+
+            # 더 강한 대비 향상
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(2.0)  # 1.5에서 2.0으로 증가
+
+            # 더 강한 선명도 향상
+            enhancer = ImageEnhance.Sharpness(image)
+            image = enhancer.enhance(2.0)  # 1.2에서 2.0으로 증가
+
+            # 밝기 조정 (필기가 더 명확하게 보이도록)
+            enhancer = ImageEnhance.Brightness(image)
+            image = enhancer.enhance(1.1)
+
+            # 최종 이미지를 고품질로 저장
+            buffer = io.BytesIO()
+            image.save(buffer, format='PNG', quality=100, optimize=False)
+            processed_data = buffer.getvalue()
+
+            # 전처리된 이미지도 디버그용으로 저장
+            debug_processed_path = f"/tmp/debug_processed_{len(processed_data)}.png"
+            try:
+                with open(debug_processed_path, 'wb') as f:
+                    f.write(processed_data)
+                print(f"🔍 OCR 디버그: 전처리된 이미지 저장됨 - {debug_processed_path}")
+            except Exception as save_error:
+                print(f"🔍 OCR 디버그: 전처리된 이미지 저장 실패 - {save_error}")
+
+            print(f"🔍 OCR 디버그: 이미지 전처리 완료 ({len(image_data)} → {len(processed_data)} bytes)")
+            return processed_data
+
+        except Exception as e:
+            print(f"🔍 OCR 디버그: 이미지 전처리 중 오류 - {str(e)}")
             return None
     
     def extract_answer_from_text(self, ocr_text: str, problem_id: int, problem_number: int) -> str:

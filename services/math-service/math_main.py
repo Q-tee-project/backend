@@ -25,15 +25,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
-app.include_router(worksheet.router, tags=["worksheets"])
-app.include_router(grading.router, prefix="/grading", tags=["grading"])
-app.include_router(assignment.router, prefix="/assignments", tags=["assignments"])
-app.include_router(problem.router, prefix="/problems", tags=["problems"])
-app.include_router(task.router, prefix="/tasks", tags=["tasks"])
-app.include_router(market_integration.router, tags=["market-integration"])
-app.include_router(problem_validation.router, tags=["validation"])
-app.include_router(test_session.router, tags=["test-sessions"])
+# Create API router with /api prefix to match Korean service structure
+api_router = APIRouter(prefix="/api")
+
+api_router.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
+api_router.include_router(worksheet.router, prefix="/worksheets", tags=["worksheets"])
+api_router.include_router(grading.router, prefix="/grading", tags=["grading"])
+api_router.include_router(assignment.router, prefix="/assignments", tags=["assignments"])
+api_router.include_router(problem.router, prefix="/problems", tags=["problems"])
+api_router.include_router(task.router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(market_integration.router, prefix="/market-integration", tags=["market-integration"])
+api_router.include_router(problem_validation.router, prefix="/validation", tags=["validation"])
+api_router.include_router(test_session.router, prefix="/test-sessions", tags=["test-sessions"])
+
+app.include_router(api_router)
 
 @app.get("/")
 async def root():
@@ -41,4 +46,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -7,10 +7,13 @@ from .models.worksheet import Worksheet, WorksheetStatus
 from .models.problem import Problem
 from .services.math_grading_service import MathGradingService
 from .models.grading_result import GradingSession, ProblemGradingResult
+from .models.math_generation import Assignment, TestSession, TestAnswer
+from .services.ocr_service import OCRService
 from .core.exceptions import AIResponseError, GradingError, GenerationError
 import json
 import uuid
-from datetime import datetime
+import base64
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 
@@ -225,5 +228,247 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
         print(f"❌ Problem regeneration failed: {str(e)}")
         self.update_state(state='FAILURE', meta={'error': str(e), 'status': '문제 재생성 실패'})
         raise
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.tasks.process_assignment_ai_grading_task")
+def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
+    """과제의 손글씨 답안에 대해 OCR + AI 채점을 비동기로 처리하는 태스크"""
+    task_id = self.request.id
+    db = SessionLocal()
+
+    try:
+        self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100, 'status': '과제 정보 조회 중...'})
+
+        assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+        if not assignment:
+            raise GradingError("Assignment not found")
+
+        self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': '제출된 세션 조회 중...'})
+
+        # 해당 과제의 모든 제출된 세션들을 찾기
+        submitted_sessions = db.query(TestSession).filter(
+            TestSession.assignment_id == assignment_id,
+            TestSession.status == 'submitted'
+        ).all()
+
+        if not submitted_sessions:
+            return {"message": "제출된 세션이 없습니다.", "processed_count": 0}
+
+        self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'OCR 처리 중...'})
+
+        processed_count = 0
+        total_answers = 0
+
+        # 모든 세션의 손글씨 답안 수 계산
+        for session in submitted_sessions:
+            handwriting_answers = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session.session_id,
+                TestAnswer.answer.like('data:image/%')
+            ).all()
+            total_answers += len(handwriting_answers)
+
+        current_answer = 0
+
+        for session in submitted_sessions:
+            # 손글씨 이미지 답안들을 찾기
+            handwriting_answers = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session.session_id,
+                TestAnswer.answer.like('data:image/%')
+            ).all()
+
+            for answer in handwriting_answers:
+                current_answer += 1
+                progress = 20 + (current_answer * 50 // total_answers) if total_answers > 0 else 70
+                self.update_state(state='PROGRESS', meta={
+                    'current': progress, 'total': 100,
+                    'status': f'OCR 처리 중... ({current_answer}/{total_answers})'
+                })
+
+                try:
+                    print(f"🔍 답안 디버그: 문제 {answer.problem_id}, 답안 길이: {len(answer.answer)}")
+                    print(f"🔍 답안 디버그: 답안 시작: {answer.answer[:100]}...")
+
+                    # base64 이미지에서 실제 데이터 추출
+                    if ',' in answer.answer:
+                        image_data = base64.b64decode(answer.answer.split(',')[1])
+                        print(f"🔍 답안 디버그: 디코딩된 이미지 크기: {len(image_data)} bytes")
+
+                        ocr_service = OCRService()
+                        ocr_text = ocr_service.extract_text_from_image(image_data)
+
+                        if ocr_text and ocr_text.strip():
+                            # OCR 성공 시 텍스트로 업데이트
+                            answer.answer = ocr_text.strip()
+                            processed_count += 1
+                            print(f"✅ OCR 처리 완료: 문제 {answer.problem_id} → {ocr_text[:50]}")
+                        else:
+                            print(f"❌ OCR 텍스트 인식 실패: 문제 {answer.problem_id}")
+                    else:
+                        print(f"❌ 잘못된 이미지 형식: 문제 {answer.problem_id}")
+
+                except Exception as e:
+                    print(f"❌ OCR 처리 실패: 문제 {answer.problem_id}, 오류: {e}")
+                    continue
+
+        db.commit()
+
+        self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100, 'status': '채점 세션 생성 중...'})
+
+        # OCR 처리된 손글씨 답안에 대해서만 채점 세션 업데이트
+        updated_sessions = []
+        newly_graded_sessions = []
+        from .models.problem import Problem
+
+        for session in submitted_sessions:
+            # 해당 세션에 손글씨 답안이 있는지 확인
+            handwriting_answers = db.query(TestAnswer).filter(
+                TestAnswer.session_id == session.session_id,
+                TestAnswer.answer.like('data:image/%')
+            ).all()
+
+            # 손글씨 답안이 없으면 스킵 (이미 채점된 객관식만 있음)
+            if not handwriting_answers:
+                continue
+
+            # 해당 세션의 기존 채점 결과가 있는지 확인
+            existing_grading = db.query(GradingSession).filter(
+                GradingSession.worksheet_id == assignment.worksheet_id,
+                GradingSession.graded_by == session.student_id  # 학생별 구분
+            ).first()
+
+            problems = db.query(Problem).filter(Problem.worksheet_id == assignment.worksheet_id).all()
+            answers = db.query(TestAnswer).filter(TestAnswer.session_id == session.session_id).all()
+
+            problem_map = {p.id: p for p in problems}
+            answer_map = {str(ans.problem_id): ans.answer for ans in answers}
+
+            correct_count = 0
+            points_per_problem = 10 if len(problems) == 10 else 5 if len(problems) == 20 else 100 / len(problems)
+
+            if existing_grading:
+                # 기존 채점 세션이 있으면 업데이트 (손글씨 답안만)
+                # 기존 문제별 결과 중 손글씨였던 것만 삭제하고 다시 생성
+                db.query(ProblemGradingResult).filter(
+                    ProblemGradingResult.grading_session_id == existing_grading.id,
+                    ProblemGradingResult.input_method.like('%ocr%')
+                ).delete()
+
+                # 모든 답안 다시 채점
+                for problem in problems:
+                    student_answer = answer_map.get(str(problem.id), '')
+                    is_correct = student_answer == problem.correct_answer
+                    if is_correct:
+                        correct_count += 1
+
+                    # 기존 결과가 있는지 확인
+                    existing_result = db.query(ProblemGradingResult).filter(
+                        ProblemGradingResult.grading_session_id == existing_grading.id,
+                        ProblemGradingResult.problem_id == problem.id
+                    ).first()
+
+                    if not existing_result:
+                        # 새로운 문제 결과 생성
+                        input_method = "ai_grading_ocr" if student_answer.startswith('data:image/') else "multiple_choice"
+                        problem_result = ProblemGradingResult(
+                            grading_session_id=existing_grading.id,
+                            problem_id=problem.id,
+                            user_answer=student_answer,
+                            correct_answer=problem.correct_answer,
+                            is_correct=is_correct,
+                            score=points_per_problem if is_correct else 0,
+                            points_per_problem=points_per_problem,
+                            problem_type=problem.problem_type,
+                            difficulty=problem.difficulty,
+                            input_method=input_method,
+                            explanation=problem.explanation
+                        )
+                        db.add(problem_result)
+
+                # 채점 세션 점수 업데이트
+                existing_grading.correct_count = correct_count
+                existing_grading.total_score = correct_count * points_per_problem
+                existing_grading.graded_at = datetime.now(timezone.utc)
+                updated_sessions.append(existing_grading.id)
+
+            else:
+                # 새로운 채점 세션 생성
+                new_grading_session = GradingSession(
+                    worksheet_id=assignment.worksheet_id,
+                    celery_task_id=task_id,
+                    total_problems=len(problems),
+                    correct_count=0,  # 나중에 업데이트
+                    total_score=0,    # 나중에 업데이트
+                    max_possible_score=len(problems) * points_per_problem,
+                    points_per_problem=points_per_problem,
+                    input_method="ai_grading",
+                    graded_at=datetime.now(timezone.utc),
+                    graded_by=session.student_id  # 학생 ID로 구분
+                )
+                db.add(new_grading_session)
+                db.flush()
+
+                # 문제별 채점 결과 생성
+                for problem in problems:
+                    student_answer = answer_map.get(str(problem.id), '')
+                    is_correct = student_answer == problem.correct_answer
+                    if is_correct:
+                        correct_count += 1
+
+                    input_method = "ai_grading_ocr" if student_answer.startswith('data:image/') else "multiple_choice"
+                    problem_result = ProblemGradingResult(
+                        grading_session_id=new_grading_session.id,
+                        problem_id=problem.id,
+                        user_answer=student_answer,
+                        correct_answer=problem.correct_answer,
+                        is_correct=is_correct,
+                        score=points_per_problem if is_correct else 0,
+                        points_per_problem=points_per_problem,
+                        problem_type=problem.problem_type,
+                        difficulty=problem.difficulty,
+                        input_method=input_method,
+                        explanation=problem.explanation
+                    )
+                    db.add(problem_result)
+
+                # 채점 세션 점수 업데이트
+                new_grading_session.correct_count = correct_count
+                new_grading_session.total_score = correct_count * points_per_problem
+                newly_graded_sessions.append(new_grading_session.id)
+
+        self.update_state(state='PROGRESS', meta={'current': 95, 'total': 100, 'status': '결과 저장 중...'})
+
+        db.commit()
+
+        return {
+            "message": f"OCR + AI 채점 완료",
+            "processed_count": processed_count,
+            "updated_sessions": len(updated_sessions),
+            "newly_graded_sessions": len(newly_graded_sessions),
+            "assignment_id": assignment_id,
+            "task_id": task_id
+        }
+
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        traceback_info = traceback.format_exc()
+        print(f"❌ AI 채점 태스크 실패: {error_msg}")
+        print(f"❌ 상세 오류: {traceback_info}")
+
+        try:
+            self.update_state(
+                state='FAILURE',
+                meta={
+                    'error': error_msg,
+                    'status': 'OCR + AI 채점 실패',
+                    'assignment_id': assignment_id
+                }
+            )
+        except Exception as update_error:
+            print(f"❌ 상태 업데이트 실패: {str(update_error)}")
+
+        raise GradingError(f"AI 채점 태스크 실패: {error_msg}")
     finally:
         db.close()

@@ -219,3 +219,14 @@ async def start_test_session(
         started_at=new_session.started_at.isoformat(),
         status=new_session.status
     )
+
+@router.get("/classrooms/{class_id}/assignments")
+async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get_db)):
+    """클래스룸별 배포된 과제 목록 조회"""
+    from ..models.math_generation import Assignment
+
+    assignments = db.query(Assignment).filter(
+        Assignment.classroom_id == class_id,
+        Assignment.is_deployed == "deployed"
+    ).all()
+    return assignments
