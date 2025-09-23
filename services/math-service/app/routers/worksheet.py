@@ -99,7 +99,7 @@ async def get_generation_detail(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"세션 상세 조회 중 오류: {str(e)}")
 
 
-@router.get("/worksheets")
+@router.get("/")
 async def get_worksheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -145,7 +145,7 @@ async def get_worksheets(
         )
 
 
-@router.get("/worksheets/{worksheet_id}")
+@router.get("/{worksheet_id}")
 async def get_worksheet_detail(
     worksheet_id: int,
     db: Session = Depends(get_db),
@@ -220,7 +220,7 @@ async def get_worksheet_detail(
         )
 
 
-@router.patch("/worksheets/{worksheet_id}")
+@router.patch("/{worksheet_id}")
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
@@ -294,7 +294,7 @@ async def update_worksheet(
         )
 
 
-@router.delete("/worksheets/{worksheet_id}")
+@router.delete("/{worksheet_id}")
 async def delete_worksheet(
     worksheet_id: int,
     db: Session = Depends(get_db),
