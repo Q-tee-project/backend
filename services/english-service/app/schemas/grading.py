@@ -37,9 +37,9 @@ class ExampleInfo(BaseModel):
 
 # 채점 결과 전체 스키마 (문제지 데이터 포함)
 class GradingResultResponse(BaseModel):
-    result_id: str  # id 제거, result_id만 사용
+    result_id: int  # integer로 변경
     worksheet_id: int
-    student_name: str
+    student_id: int
     completion_time: int
     total_score: int
     max_score: int
@@ -80,6 +80,7 @@ class ReviewRequest(BaseModel):
 
 # 답안 제출 요청 스키마
 class SubmissionRequest(BaseModel):
-    student_name: str  # 학생 이름
+    assignment_id: int  # 과제 ID
+    student_id: int  # 학생 ID
     answers: Dict[int, str]  # question_id -> answer
-    completion_time: int  # 소요 시간 (초)
+    user_id: int  # 사용자 ID (선택적)

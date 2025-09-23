@@ -1,7 +1,6 @@
 from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
-import uuid
 
 from app.models import (
     Worksheet, Question, Passage,
@@ -19,8 +18,8 @@ class GradingService:
         self.objective_grader = ObjectiveGrader()
         self.subjective_grader = SubjectiveGrader()
 
-    async def grade_worksheet(self, worksheet_id: int, student_name: str,
-                            answers: Dict[int, str], completion_time: int) -> Dict[str, Any]:
+    async def grade_worksheet(self, worksheet_id: int, student_id: int,
+                            answers: Dict[int, str], completion_time: int = 0) -> Dict[str, Any]:
         """문제지 전체 채점"""
         try:
             # 문제지 정보 조회
@@ -46,6 +45,8 @@ class GradingService:
 
             for question in questions:
                 student_answer = answers.get(question.question_id, "")
+                print(f"🔍 문제 {question.question_id}: 학생답안 '{student_answer}' (타입: {type(student_answer)}) 문제타입: {question.question_type}")
+                print(f"🔍 answers 딕셔너리 키들: {list(answers.keys())}")
 
                 # 문제별 채점
                 result = await self._grade_single_question(
@@ -58,7 +59,7 @@ class GradingService:
 
             # 채점 결과 저장
             grading_result = await self._save_grading_result(
-                worksheet_id, student_name, completion_time,
+                worksheet_id, student_id, completion_time,
                 total_score, max_score, question_results
             )
 
@@ -67,7 +68,7 @@ class GradingService:
 
             return {
                 "result_id": grading_result.result_id,
-                "student_name": student_name,
+                "student_id": student_id,
                 "worksheet_id": worksheet_id,
                 "total_score": total_score,
                 "max_score": max_score,
@@ -112,16 +113,11 @@ class GradingService:
                 question.correct_answer, student_answer
             )
             question_result.update(grading_result)
+            question_result["student_answer"] = student_answer  # 프론트 원본값 그대로 저장
+            question_result["needs_review"] = True  # 객관식도 검수 필요
 
-        elif question.question_type == "단답형":
-            # 단답형: DB의 정답과 직접 비교
-            grading_result = self.objective_grader.grade_short_answer(
-                question.correct_answer, student_answer
-            )
-            question_result.update(grading_result)
-
-        elif question.question_type in ["주관식", "서술형"]:
-            # 주관식/서술형: AI 채점
+        elif question.question_type in ["단답형", "서술형"]:
+            # 단답형/서술형: AI 채점
             # 관련 지문과 예문 조회
             passage_content = self._get_passage_content(worksheet_id, question.passage_id)
             example_content = question.example_content
@@ -131,7 +127,9 @@ class GradingService:
                 correct_answer=question.correct_answer,
                 student_answer=student_answer,
                 passage_content=passage_content,
-                example_content=example_content
+                example_content=example_content,
+                explanation=question.explanation,
+                learning_point=question.learning_point
             )
 
             question_result.update(grading_result)
@@ -151,20 +149,18 @@ class GradingService:
 
         return str(passage.passage_content) if passage else None
 
-    async def _save_grading_result(self, worksheet_id: int, student_name: str,
+    async def _save_grading_result(self, worksheet_id: int, student_id: int,
                                  completion_time: int, total_score: int, max_score: int,
                                  question_results: List[Dict[str, Any]]) -> GradingResult:
         """채점 결과를 데이터베이스에 저장합니다."""
 
         # 전체 채점 결과 저장
-        result_id = str(uuid.uuid4())
         percentage = (total_score / max_score * 100) if max_score > 0 else 0
         needs_review = any(qr.get("needs_review", False) for qr in question_results)
 
         grading_result = GradingResult(
-            result_id=result_id,
             worksheet_id=worksheet_id,
-            student_name=student_name,
+            student_id=student_id,
             completion_time=completion_time,
             total_score=total_score,
             max_score=max_score,
@@ -179,7 +175,7 @@ class GradingService:
         # 문제별 채점 결과 저장
         for qr in question_results:
             question_result = QuestionResult(
-                grading_result_id=result_id,
+                grading_result_id=grading_result.result_id,
                 question_id=qr["question_id"],
                 question_type=qr["question_type"],
                 student_answer=qr["student_answer"],
@@ -197,7 +193,7 @@ class GradingService:
         self.db.commit()
         return grading_result
 
-    def get_grading_result(self, result_id: str) -> Optional[Dict[str, Any]]:
+    def get_grading_result(self, result_id: int) -> Optional[Dict[str, Any]]:
         """채점 결과를 조회합니다."""
         grading_result = self.db.query(GradingResult).filter(
             GradingResult.result_id == result_id

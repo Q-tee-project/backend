@@ -27,7 +27,7 @@ class QuestionSaveData(BaseModel):
     related_question: Optional[int] = None
     question_passage_id: Optional[int] = None
     question_choices: Optional[List[str]] = None
-    correct_answer: Any  # int for 객관식, str for others
+    correct_answer: str  # 객관식: "1","2","3","4", 주관식: 정답 문자열
     explanation: str
     learning_point: str
 

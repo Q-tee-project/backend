@@ -203,7 +203,6 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
     print("🚨 저장 요청 시작!")
     try:
         # 문제지 메타데이터는 이제 직접 접근 가능
-        worksheet_id = request.worksheet_id
         teacher_id = request.teacher_id
         worksheet_name = request.worksheet_name
         school_level = request.worksheet_level
@@ -212,19 +211,11 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         problem_type = request.problem_type
         total_questions = request.total_questions
         duration = request.worksheet_duration
-        
-        print(f"🆔 생성된 워크시트 UUID: {worksheet_id}")
-        
-        # 중복 확인 (정수 ID 중복 체크)
-        existing = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
-        if existing:
-            # 만약 ID가 중복되면 새로 생성
-            worksheet_id = random.randint(1000000000, 9999999999)
-            print(f"🔄 ID 중복으로 재생성: {worksheet_id}")
-        
-        # 1. Worksheet 생성
+
+        print(f"🆔 워크시트 자동 ID 생성 예정")
+
+        # 1. Worksheet 생성 (worksheet_id는 자동 증가)
         db_worksheet = Worksheet(
-            worksheet_id=worksheet_id,
             teacher_id=teacher_id,
             worksheet_name=worksheet_name,
             school_level=school_level,
@@ -282,7 +273,7 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         
         return {
             "message": "문제지가 성공적으로 저장되었습니다.",
-            "worksheet_id": worksheet_id,
+            "worksheet_id": db_worksheet.worksheet_id,
             "status": "success"
         }
         

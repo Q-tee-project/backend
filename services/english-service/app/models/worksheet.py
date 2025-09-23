@@ -8,7 +8,7 @@ class Worksheet(Base):
     __tablename__ = "worksheets"
     __table_args__ = {"schema": "english_service"}
 
-    worksheet_id = Column(Integer, primary_key=True, index=True)  # 문제지 ID
+    worksheet_id = Column(Integer, primary_key=True, autoincrement=True, index=True)  # 문제지 ID
     teacher_id = Column(Integer, nullable=False)    # 선생님 ID
     worksheet_name = Column(String(200), nullable=False)  # 문제지 제목
     school_level = Column(String(20), nullable=False)  # 중학교, 고등학교 등

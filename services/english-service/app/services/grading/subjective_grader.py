@@ -9,9 +9,10 @@ class SubjectiveGrader:
         self.ai_service = AIService()
 
     async def grade_subjective(self, question_text: str, correct_answer: str, student_answer: str,
-                             passage_content: str = None, example_content: str = None) -> Dict[str, Any]:
+                             passage_content: str = None, example_content: str = None,
+                             explanation: str = None, learning_point: str = None) -> Dict[str, Any]:
         """
-        주관식/서술형 문제를 AI로 채점합니다.
+        단답형/서술형 문제를 AI로 채점합니다.
 
         Args:
             question_text: 문제 텍스트
@@ -28,7 +29,9 @@ class SubjectiveGrader:
             correct_answer=correct_answer,
             student_answer=student_answer,
             passage_content=passage_content,
-            example_content=example_content
+            example_content=example_content,
+            explanation=explanation,
+            learning_point=learning_point
         )
 
         # grading_method 추가

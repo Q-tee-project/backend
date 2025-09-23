@@ -8,6 +8,12 @@ class AssignmentDeployRequest(BaseModel):
     classroom_id: int = Field(..., description="배포할 클래스룸 ID")
     student_ids: List[int] = Field(..., description="배포할 학생 ID 목록")
 
+class SimpleAssignmentDeployRequest(BaseModel):
+    """간단한 과제 배포 요청 (프론트엔드용)"""
+    assignment_id: int = Field(..., description="워크시트 ID (assignment_id로 사용)")
+    student_ids: List[int] = Field(..., description="배포할 학생 ID 목록")
+    classroom_id: int = Field(..., description="배포할 클래스룸 ID")
+
 class AssignmentDeploymentResponse(BaseModel):
     """과제 배포 응답"""
     id: int
