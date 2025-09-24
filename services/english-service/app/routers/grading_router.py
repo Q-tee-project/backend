@@ -58,11 +58,21 @@ async def get_grading_results(db: Session = Depends(get_db)):
         
         result_summaries = []
         for result in results:
+            # student_id로 student 이름 조회 (auth_service 스키마에서)
+            from sqlalchemy import text
+            student_query = text("""
+                SELECT name
+                FROM auth_service.students
+                WHERE id = :student_id
+            """)
+            student_result = db.execute(student_query, {"student_id": result.student_id})
+            student_name = student_result.scalar() or f"Student {result.student_id}"
+
             result_summaries.append(GradingResultSummary(
-                id=result.result_id,  # result_id를 id로 사용
-                result_id=result.result_id,
+                id=str(result.result_id),  # string으로 변환
+                result_id=str(result.result_id),  # string으로 변환
                 worksheet_id=result.worksheet_id,
-                student_name=result.student_name,
+                student_name=student_name,
                 completion_time=result.completion_time,
                 total_score=result.total_score,
                 max_score=result.max_score,
