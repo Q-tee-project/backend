@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 from datetime import datetime
 
@@ -53,7 +53,7 @@ class DifficultyDistribution(BaseModel):
     ratio: int = Field(..., ge=0, le=100, description="해당 난이도의 비율 (0-100%)")
 
 # 메인 문제 생성 요청 스키마
-class QuestionGenerationRequest(BaseModel):
+class WorksheetGenerationRequest(BaseModel):
     # 기본 정보
     school_level: str = Field(..., description="학교급")
     grade: int = Field(..., ge=1, le=3, description="학년")
@@ -131,27 +131,168 @@ class CategoriesResponse(BaseModel):
 # 지문 유형 관련 스키마들 (간단 버전)
 # ===========================================
 
-# 지문 유형 생성 요청 스키마
-class TextTypeCreate(BaseModel):
-    type_name: str = Field(..., description="지문 유형 이름 (영문, 예: article, correspondence)")
-    display_name: str = Field(..., description="지문 유형 표시명 (한글)")
-    description: Optional[str] = Field(None, description="유형 설명")
-    json_format: Dict[str, Any] = Field(..., description="JSON 형식 예시")
+# 지문 유형 관련 스키마들 제거 (사용하지 않음)
 
-# 지문 유형 수정 요청 스키마
-class TextTypeUpdate(BaseModel):
-    display_name: Optional[str] = Field(None, description="지문 유형 표시명 (한글)")
-    description: Optional[str] = Field(None, description="유형 설명")
-    json_format: Optional[Dict[str, Any]] = Field(None, description="JSON 형식 예시")
+# ====================================
+# 문제지 저장 관련 스키마
+# ====================================
 
-# 지문 유형 응답 스키마
-class TextTypeResponse(BaseModel):
+# 문제지 저장 요청 스키마
+class WorksheetSaveRequest(BaseModel):
+    worksheet_data: Dict[str, Any] = Field(..., description="생성된 통합 문제지 JSON 데이터 (문제지+답안지)")
+
+# 지문 스키마
+class PassageResponse(BaseModel):
     id: int
-    type_name: str
-    display_name: str
-    description: Optional[str]
-    json_format: Dict[str, Any]
-    created_at: Optional[datetime]
+    passage_id: int
+    passage_type: str
+    passage_content: Dict[str, Any]
+    related_questions: List[int]
+    created_at: datetime
     
     class Config:
         from_attributes = True
+
+# 예문 스키마
+class ExampleResponse(BaseModel):
+    id: int
+    example_id: int
+    example_content: str
+    related_question: Optional[int]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제 스키마
+class QuestionResponse(BaseModel):
+    id: int
+    question_id: int
+    question_text: str
+    question_type: str
+    question_subject: str
+    question_difficulty: str
+    question_detail_type: Optional[str]
+    question_choices: Optional[List[str]]
+    passage_id: Optional[int]
+    example_id: Optional[int]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 답안지 스키마
+class AnswerSheetResponse(BaseModel):
+    id: int
+    answer_data: Dict[str, Any]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제지 전체 응답 스키마
+class WorksheetResponse(BaseModel):
+    worksheet_id: str
+    worksheet_name: str
+    school_level: str
+    grade: str
+    subject: str
+    total_questions: int
+    duration: Optional[int]
+    created_at: datetime
+    passages: List[PassageResponse]
+    examples: List[ExampleResponse]
+    questions: List[QuestionResponse]
+    
+    class Config:
+        from_attributes = True
+
+# 문제지 목록 조회용 간단한 스키마
+class WorksheetSummary(BaseModel):
+    id: str  # worksheet_id와 동일한 값
+    worksheet_id: str
+    worksheet_name: str
+    school_level: str
+    grade: str
+    subject: str
+    total_questions: int
+    duration: Optional[int]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 문제별 채점 결과 스키마 (간소화)
+class QuestionResultResponse(BaseModel):
+    question_id: int
+    question_type: str
+    student_answer: Optional[str]
+    correct_answer: Optional[str]
+    score: int
+    max_score: int
+    is_correct: bool
+    grading_method: str
+    ai_feedback: Optional[str]
+    # 검수 관련 필드들 및 id, created_at 제거
+    
+    class Config:
+        from_attributes = True
+
+# 지문 원문 정보 스키마 (채점 결과용)
+class PassageInfo(BaseModel):
+    passage_id: int
+    original_content: str
+    korean_translation: Optional[str] = None
+    text_type: Optional[str] = None
+
+# 예문 원문 정보 스키마 (채점 결과용)  
+class ExampleInfo(BaseModel):
+    example_id: int
+    original_content: str
+    korean_translation: Optional[str] = None
+
+# 채점 결과 전체 스키마 (문제지 데이터 포함)
+class GradingResultResponse(BaseModel):
+    result_id: str  # id 제거, result_id만 사용
+    worksheet_id: str
+    student_name: str
+    completion_time: int
+    total_score: int
+    max_score: int
+    percentage: float
+    question_results: List[QuestionResultResponse] = []
+    student_answers: Dict[int, str] = {}  # 학생 답안 딕셔너리
+    created_at: datetime
+    worksheet_data: Dict[str, Any] = {}  # 문제지 데이터 포함
+    
+    class Config:
+        from_attributes = True
+
+# 채점 결과 목록 조회용 간단한 스키마
+class GradingResultSummary(BaseModel):
+    id: str  # result_id가 UUID 문자열이므로 str로 변경
+    result_id: str
+    worksheet_id: str
+    student_name: str
+    completion_time: int
+    total_score: int
+    max_score: int
+    percentage: float
+    needs_review: bool
+    is_reviewed: bool
+    created_at: datetime
+    worksheet_name: Optional[str]  # 조인으로 가져온 문제지 이름
+    
+    class Config:
+        from_attributes = True
+
+# 검수 요청 스키마
+class ReviewRequest(BaseModel):
+    question_results: Dict[int, Dict[str, Any]]  # question_id -> {score, feedback}
+    reviewed_by: Optional[str] = "교사"
+    
+# 답안 제출 요청 스키마
+class SubmissionRequest(BaseModel):
+    student_name: str  # 학생 이름
+    answers: Dict[int, str]  # question_id -> answer
+    completion_time: int  # 소요 시간 (초)
