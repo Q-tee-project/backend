@@ -219,8 +219,8 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
             KoreanGradingSession.student_id == student_id
         ).first()
 
-        # 상태 결정 (수학과 동일한 방식)
-        if deployment.status == "submitted":
+        # 상태 결정 (completed 상태 추가)
+        if deployment.status == "completed" or deployment.status == "submitted":
             status_text = "완료" if grading_session else "제출완료"
             completed_at = deployment.submitted_at.isoformat() if deployment.submitted_at else None
         elif deployment.status == "assigned":

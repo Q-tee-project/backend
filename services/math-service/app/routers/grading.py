@@ -117,7 +117,7 @@ async def get_assignment_results(
         if not test_session:
             status = "미시작"
             completed_at = None
-        elif test_session.status == "submitted":
+        elif test_session.status == "completed" or test_session.status == "submitted":
             status = "완료" if grading_session else "제출완료"
             completed_at = test_session.submitted_at.isoformat() if test_session.submitted_at else None
         elif test_session.status == "started":
@@ -189,7 +189,7 @@ async def start_ai_grading(
     from ..models.math_generation import TestSession
     submitted_sessions = db.query(TestSession).filter(
         TestSession.assignment_id == assignment_id,
-        TestSession.status == 'submitted'
+        TestSession.status.in_(['completed', 'submitted'])
     ).all()
 
     if not submitted_sessions:

@@ -71,7 +71,7 @@ async def submit_test(
         db.add(db_answer)
 
     # 3. 세션 및 과제 배포 상태 업데이트
-    session.status = 'submitted'
+    session.status = 'completed'
     session.submitted_at = datetime.utcnow()
 
     # AssignmentDeployment 상태를 'completed'로 업데이트
