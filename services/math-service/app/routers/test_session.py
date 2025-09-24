@@ -34,12 +34,20 @@ async def submit_test(
     assignment = db.query(Assignment).filter(Assignment.id == session.assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    
+
     problems = db.query(Problem).filter(Problem.worksheet_id == assignment.worksheet_id).all()
     problem_map = {str(p.id): p for p in problems}
 
-    # 2. 채점 로직
+    # 2. 모든 문제에 대한 답안이 제출되었는지 확인
     total_problems = len(problems)
+    answered_problems = len(answers)
+    if answered_problems < total_problems:
+        raise HTTPException(
+            status_code=422,
+            detail=f"모든 문제에 답안을 제출해야 합니다. 현재 {answered_problems}/{total_problems}개 문제에 답안이 제출되었습니다."
+        )
+
+    # 3. 채점 로직
     correct_answers = 0
     points_per_problem = 10 if total_problems == 10 else 5 if total_problems == 20 else 100 / total_problems
 
@@ -81,6 +89,7 @@ async def submit_test(
     ).first()
     if deployment:
         deployment.status = 'completed'
+        deployment.submitted_at = datetime.utcnow()
 
     db.commit()
 

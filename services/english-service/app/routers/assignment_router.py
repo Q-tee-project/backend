@@ -412,6 +412,21 @@ async def submit_assignment(
         if not worksheet:
             raise HTTPException(status_code=404, detail="문제지를 찾을 수 없습니다.")
 
+        # 문제지의 모든 문제 조회
+        questions = db.query(Question).filter(Question.worksheet_id == worksheet_id).all()
+        total_questions = len(questions)
+
+        if total_questions == 0:
+            raise HTTPException(status_code=400, detail="문제지에 문제가 없습니다.")
+
+        # 모든 문제에 대한 답안이 제출되었는지 확인
+        answered_questions = len(submission_data.answers)
+        if answered_questions < total_questions:
+            raise HTTPException(
+                status_code=422,
+                detail=f"모든 문제에 답안을 제출해야 합니다. 현재 {answered_questions}/{total_questions}개 문제에 답안이 제출되었습니다."
+            )
+
         # 기존 채점 서비스 사용
         from app.services.grading.grading_service import GradingService
         grading_service = GradingService(db)
@@ -433,6 +448,7 @@ async def submit_assignment(
 
             if deployment:
                 deployment.status = "completed"
+                deployment.submitted_at = datetime.utcnow()
                 db.commit()
 
         return {
@@ -507,6 +523,21 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
                 status_text = "미완료"
                 completed_at = None
 
+            # total_problems와 correct_count 계산
+            total_problems = assignment.total_questions
+            correct_count = 0
+
+            if grading_result:
+                # 점수 기반으로 정답 개수 추정 (안전한 방법)
+                if grading_result.max_score > 0:
+                    correct_count = int((grading_result.total_score / grading_result.max_score) * total_problems)
+                print(f"📊 점수 기반 정답 개수 계산: student_id={student_id}, score={grading_result.total_score}, max={grading_result.max_score}, correct_count={correct_count}")
+
+                max_possible_score = grading_result.max_score
+            else:
+                # 기본값: 문제당 10점으로 가정
+                max_possible_score = total_problems * 10
+
             student_result = {
                 "student_id": student_id,
                 "student_name": student_name,
@@ -514,11 +545,11 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
                 "grade": student_grade,
                 "status": status_text,
                 "total_score": grading_result.total_score if grading_result else 0,
-                "max_possible_score": grading_result.max_score if grading_result else 100,
+                "max_possible_score": max_possible_score,
                 "completed_at": completed_at,
                 "grading_session_id": grading_result.result_id if grading_result else None,
-                "total_problems": grading_result.max_score if grading_result else assignment.total_questions,
-                "correct_count": grading_result.total_score if grading_result else 0,
+                "total_problems": total_problems,
+                "correct_count": correct_count,
                 "graded_at": grading_result.created_at.isoformat() if grading_result and grading_result.created_at else None,
             }
 
@@ -536,6 +567,9 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print(f"❌ 과제 결과 조회 중 오류 발생: {str(e)}")
+        print(f"❌ 트레이스백: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"과제 결과 조회 중 오류 발생: {str(e)}"

@@ -45,7 +45,7 @@ class AssignmentDeployment(Base):
     # 배포 시간
     deployed_at = Column(DateTime(timezone=True), server_default=func.now())
     started_at = Column(DateTime(timezone=True))
-    completed_at = Column(DateTime(timezone=True))
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
 
     # 관계
     assignment = relationship("Assignment", backref="deployments")

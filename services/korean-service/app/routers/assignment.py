@@ -206,6 +206,14 @@ async def submit_korean_assignment(
     if total_problems == 0:
         raise HTTPException(status_code=400, detail="No problems in this assignment")
 
+    # 모든 문제에 대한 답안이 제출되었는지 확인
+    answered_problems = len(answers)
+    if answered_problems < total_problems:
+        raise HTTPException(
+            status_code=422,
+            detail=f"모든 문제에 답안을 제출해야 합니다. 현재 {answered_problems}/{total_problems}개 문제에 답안이 제출되었습니다."
+        )
+
     points_per_problem = 10 if total_problems <= 10 else 5
     correct_count = 0
 
