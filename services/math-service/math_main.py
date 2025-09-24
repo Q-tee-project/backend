@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from app.routers import math_generation, market_integration
 from app.database import engine
 from app.models import Base
+from app.routers import curriculum, worksheet, grading, assignment, problem, task, market_integration, test_session
+
 # Import all models to ensure they are registered with Base.metadata
 import app.models.worksheet
 import app.models.problem
@@ -20,14 +20,23 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "file://", "*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Create API router with /api prefix to match Korean service structure
+api_router = APIRouter(prefix="/api")
 
-app.include_router(math_generation.router, prefix="/api/math-generation", tags=["math-generation"])
-app.include_router(market_integration.router, tags=["market-integration"])
+api_router.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
+api_router.include_router(worksheet.router, prefix="/worksheets", tags=["worksheets"])
+api_router.include_router(grading.router, prefix="/grading", tags=["grading"])
+api_router.include_router(assignment.router, prefix="/assignments", tags=["assignments"])
+api_router.include_router(problem.router, prefix="/problems", tags=["problems"])
+api_router.include_router(task.router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(market_integration.router, prefix="/market-integration", tags=["market-integration"])
+api_router.include_router(test_session.router, prefix="/test-sessions", tags=["test-sessions"])
+
+app.include_router(api_router)
 
 @app.get("/")
 async def root():
@@ -35,4 +44,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

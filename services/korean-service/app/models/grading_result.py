@@ -10,6 +10,7 @@ class KoreanGradingSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     worksheet_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)  # 학생 ID
     graded_by = Column(Integer, nullable=False)  # 채점한 사용자 ID
 
     # 채점 정보
@@ -31,6 +32,13 @@ class KoreanGradingSession(Base):
 
     # 비동기 처리
     celery_task_id = Column(String, nullable=True)
+
+    # 상태
+    status = Column(String, default="pending_approval") # pending_approval, approved, rejected
+
+    # 승인 정보
+    teacher_id = Column(Integer, nullable=True)  # 승인한 선생님 ID
+    approved_at = Column(DateTime(timezone=True), nullable=True) # 승인 시간
 
     # 시간 관리
     graded_at = Column(DateTime(timezone=True), server_default=func.now())

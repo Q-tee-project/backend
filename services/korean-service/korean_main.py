@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import korean_generation, market_integration
+from app.routers import korean_generation, market_integration, assignment, grading
 from app.database import engine
 from app.models import Base
 # Import all models to ensure they are registered with Base.metadata
@@ -17,12 +17,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "file://", "*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
 app.include_router(korean_generation.router, prefix="/api/korean-generation", tags=["korean-generation"])
 app.include_router(market_integration.router, tags=["market-integration"])
+app.include_router(assignment.router, prefix="/api/assignments", tags=["assignments"])
+app.include_router(grading.router, prefix="/api/grading", tags=["grading"])
 
 @app.get("/")
 async def root():

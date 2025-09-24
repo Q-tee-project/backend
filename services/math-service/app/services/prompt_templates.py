@@ -213,7 +213,7 @@ class PromptTemplates:
     "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
     "correct_answer": "정답",
     "explanation": "간결한 해설",
-    "problem_type": "multiple_choice/short_answer/essay",
+    "problem_type": "multiple_choice/short_answer",
     "difficulty": "A/B/C",
     "has_diagram": false,
     "diagram_type": null,
@@ -314,7 +314,7 @@ class PromptTemplates:
     "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
     "correct_answer": "정답 (객관식: A/B/C/D, 단답형: 수식)",
     "explanation": "간결한 해설 (A: 50자, B: 100자, C: 150자 이하)",
-    "problem_type": "multiple_choice/short_answer/essay",
+    "problem_type": "multiple_choice/short_answer",
     "difficulty": "A/B/C",
     "has_diagram": false
   }}

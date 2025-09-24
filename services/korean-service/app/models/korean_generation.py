@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
 
@@ -47,6 +48,7 @@ class KoreanGeneration(Base):
 class Assignment(Base):
     """국어 과제 모델"""
     __tablename__ = "korean_assignments"
+    __table_args__ = {"schema": "korean_service"}
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
@@ -70,9 +72,10 @@ class Assignment(Base):
 class AssignmentDeployment(Base):
     """국어 과제 배포 모델"""
     __tablename__ = "korean_assignment_deployments"
+    __table_args__ = {"schema": "korean_service"}
 
     id = Column(Integer, primary_key=True, index=True)
-    assignment_id = Column(Integer, nullable=False)
+    assignment_id = Column(Integer, ForeignKey("korean_service.korean_assignments.id"), nullable=False)
     student_id = Column(Integer, nullable=False)
     classroom_id = Column(Integer, nullable=False)
 
@@ -83,3 +86,6 @@ class AssignmentDeployment(Base):
     deployed_at = Column(DateTime(timezone=True), server_default=func.now())
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     graded_at = Column(DateTime(timezone=True), nullable=True)
+
+    # 관계
+    assignment = relationship("Assignment", backref="deployments")

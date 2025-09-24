@@ -202,7 +202,7 @@ class MathGenerationService:
             difficulty = problem_data.get("difficulty")
 
             # 유효성 검사 및 기본값 설정 (로그와 함께)
-            if problem_type not in ["multiple_choice", "essay", "short_answer"]:
+            if problem_type not in ["multiple_choice", "short_answer"]:
                 print(f"⚠️ 잘못된 문제유형 '{problem_type}' -> 'multiple_choice'로 대체")
                 problem_type = "multiple_choice"
 
@@ -316,14 +316,13 @@ class MathGenerationService:
             return []
     
     def _generate_problems_with_ai(self, curriculum_data: Dict, problem_types: List[str], request: MathProblemGenerationRequest) -> List[Dict]:
-        """AI를 통한 문제 생성 - Celery task 사용"""
+        """비율 기반 AI 문제 생성"""
 
-        # 사용자 프롬프트 그대로 전달 (ProblemGenerator에서 모든 처리)
-        enhanced_prompt = request.user_text
+        print(f"📊 비율 기반 문제 생성 시작")
+        print(f"🎯 요청된 비율: {request.problem_type_ratio.model_dump()}")
 
-        # MathGenerationService는 더 이상 직접 문제 생성하지 않음
-        # 모든 문제 생성은 Celery Task를 통해서만 수행
-        raise Exception("이 메서드는 더 이상 사용되지 않습니다. API 엔드포인트에서 직접 Task를 호출하세요.")
+        # 비율 기반 문제 생성 로직 사용
+        return self._generate_problems_with_ratio(curriculum_data, request)
     
     def _generate_fallback_problems(self, count: int, curriculum_data: Dict) -> List[Dict]:
         """AI 오류시 기본 문제 생성"""
@@ -359,10 +358,10 @@ class MathGenerationService:
     
     def _calculate_type_distribution(self, problems: List[Dict]) -> Dict[str, int]:
         """유형 분포 계산"""
-        distribution = {"multiple_choice": 0, "essay": 0, "short_answer": 0, "UNKNOWN": 0}
+        distribution = {"multiple_choice": 0, "short_answer": 0, "UNKNOWN": 0}
         for problem in problems:
             problem_type = problem.get("problem_type")
-            if problem_type in ["multiple_choice", "essay", "short_answer"]:
+            if problem_type in ["multiple_choice", "short_answer"]:
                 distribution[problem_type] += 1
             else:
                 # problem_type 필드가 누락되거나 잘못된 경우 UNKNOWN으로 분류
@@ -374,7 +373,209 @@ class MathGenerationService:
             print(f"🚨 문제유형 분류 실패한 문제 {distribution['UNKNOWN']}개 발견")
 
         return distribution
-    
+
+    def _calculate_problem_counts_by_ratio(self, total_count: int, ratio: Dict[str, int]) -> Dict[str, int]:
+        """
+        비율에 따른 문제 개수 계산 - 정확한 비율 보장
+
+        Args:
+            total_count: 총 문제 개수 (10 or 20)
+            ratio: 문제 유형 비율 {"multiple_choice": 50, "short_answer": 50}
+
+        Returns:
+            실제 생성할 문제 개수 {"multiple_choice": 5, "short_answer": 5}
+        """
+        print(f"📊 비율 기반 문제 개수 계산 시작: 총 {total_count}개, 비율 {ratio}")
+
+        mc_ratio = ratio.get("multiple_choice", 0)
+        sa_ratio = ratio.get("short_answer", 0)
+
+        # 정확한 비율 계산 (소수점 사용)
+        mc_exact = total_count * mc_ratio / 100.0
+        sa_exact = total_count * sa_ratio / 100.0
+
+        print(f"📐 정확한 계산: 객관식 {mc_exact}, 단답형 {sa_exact}")
+
+        # 내림 처리로 기본 개수 할당
+        mc_count = int(mc_exact)
+        sa_count = int(sa_exact)
+
+        # 남은 문제 개수 계산
+        allocated = mc_count + sa_count
+        remaining = total_count - allocated
+
+        print(f"📝 기본 할당: 객관식 {mc_count}개, 단답형 {sa_count}개, 남은 문제: {remaining}개")
+
+        # 남은 문제를 소수점 부분이 큰 순서대로 배분
+        if remaining > 0:
+            mc_decimal = mc_exact - mc_count
+            sa_decimal = sa_exact - sa_count
+
+            # 소수점 부분이 큰 순서대로 1개씩 배분
+            priority_list = [
+                ("multiple_choice", mc_decimal),
+                ("short_answer", sa_decimal)
+            ]
+            priority_list.sort(key=lambda x: x[1], reverse=True)
+
+            for i in range(remaining):
+                if priority_list[i % 2][0] == "multiple_choice":
+                    mc_count += 1
+                else:
+                    sa_count += 1
+
+        result = {
+            "multiple_choice": mc_count,
+            "short_answer": sa_count
+        }
+
+        print(f"✅ 최종 문제 개수: {result}")
+        print(f"🔍 검증: 총합 {mc_count + sa_count} = {total_count} ✓")
+
+        return result
+
+    def _generate_problems_with_ratio(self, curriculum_data: Dict, request) -> List[Dict]:
+        """
+        비율에 따른 문제 생성
+        """
+        total_count = request.problem_count.value_int
+        ratio_counts = self._calculate_problem_counts_by_ratio(
+            total_count,
+            request.problem_type_ratio.model_dump()
+        )
+
+        print(f"🎯 문제 유형별 생성 목표: {ratio_counts}")
+
+        problems = []
+
+        # 객관식 문제 생성
+        if ratio_counts["multiple_choice"] > 0:
+            print(f"📝 객관식 문제 {ratio_counts['multiple_choice']}개 생성 중...")
+            mc_problems = self._generate_specific_type_problems(
+                count=ratio_counts["multiple_choice"],
+                problem_type="multiple_choice",
+                curriculum_data=curriculum_data,
+                request=request
+            )
+            problems.extend(mc_problems)
+            print(f"✅ 객관식 문제 {len(mc_problems)}개 생성 완료")
+
+        # 단답형 문제 생성
+        if ratio_counts["short_answer"] > 0:
+            print(f"📝 단답형 문제 {ratio_counts['short_answer']}개 생성 중...")
+            sa_problems = self._generate_specific_type_problems(
+                count=ratio_counts["short_answer"],
+                problem_type="short_answer",
+                curriculum_data=curriculum_data,
+                request=request
+            )
+            problems.extend(sa_problems)
+            print(f"✅ 단답형 문제 {len(sa_problems)}개 생성 완료")
+
+        # 문제 순서 랜덤 섞기 (선택사항)
+        import random
+        random.shuffle(problems)
+        print(f"🔀 문제 순서 랜덤 섞기 완료")
+
+        print(f"🎉 총 {len(problems)}개 문제 생성 완료")
+        return problems
+
+    def _generate_specific_type_problems(self, count: int, problem_type: str, curriculum_data: Dict, request) -> List[Dict]:
+        """
+        특정 유형의 문제를 지정된 개수만큼 생성
+        """
+        print(f"🎯 {problem_type} 유형 {count}개 문제 생성 시작")
+
+        # 유형별 명확한 프롬프트 생성
+        if problem_type == "multiple_choice":
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 모든 {count}개 문제는 객관식(multiple_choice)만 생성
+2. 각 문제마다 정답은 반드시 1개만 존재
+3. 선택지는 정확히 4개 (A, B, C, D)
+4. correct_answer는 A, B, C, D 중 하나만
+5. "정답을 2개 고르시오" 같은 문제 절대 금지
+6. problem_type은 반드시 "multiple_choice"
+
+JSON 형식에서 모든 문제의 problem_type이 "multiple_choice"인지 확인하세요.
+"""
+        else:  # short_answer
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 모든 {count}개 문제는 단답형(short_answer)만 생성
+2. 명확한 하나의 정답만 존재
+3. 선택지(choices) 없음 - choices 필드를 null이나 빈 배열로 설정
+4. 간단한 계산이나 단어로 답 가능
+5. problem_type은 반드시 "short_answer"
+
+JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인하세요.
+"""
+
+        try:
+            # ProblemGenerator를 사용하여 해당 유형만 생성
+            generated_problems = self.problem_generator.generate_problems(
+                curriculum_data=curriculum_data,
+                user_prompt=type_specific_prompt,
+                problem_count=count,
+                difficulty_ratio=request.difficulty_ratio.model_dump(),
+                problem_type=problem_type
+            )
+
+            # 생성된 문제의 타입을 강제로 설정하고 검증
+            validated_problems = []
+            for problem in generated_problems:
+                # 타입 강제 설정
+                problem["problem_type"] = problem_type
+
+                # 객관식 문제 검증 및 수정
+                if problem_type == "multiple_choice":
+                    # 선택지가 없거나 4개가 아니면 기본값 설정
+                    if not problem.get("choices") or len(problem["choices"]) != 4:
+                        problem["choices"] = ["선택지 A", "선택지 B", "선택지 C", "선택지 D"]
+
+                    # 정답이 A,B,C,D가 아니면 A로 설정
+                    if problem.get("correct_answer") not in ["A", "B", "C", "D"]:
+                        problem["correct_answer"] = "A"
+
+                # 단답형 문제 검증 및 수정
+                elif problem_type == "short_answer":
+                    # 선택지 제거
+                    problem["choices"] = None
+
+                validated_problems.append(problem)
+
+            print(f"✅ {problem_type} 유형 {len(validated_problems)}개 문제 생성 완료")
+            return validated_problems
+
+        except Exception as e:
+            print(f"❌ AI 생성 실패, 폴백 사용: {str(e)}")
+            # 간단한 폴백
+            problems = []
+            for i in range(count):
+                if problem_type == "multiple_choice":
+                    problem = {
+                        "question": f"[{curriculum_data.get('chapter_name', '수학')}] 객관식 문제 {i+1}번",
+                        "choices": ["선택지 A", "선택지 B", "선택지 C", "선택지 D"],
+                        "correct_answer": "A",
+                        "explanation": f"{curriculum_data.get('chapter_name', '수학')} 관련 해설",
+                        "problem_type": "multiple_choice",
+                        "difficulty": "B"
+                    }
+                else:  # short_answer
+                    problem = {
+                        "question": f"[{curriculum_data.get('chapter_name', '수학')}] 단답형 문제 {i+1}번",
+                        "correct_answer": "답안",
+                        "explanation": f"{curriculum_data.get('chapter_name', '수학')} 관련 해설",
+                        "problem_type": "short_answer",
+                        "difficulty": "B"
+                    }
+                problems.append(problem)
+            return problems
+
     def get_worksheet_problems(self, db: Session, worksheet_id: int) -> List[Dict]:
         """워크시트의 문제 목록 조회"""
         try:

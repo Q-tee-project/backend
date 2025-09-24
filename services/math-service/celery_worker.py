@@ -11,5 +11,5 @@ if __name__ == '__main__':
         'worker',
         '--loglevel=info',
         '--concurrency=4',
-        '--queues=math_queue'
+        '--queues=math_queue,celery'
     ])

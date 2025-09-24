@@ -39,9 +39,9 @@ async def generate_korean_problems(
 ):
     """국어 문제 생성"""
     try:
-        task = generate_korean_problems_task.delay(
-            request_data=request.model_dump(),
-            user_id=current_user["id"]
+        task = generate_korean_problems_task.apply_async(
+            args=[request.model_dump(), current_user["id"]],
+            queue='korean_queue'
         )
 
         return {
@@ -401,7 +401,7 @@ async def get_worksheet_detail(
         )
 
 
-@router.put("/worksheets/{worksheet_id}")
+@router.patch("/worksheets/{worksheet_id}")
 async def update_worksheet(
     worksheet_id: int,
     request: dict,
@@ -438,7 +438,7 @@ async def update_worksheet(
             "worksheet_id": worksheet_id,
             "updated_at": datetime.now().isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -446,4 +446,119 @@ async def update_worksheet(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"국어 워크시트 업데이트 중 오류 발생: {str(e)}"
+        )
+
+
+@router.patch("/problems/{problem_id}")
+async def update_problem(
+    problem_id: int,
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """국어 문제 업데이트"""
+    try:
+        from ..models.problem import Problem
+
+        problem = db.query(Problem)\
+            .join(Problem.worksheet)\
+            .filter(Problem.id == problem_id)\
+            .first()
+
+        if not problem:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="문제를 찾을 수 없습니다."
+            )
+
+        if "question" in request:
+            problem.question = request["question"]
+        if "choices" in request:
+            problem.choices = json.dumps(request["choices"], ensure_ascii=False)
+        if "correct_answer" in request:
+            problem.correct_answer = request["correct_answer"]
+        if "explanation" in request:
+            problem.explanation = request["explanation"]
+        if "difficulty" in request:
+            problem.difficulty = request["difficulty"]
+        if "problem_type" in request:
+            problem.problem_type = request["problem_type"]
+        if "korean_type" in request:
+            problem.korean_type = request["korean_type"]
+        if "source_text" in request:
+            problem.source_text = request["source_text"]
+        if "source_title" in request:
+            problem.source_title = request["source_title"]
+        if "source_author" in request:
+            problem.source_author = request["source_author"]
+
+        db.commit()
+        db.refresh(problem)
+
+        return {
+            "message": "국어 문제가 성공적으로 수정되었습니다.",
+            "problem_id": problem_id,
+            "updated_at": problem.updated_at.isoformat() if problem.updated_at else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"국어 문제 수정 중 오류 발생: {str(e)}"
+        )
+
+
+@router.post("/problems/regenerate-async")
+async def regenerate_problem_async(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """개별 국어 문제 재생성 (비동기 - Celery)"""
+    try:
+        from ..tasks import regenerate_korean_problem_task
+
+        # 필수 데이터 검증
+        problem_id = request.get("problem_id")
+        requirements = request.get("requirements", "")
+        current_problem = request.get("current_problem", {})
+
+        if not problem_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="problem_id가 필요합니다."
+            )
+
+        # 문제 존재 확인
+        from ..models.problem import Problem
+        problem = db.query(Problem).filter(Problem.id == problem_id).first()
+        if not problem:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="문제를 찾을 수 없습니다."
+            )
+
+        # Celery 태스크 시작
+        task = regenerate_korean_problem_task.apply_async(
+            kwargs={
+                "problem_id": problem_id,
+                "requirements": requirements,
+                "current_problem": current_problem
+            },
+            queue='korean_queue'
+        )
+
+        return {
+            "task_id": task.id,
+            "status": "PENDING",
+            "message": "국어 문제 재생성이 시작되었습니다. /tasks/{task_id} 엔드포인트로 진행 상황을 확인하세요."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"비동기 국어 문제 재생성 요청 중 오류 발생: {str(e)}"
         )
