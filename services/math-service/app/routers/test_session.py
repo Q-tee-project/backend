@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 from ..database import get_db
-from ..models.math_generation import TestSession, TestAnswer, Assignment
+from ..models.math_generation import TestSession, TestAnswer, Assignment, AssignmentDeployment
 from ..models.problem import Problem
 from ..models.grading_result import GradingSession, ProblemGradingResult
 from ..schemas.math_generation import TestSubmissionResponse
@@ -70,9 +70,18 @@ async def submit_test(
         )
         db.add(db_answer)
 
-    # 3. 세션 업데이트
+    # 3. 세션 및 과제 배포 상태 업데이트
     session.status = 'submitted'
     session.submitted_at = datetime.utcnow()
+
+    # AssignmentDeployment 상태를 'completed'로 업데이트
+    deployment = db.query(AssignmentDeployment).filter(
+        AssignmentDeployment.assignment_id == assignment.id,
+        AssignmentDeployment.student_id == current_user["id"]
+    ).first()
+    if deployment:
+        deployment.status = 'completed'
+
     db.commit()
 
     score = correct_answers * points_per_problem

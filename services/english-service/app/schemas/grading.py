@@ -40,6 +40,7 @@ class GradingResultResponse(BaseModel):
     result_id: int  # integer로 변경
     worksheet_id: int
     student_id: int
+    student_name: str  # 학생 이름 추가
     completion_time: int
     total_score: int
     max_score: int
@@ -55,8 +56,8 @@ class GradingResultResponse(BaseModel):
 
 # 채점 결과 목록 조회용 간단한 스키마
 class GradingResultSummary(BaseModel):
-    id: str  # result_id가 UUID 문자열이므로 str로 변경
-    result_id: str
+    id: int  # result_id가 Integer이므로 int로 변경
+    result_id: int
     worksheet_id: int
     student_name: str
     completion_time: int

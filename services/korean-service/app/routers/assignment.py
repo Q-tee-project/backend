@@ -248,13 +248,13 @@ async def submit_korean_assignment(
     grading_session.correct_count = correct_count
     grading_session.total_score = correct_count * points_per_problem
     
-    # Update deployment status
+    # Update deployment status to completed
     deployment = db.query(AssignmentDeployment).filter(
         AssignmentDeployment.assignment_id == assignment_id,
         AssignmentDeployment.student_id == student_id
     ).first()
     if deployment:
-        deployment.status = "submitted"
+        deployment.status = "completed"
         deployment.submitted_at = datetime.utcnow()
 
     db.commit()

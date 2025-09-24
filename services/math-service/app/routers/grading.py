@@ -309,11 +309,7 @@ async def update_grading_session(
         raise HTTPException(status_code=404, detail="Grading session not found")
 
     try:
-        # 세션 정보 업데이트 (존재하는 필드만)
-        if "total_score" in update_data:
-            grading_session.total_score = update_data["total_score"]
-        if "correct_count" in update_data:
-            grading_session.correct_count = update_data["correct_count"]
+        # total_score와 correct_count는 문제별 결과 기반으로 재계산하므로 직접 업데이트 하지 않음
 
         # status와 teacher_id는 현재 모델에 없으므로 주석 처리
         # if "status" in update_data:
@@ -347,7 +343,46 @@ async def update_grading_session(
 
                     print(f"  User answer preserved: {old_user_answer}")
                 else:
-                    print(f"  Problem result not found for problem_id: {problem_id}")
+                    # 문제 결과가 없으면 새로 생성 (학생이 답안을 제출하지 않았지만 선생님이 편집하는 경우)
+                    print(f"  Creating new problem result for problem_id: {problem_id}")
+
+                    # grading_session에서 points_per_problem 값 가져오기, null인 경우 기본값 설정
+                    points_per_problem = grading_session.points_per_problem
+                    if points_per_problem is None:
+                        # 문제 수에 따른 기본 배점 계산 (10문제면 10점, 20문제면 5점)
+                        total_problems = grading_session.total_problems or 10
+                        points_per_problem = 10.0 if total_problems <= 10 else 5.0
+                        # session의 points_per_problem도 업데이트
+                        grading_session.points_per_problem = points_per_problem
+
+                    new_problem_result = ProblemGradingResult(
+                        grading_session_id=session_id,
+                        problem_id=problem_id,
+                        user_answer="(답안 없음)",
+                        correct_answer="",
+                        is_correct=problem_data.get("is_correct", False),
+                        score=problem_data.get("score", 0),
+                        points_per_problem=points_per_problem,
+                        problem_type="객관식",
+                        explanation="",
+                        input_method="teacher_manual"
+                    )
+                    db.add(new_problem_result)
+                    print(f"  New problem result created: score={new_problem_result.score}, is_correct={new_problem_result.is_correct}")
+
+        # 모든 문제별 결과를 기반으로 총점과 정답 수 재계산
+        if "problem_results" in update_data:
+            all_problem_results = db.query(ProblemGradingResult).filter(
+                ProblemGradingResult.grading_session_id == session_id
+            ).all()
+
+            correct_count = sum(1 for pr in all_problem_results if pr.is_correct)
+            total_score = sum(pr.score for pr in all_problem_results)
+
+            grading_session.correct_count = correct_count
+            grading_session.total_score = total_score
+
+            print(f"Recalculated: correct_count={correct_count}, total_score={total_score}")
 
         db.commit()
 
@@ -374,40 +409,6 @@ async def update_grading_session(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update grading session: {str(e)}")
-
-@router.post("/grading-sessions/{session_id}/approve")
-async def approve_grading_session(
-    session_id: int,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """채점 결과 승인"""
-    grading_session = db.query(GradingSession).filter(GradingSession.id == session_id).first()
-    if not grading_session:
-        raise HTTPException(status_code=404, detail="Grading session not found")
-
-    try:
-        from datetime import datetime
-
-        # 현재 모델에 없는 필드들은 주석 처리
-        # grading_session.status = "approved"
-        # grading_session.teacher_id = current_user["id"]
-        # grading_session.approved_at = datetime.utcnow()
-
-        # 현재는 별도의 승인 처리 없이 완료 상태로 간주
-        db.commit()
-
-        return {
-            "message": "Grading session approved successfully",
-            "session_id": session_id,
-            "status": "approved",  # 고정값
-            "approved_at": datetime.utcnow().isoformat(),
-            "approved_by": current_user["id"]
-        }
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to approve grading session: {str(e)}")
 
 @router.get("/assignments/{assignment_id}/students/{student_id}/result")
 async def get_student_grading_result(

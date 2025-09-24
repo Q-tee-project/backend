@@ -69,8 +69,8 @@ async def get_grading_results(db: Session = Depends(get_db)):
             student_name = student_result.scalar() or f"Student {result.student_id}"
 
             result_summaries.append(GradingResultSummary(
-                id=str(result.result_id),  # string으로 변환
-                result_id=str(result.result_id),  # string으로 변환
+                id=result.result_id,  # int 그대로 사용
+                result_id=result.result_id,  # int 그대로 사용
                 worksheet_id=result.worksheet_id,
                 student_name=student_name,
                 completion_time=result.completion_time,
@@ -88,18 +88,21 @@ async def get_grading_results(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"채점 결과 조회 중 오류: {str(e)}")
 
 @router.get("/grading-results/{result_id}", response_model=GradingResultResponse)
-async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
+async def get_grading_result(result_id: int, db: Session = Depends(get_db)):
     """특정 채점 결과의 상세 정보를 조회합니다."""
     try:
-        # result_id (UUID)로 검색
+        print(f"📊 채점 결과 상세 조회: result_id={result_id} (type: {type(result_id)})")
+        # result_id (Integer)로 검색
         result = db.query(GradingResult).filter(
             GradingResult.result_id == result_id
         ).first()
-        
+        print(f"📋 채점 결과 조회: {result}")
+
         if not result:
             raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
         
         # 문제별 결과를 딕셔너리로 변환 (깔끔한 구조)
+        print(f"🔍 문제별 결과 처리 시작: {len(result.question_results)}개")
         question_results = []
         for question_result in result.question_results:
             question_data = {
@@ -122,9 +125,11 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
             student_answers[qr.question_id] = qr.student_answer
         
         # 문제지 데이터도 함께 조회
+        print("📝 문제지 데이터 조회 시작")
         from app.models import Worksheet, Passage, Question
         worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == result.worksheet_id).first()
-        
+        print(f"📄 Worksheet 조회 결과: {worksheet}")
+
         if not worksheet:
             raise HTTPException(status_code=404, detail="관련 문제지를 찾을 수 없습니다.")
         
@@ -153,15 +158,7 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 "related_questions": passage.related_questions
             })
         
-        # 예문 데이터 추가 (한글 번역 포함)
-        for example in worksheet.examples:
-            worksheet_data["examples"].append({
-                "example_id": example.example_id,
-                "example_content": example.example_content,
-                "original_content": example.original_content,
-                "korean_translation": example.korean_translation,
-                "related_question": example.related_question
-            })
+        # 예문 데이터는 Question 모델의 example_* 필드에서 처리됨 (별도 테이블 없음)
         
         # 문제 데이터 추가 (답안 제외)
         for question in worksheet.questions:
@@ -174,17 +171,36 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
                 "question_detail_type": question.question_detail_type,
                 "question_choices": question.question_choices,
                 "question_passage_id": question.passage_id,
-                "question_example_id": question.example_id,
+                "example_content": question.example_content,
+                "example_original_content": question.example_original_content,
+                "example_korean_translation": question.example_korean_translation,
                 "correct_answer": question.correct_answer,
                 "explanation": question.explanation,
                 "learning_point": question.learning_point
             })
         
+        # 학생 이름 조회
+        print("👤 학생 정보 조회 시작")
+        try:
+            from sqlalchemy import text
+            student_query = text("""
+                SELECT name
+                FROM auth_service.students
+                WHERE id = :student_id
+            """)
+            student_result = db.execute(student_query, {"student_id": result.student_id})
+            student_info = student_result.fetchone()
+            student_name = student_info[0] if student_info else f"학생{result.student_id}"
+        except Exception as e:
+            print(f"학생 정보 조회 실패: {e}")
+            student_name = f"학생{result.student_id}"
+
         # 결과 객체 구성 (문제지 데이터 포함)
         result_dict = {
             "result_id": result.result_id,
             "worksheet_id": result.worksheet_id,
-            "student_name": result.student_name,
+            "student_id": result.student_id,
+            "student_name": student_name,
             "completion_time": result.completion_time,
             "total_score": result.total_score,
             "max_score": result.max_score,
@@ -199,12 +215,94 @@ async def get_grading_result(result_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ 채점 결과 조회 에러: {str(e)}")
+        import traceback
+        print(f"❌ 전체 스택트레이스: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"채점 결과 조회 중 오류: {str(e)}")
+
+@router.put("/grading-results/{result_id}/update")
+async def update_grading_result(
+    result_id: int,
+    update_data: dict,
+    db: Session = Depends(get_db)
+):
+    """영어 채점 결과를 업데이트합니다."""
+    try:
+        # 채점 결과 조회
+        grading_result = db.query(GradingResult).filter(
+            GradingResult.result_id == result_id
+        ).first()
+
+        if not grading_result:
+            raise HTTPException(status_code=404, detail="채점 결과를 찾을 수 없습니다.")
+
+        print(f"📊 영어 채점 결과 업데이트: result_id={result_id}")
+        print(f"📊 업데이트 데이터: {update_data}")
+
+        # 문제별 정답/오답 처리
+        if "answers" in update_data:
+            answers = update_data["answers"]
+
+            for answer in answers:
+                question_id = answer.get("question_id")
+                is_correct = answer.get("is_correct", False)
+                score = answer.get("score", 0)
+
+                # 해당 문제 결과 찾기
+                question_result = db.query(QuestionResult).filter(
+                    QuestionResult.grading_result_id == result_id,
+                    QuestionResult.question_id == question_id
+                ).first()
+
+                if question_result:
+                    # 기존 결과 업데이트
+                    question_result.is_correct = is_correct
+                    question_result.score = score
+                    print(f"📝 문제 {question_id} 업데이트: 정답={is_correct}, 점수={score}")
+
+        # 전체 점수 재계산
+        if "answers" in update_data:
+            all_question_results = db.query(QuestionResult).filter(
+                QuestionResult.grading_result_id == result_id
+            ).all()
+
+            correct_count = sum(1 for qr in all_question_results if qr.is_correct)
+            total_score = sum(qr.score for qr in all_question_results)
+            max_score = sum(qr.max_score for qr in all_question_results)
+            percentage = (total_score / max_score * 100) if max_score > 0 else 0
+
+            grading_result.total_score = total_score
+            grading_result.percentage = percentage
+
+            print(f"📊 점수 재계산: 총점={total_score}, 정답수={correct_count}, 퍼센트={percentage}")
+
+        # 검수 상태 업데이트
+        if "is_reviewed" in update_data:
+            grading_result.is_reviewed = update_data["is_reviewed"]
+
+        db.commit()
+        db.refresh(grading_result)
+
+        return {
+            "result_id": result_id,
+            "status": "success",
+            "total_score": grading_result.total_score,
+            "percentage": grading_result.percentage,
+            "message": "채점 결과가 성공적으로 업데이트되었습니다."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 채점 결과 업데이트 에러: {str(e)}")
+        import traceback
+        print(f"❌ 전체 스택트레이스: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"채점 결과 업데이트 중 오류: {str(e)}")
 
 @router.put("/grading-results/{result_id}/review")
 async def update_grading_review(
-    result_id: str, 
-    review_data: ReviewRequest, 
+    result_id: int,
+    review_data: ReviewRequest,
     db: Session = Depends(get_db)
 ):
     """AI 채점 결과의 검수를 업데이트합니다."""
@@ -225,9 +323,9 @@ async def update_grading_review(
         db.commit()
 
         review_result = {"status": "success", "message": "검수가 완료되었습니다."}
-        
+
         return review_result
-        
+
     except HTTPException:
         raise
     except Exception as e:

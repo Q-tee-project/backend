@@ -34,17 +34,6 @@ async def get_student_info(student_id: int) -> dict:
             "grade": "정보없음"
         }
 
-@router.get(
-    "/grading-sessions/pending",
-    response_model=List[KoreanGradingSessionResponse],
-    summary="Get all grading sessions pending teacher approval",
-    description="Retrieves a list of all Korean grading sessions that are awaiting teacher approval."
-)
-async def get_pending_grading_sessions(db: Session = Depends(get_db)):
-    pending_sessions = db.query(KoreanGradingSession).filter(KoreanGradingSession.status == "pending_approval").all()
-    return pending_sessions
-
-
 @router.get("/grading-sessions/{session_id}")
 async def get_grading_session_details(session_id: int, db: Session = Depends(get_db)):
     """채점 세션 상세 정보 조회 (선생님 편집용)"""
@@ -104,30 +93,105 @@ async def get_grading_session_details(session_id: int, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@router.post(
-    "/grading-sessions/{session_id}/approve",
-    response_model=KoreanGradingSessionResponse,
-    summary="Approve a grading session",
-    description="Approves a Korean grading session, setting its status to 'approved' and recording the teacher's ID and approval timestamp."
-)
-async def approve_grading_session(
+
+
+@router.put("/grading-sessions/{session_id}/update")
+async def update_grading_session(
     session_id: int,
+    update_data: dict,
     db: Session = Depends(get_db),
     current_teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
+    """채점 결과 업데이트 (선생님 편집용)"""
     session = db.query(KoreanGradingSession).filter(KoreanGradingSession.id == session_id).first()
     if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grading session not found")
+        raise HTTPException(status_code=404, detail="Grading session not found")
 
-    if session.status != "pending_approval":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grading session is not pending approval")
+    try:
+        # status만 직접 업데이트, total_score와 correct_count는 문제별 결과 기반으로 재계산
+        if "status" in update_data:
+            session.status = update_data["status"]
 
-    session.status = "approved"
-    session.teacher_id = current_teacher["id"]
-    session.approved_at = datetime.now()
-    db.commit()
-    db.refresh(session)
-    return session
+        # 선생님이 수정한 경우 teacher_id와 승인 시간 업데이트
+        session.teacher_id = current_teacher["id"]
+        session.approved_at = datetime.now()
+
+        # 문제별 정답/오답 수정사항 적용
+        if "problem_corrections" in update_data:
+            from ..models.grading_result import KoreanProblemGradingResult
+            corrections = update_data["problem_corrections"]
+
+            for problem_id_str, is_correct in corrections.items():
+                problem_id = int(problem_id_str)
+                problem_result = db.query(KoreanProblemGradingResult).filter(
+                    KoreanProblemGradingResult.grading_session_id == session_id,
+                    KoreanProblemGradingResult.problem_id == problem_id
+                ).first()
+
+                if problem_result:
+                    problem_result.is_correct = is_correct
+                    # 기존 points_per_problem이 있으면 사용, 없으면 session에서 가져오기
+                    if problem_result.points_per_problem:
+                        points_per_problem = problem_result.points_per_problem
+                    else:
+                        points_per_problem = session.points_per_problem
+                        if points_per_problem is None:
+                            total_problems = session.total_problems or 10
+                            points_per_problem = 10.0 if total_problems <= 10 else 5.0
+                            session.points_per_problem = points_per_problem
+                        problem_result.points_per_problem = points_per_problem
+                    problem_result.score = points_per_problem if is_correct else 0
+                else:
+                    # 문제 결과가 없으면 생성
+                    # grading_session에서 points_per_problem 값 가져오기, null인 경우 기본값 설정
+                    points_per_problem = session.points_per_problem
+                    if points_per_problem is None:
+                        # 문제 수에 따른 기본 배점 계산 (10문제면 10점, 20문제면 5점)
+                        total_problems = session.total_problems or 10
+                        points_per_problem = 10.0 if total_problems <= 10 else 5.0
+                        # session의 points_per_problem도 업데이트
+                        session.points_per_problem = points_per_problem
+
+                    new_result = KoreanProblemGradingResult(
+                        grading_session_id=session_id,
+                        problem_id=problem_id,
+                        is_correct=is_correct,
+                        score=points_per_problem if is_correct else 0,
+                        points_per_problem=points_per_problem,
+                        user_answer="",
+                        correct_answer="",
+                        problem_type="객관식",
+                        input_method="manual"
+                    )
+                    db.add(new_result)
+
+        # 모든 문제별 결과를 기반으로 총점과 정답 수 재계산
+        if "problem_corrections" in update_data:
+            all_problem_results = db.query(KoreanProblemGradingResult).filter(
+                KoreanProblemGradingResult.grading_session_id == session_id
+            ).all()
+
+            correct_count = sum(1 for pr in all_problem_results if pr.is_correct)
+            total_score = sum(pr.score for pr in all_problem_results)
+
+            session.correct_count = correct_count
+            session.total_score = total_score
+
+        db.commit()
+        db.refresh(session)
+
+        return {
+            "id": session.id,
+            "status": session.status,
+            "total_score": session.total_score,
+            "correct_count": session.correct_count,
+            "message": "채점 결과가 성공적으로 업데이트되었습니다."
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"채점 결과 업데이트 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"채점 결과 업데이트 실패: {str(e)}")
 
 
 @router.get("/assignments/{assignment_id}/results")

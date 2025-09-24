@@ -15,6 +15,7 @@ from app.schemas.assignment import (
 )
 from app.schemas import SubmissionRequest
 from app.schemas.assignment_results import EnglishAssignmentResultResponse
+from typing import Dict, Any
 
 router = APIRouter()
 
@@ -423,7 +424,7 @@ async def submit_assignment(
             completion_time=0  # 기본값
         )
 
-        # Assignment 배포 상태 업데이트 (제출됨으로 변경)
+        # Assignment 배포 상태 업데이트 (완료로 변경)
         if assignment_id:
             deployment = db.query(AssignmentDeployment).filter(
                 AssignmentDeployment.assignment_id == assignment_id,
@@ -431,7 +432,7 @@ async def submit_assignment(
             ).first()
 
             if deployment:
-                deployment.status = "submitted"
+                deployment.status = "completed"
                 db.commit()
 
         return {
@@ -448,4 +449,94 @@ async def submit_assignment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"과제 제출 중 오류 발생: {str(e)}"
+        )
+
+@router.get("/assignments/{assignment_id}/results")
+async def get_assignment_results(assignment_id: int, db: Session = Depends(get_db)):
+    """과제의 채점 결과를 조회 (선생님용) - 학생별 구분 포함"""
+    try:
+        print(f"📊 과제 결과 조회 시작: assignment_id={assignment_id}")
+        assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+        print(f"📋 Assignment 조회 결과: {assignment}")
+        if not assignment:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+
+        # 배포된 학생들과 제출 현황 조회
+        deployed_students = db.query(AssignmentDeployment).filter(
+            AssignmentDeployment.assignment_id == assignment_id
+        ).all()
+        print(f"👥 배포된 학생 수: {len(deployed_students)}")
+
+        results = []
+        for deployment in deployed_students:
+            student_id = deployment.student_id
+
+            # 학생 정보 조회 (auth-service에서)
+            try:
+                from sqlalchemy import text
+                student_query = text("""
+                    SELECT name
+                    FROM auth_service.students
+                    WHERE id = :student_id
+                """)
+                student_result = db.execute(student_query, {"student_id": student_id})
+                student_info = student_result.fetchone()
+                student_name = student_info[0] if student_info else f"학생{student_id}"
+                student_school = "정보없음"  # 기본값으로 설정
+                student_grade = "정보없음"   # 기본값으로 설정
+            except Exception as e:
+                print(f"학생 정보 조회 실패: {e}")
+                student_name = f"학생{student_id}"
+                student_school = "정보없음"
+                student_grade = "정보없음"
+
+            # 해당 학생의 채점 결과 조회
+            grading_result = db.query(GradingResult).filter(
+                GradingResult.worksheet_id == assignment.worksheet_id,
+                GradingResult.student_id == student_id
+            ).first()
+
+            # 상태 결정 (국어/수학과 동일한 방식) - completed 상태 추가
+            if deployment.status == "completed" or deployment.status == "submitted":
+                status_text = "완료" if grading_result else "제출완료"
+                completed_at = deployment.submitted_at.isoformat() if deployment.submitted_at else None
+            elif deployment.status == "assigned":
+                status_text = "미시작"
+                completed_at = None
+            else:
+                status_text = "미완료"
+                completed_at = None
+
+            student_result = {
+                "student_id": student_id,
+                "student_name": student_name,
+                "school": student_school,
+                "grade": student_grade,
+                "status": status_text,
+                "total_score": grading_result.total_score if grading_result else 0,
+                "max_possible_score": grading_result.max_score if grading_result else 100,
+                "completed_at": completed_at,
+                "grading_session_id": grading_result.result_id if grading_result else None,
+                "total_problems": grading_result.max_score if grading_result else assignment.total_questions,
+                "correct_count": grading_result.total_score if grading_result else 0,
+                "graded_at": grading_result.created_at.isoformat() if grading_result and grading_result.created_at else None,
+            }
+
+            results.append(student_result)
+
+        return {
+            "assignment_id": assignment_id,
+            "assignment_title": assignment.title,
+            "worksheet_id": assignment.worksheet_id,
+            "total_students": len(results),
+            "completed_count": len([r for r in results if r["status"] == "완료"]),
+            "results": results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"과제 결과 조회 중 오류 발생: {str(e)}"
         )
