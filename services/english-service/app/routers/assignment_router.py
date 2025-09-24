@@ -6,6 +6,7 @@ from datetime import datetime
 from app.database import get_db
 from app.models.worksheet import Worksheet, Question
 from app.models.assignment import Assignment, AssignmentDeployment
+from app.models.grading import GradingResult
 from app.schemas.assignment import (
     AssignmentDeployRequest,
     SimpleAssignmentDeployRequest,
@@ -13,6 +14,7 @@ from app.schemas.assignment import (
     StudentAssignmentResponse,
 )
 from app.schemas import SubmissionRequest
+from app.schemas.assignment_results import EnglishAssignmentResultResponse
 
 router = APIRouter()
 
