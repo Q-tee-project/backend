@@ -45,17 +45,63 @@ async def get_pending_grading_sessions(db: Session = Depends(get_db)):
     return pending_sessions
 
 
-@router.get(
-    "/grading-sessions/{session_id}",
-    response_model=KoreanGradingSessionResponse,
-    summary="Get details of a specific grading session",
-    description="Retrieves the detailed results of a specific Korean grading session by its ID."
-)
+@router.get("/grading-sessions/{session_id}")
 async def get_grading_session_details(session_id: int, db: Session = Depends(get_db)):
-    session = db.query(KoreanGradingSession).filter(KoreanGradingSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grading session not found")
-    return session
+    """채점 세션 상세 정보 조회 (선생님 편집용)"""
+    try:
+        grading_session = db.query(KoreanGradingSession).filter(KoreanGradingSession.id == session_id).first()
+        if not grading_session:
+            raise HTTPException(status_code=404, detail="Grading session not found")
+
+        # 문제별 채점 결과 조회
+        from ..models.grading_result import KoreanProblemGradingResult
+        problem_results = db.query(KoreanProblemGradingResult).filter(
+            KoreanProblemGradingResult.grading_session_id == session_id
+        ).all()
+
+        # 학생 정보 조회
+        try:
+            student_info = await get_student_info(grading_session.student_id)
+            student_name = student_info.get("name", f"학생{grading_session.student_id}")
+        except Exception as e:
+            print(f"학생 정보 조회 실패: {e}")
+            student_name = f"학생{grading_session.student_id}"
+
+        return {
+            "id": grading_session.id,
+            "worksheet_id": grading_session.worksheet_id,
+            "student_id": grading_session.student_id,
+            "graded_by": grading_session.graded_by,
+            "student_name": student_name,
+            "total_problems": grading_session.total_problems or 0,
+            "correct_count": grading_session.correct_count or 0,
+            "total_score": grading_session.total_score or 0,
+            "max_possible_score": grading_session.max_possible_score or 100,
+            "input_method": grading_session.input_method or "manual",
+            "status": grading_session.status or "completed",
+            "graded_at": grading_session.graded_at.isoformat() if grading_session.graded_at else None,
+            "teacher_id": grading_session.teacher_id,
+            "approved_at": grading_session.approved_at.isoformat() if grading_session.approved_at else None,
+            "problem_results": [
+                {
+                    "problem_id": pr.problem_id,
+                    "user_answer": pr.user_answer or "",
+                    "correct_answer": pr.correct_answer or "",
+                    "is_correct": pr.is_correct or False,
+                    "score": pr.score or 0,
+                    "problem_type": pr.problem_type or "객관식",
+                    "input_method": pr.input_method or "manual",
+                    "explanation": pr.explanation or "",
+                    "question": ""  # 문제 텍스트는 별도 조회 필요
+                }
+                for pr in problem_results
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"채점 세션 조회 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.post(

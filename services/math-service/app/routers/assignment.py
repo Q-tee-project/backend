@@ -15,6 +15,51 @@ from ..models.math_generation import TestSession
 router = APIRouter()
 math_service = MathGenerationService()
 
+@router.post("/create")
+async def create_assignment(
+    assignment_data: dict,
+    db: Session = Depends(get_db)
+):
+    """과제 생성 (배포하지 않음)"""
+    worksheet_id = assignment_data.get("worksheet_id")
+    classroom_id = assignment_data.get("classroom_id")
+
+    if not worksheet_id or not classroom_id:
+        raise HTTPException(status_code=400, detail="worksheet_id and classroom_id are required")
+
+    from ..models.worksheet import Worksheet
+    from ..models.math_generation import Assignment
+
+    worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
+    if not worksheet:
+        raise HTTPException(status_code=404, detail="Worksheet not found")
+
+    # 기존 과제가 있는지 확인
+    existing_assignment = db.query(Assignment).filter(
+        Assignment.worksheet_id == worksheet_id,
+        Assignment.classroom_id == classroom_id
+    ).first()
+
+    if existing_assignment:
+        return {"message": "Assignment already exists", "assignment_id": existing_assignment.id}
+
+    # 새 과제 생성 (배포하지 않음)
+    assignment = Assignment(
+        title=worksheet.title,
+        worksheet_id=worksheet_id,
+        classroom_id=classroom_id,
+        teacher_id=worksheet.teacher_id,
+        unit_name=worksheet.unit_name,
+        chapter_name=worksheet.chapter_name,
+        problem_count=worksheet.problem_count,
+        is_deployed="draft"  # 초안 상태로 생성
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+
+    return {"message": "Assignment created successfully", "assignment_id": assignment.id}
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -222,11 +267,9 @@ async def start_test_session(
 
 @router.get("/classrooms/{class_id}/assignments")
 async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get_db)):
-    """클래스룸별 배포된 과제 목록 조회"""
+    """클래스룸별 모든 과제 목록 조회 (draft + deployed)"""
     from ..models.math_generation import Assignment
 
-    assignments = db.query(Assignment).filter(
-        Assignment.classroom_id == class_id,
-        Assignment.is_deployed == "deployed"
-    ).all()
+    # draft와 deployed 모든 과제를 반환
+    assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id).all()
     return assignments

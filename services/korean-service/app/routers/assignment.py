@@ -13,6 +13,48 @@ from ..models.grading_result import KoreanGradingSession, KoreanProblemGradingRe
 
 router = APIRouter()
 
+@router.post("/create")
+async def create_assignment(
+    assignment_data: dict,
+    db: Session = Depends(get_db)
+):
+    """과제 생성 (배포하지 않음)"""
+    worksheet_id = assignment_data.get("worksheet_id")
+    classroom_id = assignment_data.get("classroom_id")
+
+    if not worksheet_id or not classroom_id:
+        raise HTTPException(status_code=400, detail="worksheet_id and classroom_id are required")
+
+    worksheet = db.query(Worksheet).filter(Worksheet.id == worksheet_id).first()
+    if not worksheet:
+        raise HTTPException(status_code=404, detail="Worksheet not found")
+
+    # 기존 과제가 있는지 확인
+    existing_assignment = db.query(Assignment).filter(
+        Assignment.worksheet_id == worksheet_id,
+        Assignment.classroom_id == classroom_id
+    ).first()
+
+    if existing_assignment:
+        return {"message": "Assignment already exists", "assignment_id": existing_assignment.id}
+
+    # 새 과제 생성 (배포하지 않음)
+    assignment = Assignment(
+        title=worksheet.title,
+        worksheet_id=worksheet_id,
+        classroom_id=classroom_id,
+        teacher_id=worksheet.teacher_id,
+        korean_type=worksheet.korean_type or "소설",
+        question_type=worksheet.question_type or "객관식",
+        problem_count=worksheet.problem_count,
+        is_deployed="draft"  # 초안 상태로 생성
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+
+    return {"message": "Assignment created successfully", "assignment_id": assignment.id}
+
 @router.post("/deploy", response_model=List[AssignmentDeploymentResponse])
 async def deploy_assignment(
     deploy_request: AssignmentDeployRequest,
@@ -169,6 +211,7 @@ async def submit_korean_assignment(
 
     grading_session = KoreanGradingSession(
         worksheet_id=assignment.worksheet_id,
+        student_id=student_id,
         graded_by=student_id,
         total_problems=total_problems,
         max_possible_score=total_problems * points_per_problem,
@@ -211,8 +254,8 @@ async def submit_korean_assignment(
         AssignmentDeployment.student_id == student_id
     ).first()
     if deployment:
-        deployment.status = "completed"
-        deployment.completed_at = datetime.utcnow()
+        deployment.status = "submitted"
+        deployment.submitted_at = datetime.utcnow()
 
     db.commit()
 
@@ -227,5 +270,6 @@ async def submit_korean_assignment(
 
 @router.get("/classrooms/{class_id}/assignments")
 async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get_db)):
-    assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id, Assignment.is_deployed == "deployed").all()
+    # draft와 deployed 모든 과제를 반환
+    assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id).all()
     return assignments
