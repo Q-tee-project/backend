@@ -341,6 +341,12 @@ async def update_grading_session(
                         problem_result.is_correct = problem_data["is_correct"]
                         print(f"  Correct: {old_correct} -> {problem_result.is_correct}")
 
+                    # 업데이트된 정답이 있으면 반영
+                    if "correct_answer" in problem_data:
+                        old_correct_answer = problem_result.correct_answer
+                        problem_result.correct_answer = problem_data["correct_answer"]
+                        print(f"🔄 수학 문제 {problem_id}의 정답: '{old_correct_answer}' -> '{problem_result.correct_answer}'")
+
                     print(f"  User answer preserved: {old_user_answer}")
                 else:
                     # 문제 결과가 없으면 새로 생성 (학생이 답안을 제출하지 않았지만 선생님이 편집하는 경우)
@@ -369,6 +375,23 @@ async def update_grading_session(
                     )
                     db.add(new_problem_result)
                     print(f"  New problem result created: score={new_problem_result.score}, is_correct={new_problem_result.is_correct}")
+
+        # 업데이트된 정답들 처리 (선생님이 정답처리한 경우 학생 답안을 정답으로 설정)
+        if "updated_correct_answers" in update_data:
+            updated_answers = update_data["updated_correct_answers"]
+            print(f"Processing {len(updated_answers)} updated correct answers...")
+
+            for problem_id_str, new_correct_answer in updated_answers.items():
+                problem_id = int(problem_id_str)
+                problem_result = db.query(ProblemGradingResult).filter(
+                    ProblemGradingResult.grading_session_id == session_id,
+                    ProblemGradingResult.problem_id == problem_id
+                ).first()
+
+                if problem_result:
+                    old_correct_answer = problem_result.correct_answer
+                    problem_result.correct_answer = new_correct_answer
+                    print(f"🔄 수학 문제 {problem_id}의 정답을 '{old_correct_answer}' -> '{new_correct_answer}'로 업데이트")
 
         # 모든 문제별 결과를 기반으로 총점과 정답 수 재계산
         if "problem_results" in update_data:

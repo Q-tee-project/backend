@@ -165,6 +165,22 @@ async def update_grading_session(
                     )
                     db.add(new_result)
 
+        # 업데이트된 정답들 처리 (선생님이 정답처리한 경우 학생 답안을 정답으로 설정)
+        if "updated_correct_answers" in update_data:
+            from ..models.grading_result import KoreanProblemGradingResult
+            updated_answers = update_data["updated_correct_answers"]
+
+            for problem_id_str, new_correct_answer in updated_answers.items():
+                problem_id = int(problem_id_str)
+                problem_result = db.query(KoreanProblemGradingResult).filter(
+                    KoreanProblemGradingResult.grading_session_id == session_id,
+                    KoreanProblemGradingResult.problem_id == problem_id
+                ).first()
+
+                if problem_result:
+                    problem_result.correct_answer = new_correct_answer
+                    print(f"🔄 국어 문제 {problem_id}의 정답을 '{new_correct_answer}'로 업데이트")
+
         # 모든 문제별 결과를 기반으로 총점과 정답 수 재계산
         if "problem_corrections" in update_data:
             all_problem_results = db.query(KoreanProblemGradingResult).filter(

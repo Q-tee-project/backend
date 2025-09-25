@@ -224,8 +224,7 @@ async def submit_korean_assignment(
         total_problems=total_problems,
         max_possible_score=total_problems * points_per_problem,
         points_per_problem=points_per_problem,
-        input_method="manual",
-        multiple_choice_answers=answers
+        input_method="manual"
     )
     db.add(grading_session)
     db.flush()

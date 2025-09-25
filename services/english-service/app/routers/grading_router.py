@@ -258,7 +258,28 @@ async def update_grading_result(
                     # 기존 결과 업데이트
                     question_result.is_correct = is_correct
                     question_result.score = score
+
+                    # 업데이트된 정답이 있으면 반영
+                    if "correct_answer" in answer:
+                        question_result.correct_answer = answer["correct_answer"]
+                        print(f"🔄 문제 {question_id}의 정답을 '{answer['correct_answer']}'로 업데이트")
+
                     print(f"📝 문제 {question_id} 업데이트: 정답={is_correct}, 점수={score}")
+
+        # 업데이트된 정답들 처리 (선생님이 정답처리한 경우 학생 답안을 정답으로 설정)
+        if "updated_correct_answers" in update_data:
+            updated_answers = update_data["updated_correct_answers"]
+
+            for question_id_str, new_correct_answer in updated_answers.items():
+                question_id = int(question_id_str)
+                question_result = db.query(QuestionResult).filter(
+                    QuestionResult.grading_result_id == result_id,
+                    QuestionResult.question_id == question_id
+                ).first()
+
+                if question_result:
+                    question_result.correct_answer = new_correct_answer
+                    print(f"🔄 영어 문제 {question_id}의 정답을 '{new_correct_answer}'로 업데이트")
 
         # 전체 점수 재계산
         if "answers" in update_data:
