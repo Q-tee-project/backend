@@ -194,8 +194,8 @@ async def get_message_detail(
         message = db.query(Message).filter(
             and_(
                 Message.id == message_id,
-                Message.recipient_id == current_user["user_id"],
-                Message.recipient_type == current_user["user_type"],
+                Message.receiver_id == current_user["user_id"],
+                Message.receiver_type == current_user["user_type"],
                 Message.is_deleted == False
             )
         ).first()
@@ -218,10 +218,10 @@ async def get_message_detail(
             sender = db.query(Student).filter(Student.id == message.sender_id).first()
 
         # 수신자 정보 조회
-        if message.recipient_type == "teacher":
-            recipient = db.query(Teacher).filter(Teacher.id == message.recipient_id).first()
+        if message.receiver_type == "teacher":
+            recipient = db.query(Teacher).filter(Teacher.id == message.receiver_id).first()
         else:
-            recipient = db.query(Student).filter(Student.id == message.recipient_id).first()
+            recipient = db.query(Student).filter(Student.id == message.receiver_id).first()
 
         if not sender or not recipient:
             raise HTTPException(status_code=404, detail="Sender or recipient not found")
@@ -241,7 +241,7 @@ async def get_message_detail(
             name=recipient.name,
             email=recipient.email,
             phone=recipient.phone,
-            type=message.recipient_type,
+            type=message.receiver_type,
             school_level=recipient.school_level.value if hasattr(recipient, 'school_level') and recipient.school_level else None,
             grade=recipient.grade if hasattr(recipient, 'grade') else None
         )
@@ -254,7 +254,7 @@ async def get_message_detail(
             recipient=recipient_data,
             is_read=message.is_read,
             is_starred=message.is_starred,
-            sent_at=message.sent_at,
+            sent_at=message.created_at,
             read_at=message.read_at
         )
     except HTTPException:

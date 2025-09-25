@@ -28,18 +28,18 @@ class MessageService:
         return []
 
     def validate_message_permission(self, sender_id: int, sender_type: str,
-                                  recipient_id: int, recipient_type: str) -> bool:
+                                  receiver_id: int, receiver_type: str) -> bool:
         """쪽지 전송 권한 검증 (같은 클래스 내 선생-학생만 가능)"""
         sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
-        recipient_classrooms = set(self.get_user_classrooms(recipient_id, recipient_type))
+        receiver_classrooms = set(self.get_user_classrooms(receiver_id, receiver_type))
 
         # 공통 클래스룸이 있고, 선생-학생 관계인지 확인
-        common_classrooms = sender_classrooms & recipient_classrooms
+        common_classrooms = sender_classrooms & receiver_classrooms
         if not common_classrooms:
             return False
 
         # 같은 타입끼리는 메시지 불가 (학생-학생, 선생-선생 불가)
-        if sender_type == recipient_type:
+        if sender_type == receiver_type:
             return False
 
         return True
@@ -90,18 +90,18 @@ class MessageService:
         """메시지 전송"""
         sent_messages = []
 
-        for recipient_id in message_request.recipient_ids:
+        for receiver_id in message_request.recipient_ids:
             # 수신자 타입 결정
-            recipient_type = "student" if sender_type == "teacher" else "teacher"
+            receiver_type = "student" if sender_type == "teacher" else "teacher"
 
             # 권한 검증
-            if not self.validate_message_permission(sender_id, sender_type, recipient_id, recipient_type):
+            if not self.validate_message_permission(sender_id, sender_type, receiver_id, receiver_type):
                 continue
 
             # 공통 클래스룸 찾기
             sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
-            recipient_classrooms = set(self.get_user_classrooms(recipient_id, recipient_type))
-            common_classroom = list(sender_classrooms & recipient_classrooms)[0]
+            receiver_classrooms = set(self.get_user_classrooms(receiver_id, receiver_type))
+            common_classroom = list(sender_classrooms & receiver_classrooms)[0]
 
             # 메시지 생성
             message = Message(
@@ -109,8 +109,8 @@ class MessageService:
                 content=message_request.content,
                 sender_id=sender_id,
                 sender_type=sender_type,
-                recipient_id=recipient_id,
-                recipient_type=recipient_type,
+                receiver_id=receiver_id,
+                receiver_type=receiver_type,
                 classroom_id=common_classroom
             )
 
@@ -128,8 +128,8 @@ class MessageService:
         """받은 메시지 목록 조회"""
         query = self.db.query(Message).filter(
             and_(
-                Message.recipient_id == user_id,
-                Message.recipient_type == user_type,
+                Message.receiver_id == user_id,
+                Message.receiver_type == user_type,
                 Message.is_deleted == False
             )
         )
@@ -152,7 +152,7 @@ class MessageService:
 
         # 정렬 및 페이징
         total_count = query.count()
-        messages = query.order_by(desc(Message.sent_at)).offset((page - 1) * page_size).limit(page_size).all()
+        messages = query.order_by(desc(Message.created_at)).offset((page - 1) * page_size).limit(page_size).all()
 
         # MessageResponse로 변환
         message_responses = []
@@ -164,10 +164,10 @@ class MessageService:
                 sender = self.db.query(Student).filter(Student.id == message.sender_id).first()
 
             # 수신자 정보 조회 (현재 사용자)
-            if message.recipient_type == "teacher":
-                recipient = self.db.query(Teacher).filter(Teacher.id == message.recipient_id).first()
+            if message.receiver_type == "teacher":
+                recipient = self.db.query(Teacher).filter(Teacher.id == message.receiver_id).first()
             else:
-                recipient = self.db.query(Student).filter(Student.id == message.recipient_id).first()
+                recipient = self.db.query(Student).filter(Student.id == message.receiver_id).first()
 
             if sender and recipient:
                 sender_data = MessageRecipient(
@@ -185,7 +185,7 @@ class MessageService:
                     name=recipient.name,
                     email=recipient.email,
                     phone=recipient.phone,
-                    type=message.recipient_type,
+                    type=message.receiver_type,
                     school_level=recipient.school_level.value if hasattr(recipient, 'school_level') and recipient.school_level else None,
                     grade=recipient.grade if hasattr(recipient, 'grade') else None
                 )
@@ -198,7 +198,7 @@ class MessageService:
                     recipient=recipient_data,
                     is_read=message.is_read,
                     is_starred=message.is_starred,
-                    sent_at=message.sent_at,
+                    sent_at=message.created_at,
                     read_at=message.read_at
                 ))
 
@@ -209,8 +209,8 @@ class MessageService:
         message = self.db.query(Message).filter(
             and_(
                 Message.id == message_id,
-                Message.recipient_id == user_id,
-                Message.recipient_type == user_type
+                Message.receiver_id == user_id,
+                Message.receiver_type == user_type
             )
         ).first()
 
@@ -226,8 +226,8 @@ class MessageService:
         message = self.db.query(Message).filter(
             and_(
                 Message.id == message_id,
-                Message.recipient_id == user_id,
-                Message.recipient_type == user_type
+                Message.receiver_id == user_id,
+                Message.receiver_type == user_type
             )
         ).first()
 
@@ -242,8 +242,8 @@ class MessageService:
         message = self.db.query(Message).filter(
             and_(
                 Message.id == message_id,
-                Message.recipient_id == user_id,
-                Message.recipient_type == user_type
+                Message.receiver_id == user_id,
+                Message.receiver_type == user_type
             )
         ).first()
 
