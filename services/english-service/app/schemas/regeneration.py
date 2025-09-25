@@ -98,13 +98,16 @@ class QuestionRegenerationRequest(BaseModel):
 
 class RegenerationResponse(BaseModel):
     """재생성 응답"""
-    status: Literal["success", "error"] = Field(..., description="처리 상태")
+    status: Literal["success", "partial_success", "error"] = Field(..., description="처리 상태")
     message: str = Field(..., description="처리 결과 메시지")
 
     # 성공시 반환 정보
-    regenerated_question: Optional[Dict[str, Any]] = Field(default=None, description="재생성된 문제 정보")
-    regenerated_passage: Optional[Dict[str, Any]] = Field(default=None, description="재생성된 지문 정보 (지문도 변경된 경우)")
-    regenerated_related_questions: Optional[List[Dict[str, Any]]] = Field(default=None, description="연계된 문제들 재생성 정보")
+    regenerated_passage: Optional[Dict[str, Any]] = Field(default=None, description="재생성된 지문 정보")
+    regenerated_questions: Optional[List[Dict[str, Any]]] = Field(default=None, description="재생성된 모든 문제들 (메인 + 연관)")
+
+    # 부분 실패시 반환 정보
+    warnings: Optional[List[str]] = Field(default=None, description="부분 실패시 경고 메시지들")
+    failed_questions: Optional[List[Dict[str, Any]]] = Field(default=None, description="실패한 문제들의 정보")
 
     # 오류시 반환 정보
     error_details: Optional[str] = Field(default=None, description="오류 상세 정보")
@@ -112,7 +115,7 @@ class RegenerationResponse(BaseModel):
 
 class QuestionDataRegenerationRequest(BaseModel):
     """데이터 기반 문제 재생성 요청"""
-    question_data: Dict[str, Any] = Field(..., description="원본 문제 데이터")
+    questions_data: List[Dict[str, Any]] = Field(..., description="원본 문제 데이터들 (메인 문제 + 연관 문제들)")
     passage_data: Optional[Dict[str, Any]] = Field(None, description="원본 지문 데이터")
     regeneration_request: QuestionRegenerationRequest = Field(..., description="재생성 조건")
 

@@ -35,6 +35,39 @@ class QuestionRegenerator:
         else:
             self.model = None
 
+    def regenerate_multiple_questions_from_data(
+        self,
+        questions_data: List[Dict[str, Any]],
+        passage_data: Optional[Dict[str, Any]],
+        request: QuestionRegenerationRequest
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]], Optional[List[str]], Optional[List[Dict[str, Any]]]]:
+        """
+        여러 문제를 재생성합니다. (DB 저장 없음)
+        """
+        if not questions_data:
+            return False, "재생성할 문제 데이터가 없습니다.", None, None, None
+
+        try:
+            # 메인 문제 재생성 (첫 번째 문제)
+            main_question = questions_data[0]
+            success, message, regenerated_question, regenerated_passage = self.regenerate_question_from_data(
+                main_question, passage_data, request
+            )
+
+            if not success:
+                return False, f"메인 문제 재생성 실패: {message}", None, None, None
+
+            # 결과 구성 - 새로운 형식에 맞게
+            regenerated_data = {
+                "regenerated_passage": regenerated_passage,
+                "regenerated_questions": [regenerated_question]  # 메인 문제를 배열에 포함
+            }
+
+            return True, "문제가 성공적으로 재생성되었습니다.", regenerated_data, None, None
+
+        except Exception as e:
+            return False, f"재생성 중 오류가 발생했습니다: {str(e)}", None, None, None
+
     def regenerate_question_from_data(
         self,
         question_data: Dict[str, Any],
@@ -77,9 +110,13 @@ class QuestionRegenerator:
 
             # 4. 재생성된 데이터 반환 (DB 저장 없음)
             regenerated_question = regenerated_data.get("question", {})
-            regenerated_passage = regenerated_data.get("passage") if not request.keep_passage and passage_data else None
+            regenerated_passage = regenerated_data.get("passage") if passage_data else None
 
-            # 5. 최종 조건 적용
+            # 5. question_id 포함
+            if "question_id" in question_data:
+                regenerated_question["question_id"] = question_data["question_id"]
+
+            # 6. 최종 조건 적용
             regenerated_question.update({
                 "question_type": final_conditions["question_type"].value if hasattr(final_conditions["question_type"], 'value') else final_conditions["question_type"],
                 "question_subject": final_conditions["subject"].value if hasattr(final_conditions["subject"], 'value') else final_conditions["subject"],
@@ -252,7 +289,7 @@ class QuestionRegenerator:
 
 """
 
-        if data.original_passage and not data.keep_passage:
+        if data.original_passage:
             prompt += f"""
 ## 기존 지문 정보
 {json.dumps(data.original_passage, ensure_ascii=False, indent=2)}
@@ -264,13 +301,12 @@ class QuestionRegenerator:
 {data.additional_requirements}
 """
 
-        # 지문 재생성 여부에 따른 응답 형식 구분
-        if data.original_passage and not data.keep_passage:
-            # 지문도 재생성하는 경우
+        # 응답 형식 (통일된 형식)
+        if data.original_passage:
             prompt += """
 # ⚠️ 응답 형식 - 절대 준수 사항
 
-**지문과 문제를 모두 재생성합니다. 반드시 다음 JSON 형식으로만 응답하세요.**
+**문제와 지문을 재생성합니다. 반드시 다음 JSON 형식으로만 응답하세요.**
 
 ```json
 {
@@ -288,9 +324,9 @@ class QuestionRegenerator:
     "passage_type": "article",
     "passage_content": {
       "content": [
-        {"type": "title", "value": "재생성된 제목"},
-        {"type": "paragraph", "value": "재생성된 첫 번째 문단 (빈칸 [ A ] 포함 가능)"},
-        {"type": "paragraph", "value": "재생성된 두 번째 문단"}
+        {"type": "title", "value": "제목"},
+        {"type": "paragraph", "value": "첫 번째 문단 (빈칸 [ A ] 포함 가능)"},
+        {"type": "paragraph", "value": "두 번째 문단"}
       ]
     },
     "original_content": {
@@ -312,7 +348,6 @@ class QuestionRegenerator:
 ```
 """
         else:
-            # 문제만 재생성하는 경우
             prompt += """
 # ⚠️ 응답 형식 - 절대 준수 사항
 
@@ -323,7 +358,7 @@ class QuestionRegenerator:
   "question": {
     "question_text": "재생성된 문제 텍스트",
     "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": 0,
+    "correct_answer": "1" or "2" or "3" or "4",
     "example_content": "예문 내용",
     "example_original_content": "예문 원본",
     "example_korean_translation": "예문 한글 번역",
@@ -530,18 +565,7 @@ class QuestionRegenerator:
 
 **⚠️ 중요: 지문 내용을 보고 가장 적합한 유형을 선택하고, 해당 형식을 정확히 따르세요!**"""
 
-        # 원본 지문 유형 감지 및 적절한 형식 지정
-        passage_type_guidance = ""
-        if data.original_passage:
-            original_type = data.original_passage.get("passage_type", "article")
-            passage_type_guidance = f"""
-
-## 🎯 지문 유형 지정
-**원본 지문 유형: {original_type}**
-반드시 위에서 제시한 {original_type} 형식을 정확히 따라 JSON을 구성하세요!
-"""
-
-        prompt += passage_type_guidance + """
+        prompt += """
 ## 🔥 절대 준수 규칙
 1. **JSON 형식만 출력** - 설명이나 추가 텍스트 절대 금지
 2. **모든 필드 필수 포함** - 누락된 필드가 있으면 시스템 오류 발생

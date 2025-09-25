@@ -159,26 +159,45 @@ async def regenerate_question_from_data(
     request: QuestionDataRegenerationRequest
 ):
     """
-    전달받은 데이터로 문제를 재생성합니다. (DB 저장 없음)
+    전달받은 데이터로 문제들을 재생성합니다. (DB 저장 없음)
 
     생성 직후나 미리보기 상태에서 재생성할 때 사용합니다.
+    메인 문제와 연관 문제들을 한 번에 처리할 수 있습니다.
 
     ## 사용 예시
     ```json
     {
-      "question_data": {
-        "question_text": "다음 문장의 빈칸에 들어갈 말은?",
-        "question_type": "객관식",
-        "question_subject": "독해",
-        "question_detail_type": "빈칸 추론",
-        "question_difficulty": "상",
-        "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-        "correct_answer": 0
-      },
+      "questions_data": [
+        {
+          "question_id": 1,
+          "question_text": "다음 글의 주제로 가장 적절한 것은?",
+          "question_type": "객관식",
+          "question_subject": "독해",
+          "question_detail_type": "주제 추론",
+          "question_difficulty": "상",
+          "question_passage_id": 1,
+          "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
+          "correct_answer": 0
+        },
+        {
+          "question_id": 2,
+          "question_text": "다음 글의 빈칸에 들어갈 말은?",
+          "question_type": "객관식",
+          "question_subject": "독해",
+          "question_detail_type": "빈칸 추론",
+          "question_difficulty": "중",
+          "question_passage_id": 1,
+          "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
+          "correct_answer": 1
+        }
+      ],
       "passage_data": {
-        "passage_content": "지문 내용...",
-        "original_content": "원본 지문...",
-        "korean_translation": "한글 번역..."
+        "passage_id": 1,
+        "passage_type": "article",
+        "passage_content": {"content": [{"type": "title", "value": "제목"}, {"type": "paragraph", "value": "내용..."}]},
+        "original_content": {"content": [{"type": "title", "value": "제목"}, {"type": "paragraph", "value": "원본 내용..."}]},
+        "korean_translation": {"content": [{"type": "title", "value": "한글 제목"}, {"type": "paragraph", "value": "한글 번역..."}]},
+        "related_questions": [1, 2]
       },
       "regeneration_request": {
         "feedback": "문제를 더 쉽게 만들어주세요",
@@ -189,41 +208,121 @@ async def regenerate_question_from_data(
         },
         "current_question_type": "객관식",
         "current_subject": "독해",
-        "current_detail_type": "빈칸 추론",
+        "current_detail_type": "주제 추론",
         "current_difficulty": "상"
       }
+    }
+    ```
+
+    ## 응답 형식
+
+    ### 전체 성공시
+    ```json
+    {
+      "status": "success",
+      "message": "모든 문제가 성공적으로 재생성되었습니다.",
+      "regenerated_question": {...},
+      "regenerated_passage": {...},
+      "regenerated_related_questions": [...]
+    }
+    ```
+
+    ### 부분 성공시
+    ```json
+    {
+      "status": "partial_success",
+      "message": "일부 문제가 재생성되었습니다.",
+      "regenerated_question": {...},
+      "regenerated_passage": {...},
+      "regenerated_related_questions": [...],
+      "warnings": ["문제 2번 재생성에 실패했습니다."],
+      "failed_questions": [{"question_id": 2, "error": "AI 생성 실패"}]
     }
     ```
     """
     try:
         regenerator = QuestionRegenerator()
 
-        success, message, regenerated_question, regenerated_passage = regenerator.regenerate_question_from_data(
-            request.question_data,
+        # 다중 문제 재생성 처리
+        success, message, regenerated_data, warnings, failed_questions = regenerator.regenerate_multiple_questions_from_data(
+            request.questions_data,
             request.passage_data,
             request.regeneration_request
         )
 
         if success:
-            return RegenerationResponse(
-                status="success",
+            status = "success" if not warnings else "partial_success"
+            response = RegenerationResponse(
+                status=status,
                 message=message,
-                regenerated_question=regenerated_question,
-                regenerated_passage=regenerated_passage
-            )
-        else:
-            return RegenerationResponse(
-                status="error",
-                message=message,
-                error_details=message
+                regenerated_passage=regenerated_data.get("regenerated_passage"),
+                regenerated_questions=regenerated_data.get("regenerated_questions"),
+                warnings=warnings,
+                failed_questions=failed_questions
             )
 
+            # 성공 응답 로그 출력
+            import json
+            print("\n" + "="*100)
+            print("✅ 재생성 성공 응답 (프론트엔드로 전송)")
+            print("="*100)
+            print("응답 데이터 구조:")
+            print(json.dumps({
+                "status": response.status,
+                "message": response.message,
+                "regenerated_passage": response.regenerated_passage,
+                "regenerated_questions": response.regenerated_questions,
+                "warnings": response.warnings,
+                "failed_questions": response.failed_questions
+            }, ensure_ascii=False, indent=2))
+            print("="*100 + "\n")
+
+            return response
+        else:
+            error_response = RegenerationResponse(
+                status="error",
+                message=message,
+                error_details=message,
+                warnings=warnings,
+                failed_questions=failed_questions
+            )
+
+            # 실패 응답 로그 출력
+            print("\n" + "="*100)
+            print("❌ 재생성 실패 응답 (프론트엔드로 전송)")
+            print("="*100)
+            print("응답 데이터 구조:")
+            print(json.dumps({
+                "status": error_response.status,
+                "message": error_response.message,
+                "error_details": error_response.error_details,
+                "warnings": error_response.warnings,
+                "failed_questions": error_response.failed_questions
+            }, ensure_ascii=False, indent=2))
+            print("="*100 + "\n")
+
+            return error_response
+
     except Exception as e:
-        return RegenerationResponse(
+        exception_response = RegenerationResponse(
             status="error",
             message="재생성 중 오류가 발생했습니다.",
             error_details=str(e)
         )
+
+        # 예외 응답 로그 출력
+        print("\n" + "="*100)
+        print("💥 재생성 예외 발생 (프론트엔드로 전송)")
+        print("="*100)
+        print("응답 데이터 구조:")
+        print(json.dumps({
+            "status": exception_response.status,
+            "message": exception_response.message,
+            "error_details": exception_response.error_details
+        }, ensure_ascii=False, indent=2))
+        print("="*100 + "\n")
+
+        return exception_response
 
 
 @router.get("/worksheets/{worksheet_id}/questions/{question_id}/regeneration-info")
