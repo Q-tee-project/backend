@@ -10,6 +10,7 @@ from app.routers.worksheet_router import router as worksheet_router
 from app.routers.grading_router import router as grading_router
 from app.routers.regeneration_router import router as regeneration_router
 from app.routers.assignment_router import router as assignment_router
+from app.routers.market_router import router as market_router
 
 # 설정 인스턴스 가져오기
 settings = get_settings()
@@ -46,6 +47,10 @@ app = FastAPI(
         {
             "name": "Assignments",
             "description": "과제 배포, 관리 및 조회"
+        },
+        {
+            "name": "Market",
+            "description": "마켓플레이스 연동을 위한 워크시트 정보 제공"
         }
     ]
 )
@@ -71,6 +76,7 @@ app.include_router(worksheet_router, prefix="/api/english")
 app.include_router(grading_router, prefix="/api/english")
 app.include_router(regeneration_router, prefix="/api/english")
 app.include_router(assignment_router, prefix="/api/english")
+app.include_router(market_router)
 
 # 루트 경로에서 HTML 페이지 제공
 @app.get("/")

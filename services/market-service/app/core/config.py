@@ -21,6 +21,7 @@ class Settings:
     # External Services (Docker 내부 포트 사용)
     KOREAN_SERVICE_URL: str = os.getenv("KOREAN_SERVICE_URL", "http://korean-service:8000")
     MATH_SERVICE_URL: str = os.getenv("MATH_SERVICE_URL", "http://math-service:8000")
+    ENGLISH_SERVICE_URL: str = os.getenv("ENGLISH_SERVICE_URL", "http://english-service:8000")
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
 
 settings = Settings()
