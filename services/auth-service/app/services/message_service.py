@@ -1,0 +1,254 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, desc
+from typing import List, Optional, Tuple
+from ..models.message import Message
+from ..models.user import Teacher, Student, ClassRoom, StudentJoinRequest
+from ..schemas.message import MessageSendRequest, MessageRecipient, MessageResponse
+from datetime import datetime
+import math
+
+class MessageService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_user_classrooms(self, user_id: int, user_type: str) -> List[int]:
+        """사용자가 속한 클래스룸 ID 목록 반환"""
+        if user_type == "teacher":
+            classrooms = self.db.query(ClassRoom).filter(ClassRoom.teacher_id == user_id).all()
+            return [classroom.id for classroom in classrooms]
+        elif user_type == "student":
+            # 승인된 가입 요청만 조회
+            join_requests = self.db.query(StudentJoinRequest).filter(
+                and_(
+                    StudentJoinRequest.student_id == user_id,
+                    StudentJoinRequest.status == "approved"
+                )
+            ).all()
+            return [req.classroom_id for req in join_requests]
+        return []
+
+    def validate_message_permission(self, sender_id: int, sender_type: str,
+                                  recipient_id: int, recipient_type: str) -> bool:
+        """쪽지 전송 권한 검증 (같은 클래스 내 선생-학생만 가능)"""
+        sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
+        recipient_classrooms = set(self.get_user_classrooms(recipient_id, recipient_type))
+
+        # 공통 클래스룸이 있고, 선생-학생 관계인지 확인
+        common_classrooms = sender_classrooms & recipient_classrooms
+        if not common_classrooms:
+            return False
+
+        # 같은 타입끼리는 메시지 불가 (학생-학생, 선생-선생 불가)
+        if sender_type == recipient_type:
+            return False
+
+        return True
+
+    def get_message_recipients(self, user_id: int, user_type: str) -> List[MessageRecipient]:
+        """메시지를 보낼 수 있는 대상 목록 조회"""
+        classrooms = self.get_user_classrooms(user_id, user_type)
+        recipients = []
+
+        for classroom_id in classrooms:
+            if user_type == "teacher":
+                # 선생님은 해당 클래스의 학생들에게 메시지 전송 가능
+                students = self.db.query(Student).join(StudentJoinRequest).filter(
+                    and_(
+                        StudentJoinRequest.classroom_id == classroom_id,
+                        StudentJoinRequest.status == "approved"
+                    )
+                ).all()
+
+                for student in students:
+                    recipients.append(MessageRecipient(
+                        id=student.id,
+                        name=student.name,
+                        email=student.email,
+                        phone=student.phone,
+                        type="student",
+                        school_level=student.school_level.value,
+                        grade=student.grade
+                    ))
+
+            elif user_type == "student":
+                # 학생은 해당 클래스의 선생님에게 메시지 전송 가능
+                classroom = self.db.query(ClassRoom).filter(ClassRoom.id == classroom_id).first()
+                if classroom and classroom.teacher:
+                    teacher = classroom.teacher
+                    recipients.append(MessageRecipient(
+                        id=teacher.id,
+                        name=teacher.name,
+                        email=teacher.email,
+                        phone=teacher.phone,
+                        type="teacher"
+                    ))
+
+        return recipients
+
+    def send_message(self, sender_id: int, sender_type: str,
+                    message_request: MessageSendRequest) -> List[Message]:
+        """메시지 전송"""
+        sent_messages = []
+
+        for recipient_id in message_request.recipient_ids:
+            # 수신자 타입 결정
+            recipient_type = "student" if sender_type == "teacher" else "teacher"
+
+            # 권한 검증
+            if not self.validate_message_permission(sender_id, sender_type, recipient_id, recipient_type):
+                continue
+
+            # 공통 클래스룸 찾기
+            sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
+            recipient_classrooms = set(self.get_user_classrooms(recipient_id, recipient_type))
+            common_classroom = list(sender_classrooms & recipient_classrooms)[0]
+
+            # 메시지 생성
+            message = Message(
+                subject=message_request.subject,
+                content=message_request.content,
+                sender_id=sender_id,
+                sender_type=sender_type,
+                recipient_id=recipient_id,
+                recipient_type=recipient_type,
+                classroom_id=common_classroom
+            )
+
+            self.db.add(message)
+            sent_messages.append(message)
+
+        self.db.commit()
+        return sent_messages
+
+    def get_messages(self, user_id: int, user_type: str,
+                    page: int = 1, page_size: int = 15,
+                    filter_type: str = "all",
+                    search_query: str = "",
+                    search_type: str = "subject") -> Tuple[List[MessageResponse], int]:
+        """받은 메시지 목록 조회"""
+        query = self.db.query(Message).filter(
+            and_(
+                Message.recipient_id == user_id,
+                Message.recipient_type == user_type,
+                Message.is_deleted == False
+            )
+        )
+
+        # 필터링
+        if filter_type == "read":
+            query = query.filter(Message.is_read == True)
+        elif filter_type == "unread":
+            query = query.filter(Message.is_read == False)
+        elif filter_type == "starred":
+            query = query.filter(Message.is_starred == True)
+
+        # 검색
+        if search_query:
+            if search_type == "subject":
+                query = query.filter(Message.subject.ilike(f"%{search_query}%"))
+            elif search_type == "sender":
+                # 발신자 이름으로 검색 (복잡한 조인 필요)
+                pass
+
+        # 정렬 및 페이징
+        total_count = query.count()
+        messages = query.order_by(desc(Message.sent_at)).offset((page - 1) * page_size).limit(page_size).all()
+
+        # MessageResponse로 변환
+        message_responses = []
+        for message in messages:
+            # 발신자 정보 조회
+            if message.sender_type == "teacher":
+                sender = self.db.query(Teacher).filter(Teacher.id == message.sender_id).first()
+            else:
+                sender = self.db.query(Student).filter(Student.id == message.sender_id).first()
+
+            # 수신자 정보 조회 (현재 사용자)
+            if message.recipient_type == "teacher":
+                recipient = self.db.query(Teacher).filter(Teacher.id == message.recipient_id).first()
+            else:
+                recipient = self.db.query(Student).filter(Student.id == message.recipient_id).first()
+
+            if sender and recipient:
+                sender_data = MessageRecipient(
+                    id=sender.id,
+                    name=sender.name,
+                    email=sender.email,
+                    phone=sender.phone,
+                    type=message.sender_type,
+                    school_level=sender.school_level.value if hasattr(sender, 'school_level') and sender.school_level else None,
+                    grade=sender.grade if hasattr(sender, 'grade') else None
+                )
+
+                recipient_data = MessageRecipient(
+                    id=recipient.id,
+                    name=recipient.name,
+                    email=recipient.email,
+                    phone=recipient.phone,
+                    type=message.recipient_type,
+                    school_level=recipient.school_level.value if hasattr(recipient, 'school_level') and recipient.school_level else None,
+                    grade=recipient.grade if hasattr(recipient, 'grade') else None
+                )
+
+                message_responses.append(MessageResponse(
+                    id=message.id,
+                    subject=message.subject,
+                    content=message.content,
+                    sender=sender_data,
+                    recipient=recipient_data,
+                    is_read=message.is_read,
+                    is_starred=message.is_starred,
+                    sent_at=message.sent_at,
+                    read_at=message.read_at
+                ))
+
+        return message_responses, total_count
+
+    def mark_as_read(self, message_id: int, user_id: int, user_type: str) -> Optional[Message]:
+        """메시지 읽음 처리"""
+        message = self.db.query(Message).filter(
+            and_(
+                Message.id == message_id,
+                Message.recipient_id == user_id,
+                Message.recipient_type == user_type
+            )
+        ).first()
+
+        if message:
+            message.is_read = True
+            message.read_at = datetime.now()
+            self.db.commit()
+
+        return message
+
+    def toggle_star(self, message_id: int, user_id: int, user_type: str, is_starred: bool) -> Optional[Message]:
+        """메시지 즐겨찾기 토글"""
+        message = self.db.query(Message).filter(
+            and_(
+                Message.id == message_id,
+                Message.recipient_id == user_id,
+                Message.recipient_type == user_type
+            )
+        ).first()
+
+        if message:
+            message.is_starred = is_starred
+            self.db.commit()
+
+        return message
+
+    def delete_message(self, message_id: int, user_id: int, user_type: str) -> Optional[Message]:
+        """메시지 삭제 (논리 삭제)"""
+        message = self.db.query(Message).filter(
+            and_(
+                Message.id == message_id,
+                Message.recipient_id == user_id,
+                Message.recipient_type == user_type
+            )
+        ).first()
+
+        if message:
+            message.is_deleted = True
+            self.db.commit()
+
+        return message
