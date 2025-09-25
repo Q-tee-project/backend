@@ -14,7 +14,6 @@ class KoreanGradingSessionBase(BaseModel):
     input_method: str
     ocr_text: Optional[str] = None
     ocr_results: Optional[dict] = None
-    multiple_choice_answers: Optional[dict] = None
     celery_task_id: Optional[str] = None
     status: str = "pending_approval"
     teacher_id: Optional[int] = None

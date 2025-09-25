@@ -178,11 +178,16 @@ async def update_grading_session(
                 ).first()
 
                 if problem_result:
+                    # 선생님이 정답처리한 경우: 학생 답안을 새로운 정답으로 설정
+                    problem_result.user_answer = new_correct_answer
                     problem_result.correct_answer = new_correct_answer
-                    print(f"🔄 국어 문제 {problem_id}의 정답을 '{new_correct_answer}'로 업데이트")
+                    # 정답처리이므로 점수와 정답 여부도 업데이트
+                    problem_result.is_correct = True
+                    problem_result.score = problem_result.points_per_problem
+                    print(f"🔄 국어 문제 {problem_id}: 학생답안과 정답을 모두 '{new_correct_answer}'로 업데이트, 정답처리")
 
         # 모든 문제별 결과를 기반으로 총점과 정답 수 재계산
-        if "problem_corrections" in update_data:
+        if "problem_corrections" in update_data or "updated_correct_answers" in update_data:
             all_problem_results = db.query(KoreanProblemGradingResult).filter(
                 KoreanProblemGradingResult.grading_session_id == session_id
             ).all()

@@ -27,8 +27,6 @@ class KoreanGradingSession(Base):
     ocr_text = Column(Text, nullable=True)
     ocr_results = Column(JSON, nullable=True)
 
-    # 객관식 답안 (직접 입력)
-    multiple_choice_answers = Column(JSON, nullable=True)
 
     # 비동기 처리
     celery_task_id = Column(String, nullable=True)

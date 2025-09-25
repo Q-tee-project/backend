@@ -208,8 +208,7 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
 
 
 @celery_app.task(bind=True)
-def grade_korean_problems_task(self, worksheet_id: int, image_data: bytes = None,
-                              multiple_choice_answers: dict = None, user_id: int = 1):
+def grade_korean_problems_task(self, worksheet_id: int, user_id: int = 1):
     """국어 문제 채점 태스크"""
     try:
         db = SessionLocal()
@@ -238,19 +237,10 @@ def grade_korean_problems_task(self, worksheet_id: int, image_data: bytes = None
             total_problems=len(problems),
             max_possible_score=float(len(problems) * 100),
             points_per_problem=100.0,
-            input_method="manual" if multiple_choice_answers else "ocr",
-            multiple_choice_answers=multiple_choice_answers,
+            input_method="manual",
             celery_task_id=self.request.id
         )
 
-        if image_data:
-            # OCR 처리
-            current_task.update_state(
-                state='PROGRESS',
-                meta={'current': 30, 'total': 100, 'status': 'OCR 처리 중...'}
-            )
-            ocr_text = ai_service.ocr_handwriting(image_data)
-            grading_session.ocr_text = ocr_text
 
         db.add(grading_session)
         db.flush()
@@ -269,13 +259,9 @@ def grade_korean_problems_task(self, worksheet_id: int, image_data: bytes = None
                 }
             )
 
-            # 학생 답안 추출
-            if multiple_choice_answers and str(problem.id) in multiple_choice_answers:
-                student_answer = multiple_choice_answers[str(problem.id)]
-                input_method = "manual"
-            else:
-                student_answer = ""  # OCR에서 추출해야 함
-                input_method = "ocr"
+            # 국어는 객관식 문제로 problem_results에서 답안을 가져옴
+            student_answer = "1"  # 기본값 (실제로는 assignment 제출시 problem_results로 처리)
+            input_method = "manual"
 
             # AI 채점
             grading_result = ai_service.grade_korean_answer(

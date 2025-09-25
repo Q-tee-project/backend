@@ -27,10 +27,19 @@ def migrate_multiple_choice_to_problem_results():
     try:
         print("🚀 국어 서비스 데이터 마이그레이션 시작...")
 
-        # multiple_choice_answers가 있는 모든 세션 조회
-        sessions_with_answers = db.query(KoreanGradingSession).filter(
-            KoreanGradingSession.multiple_choice_answers.isnot(None)
-        ).all()
+        # multiple_choice_answers가 있는 모든 세션 조회 (raw SQL 사용)
+        sessions_query = text("""
+            SELECT id, multiple_choice_answers, worksheet_id, points_per_problem, total_problems
+            FROM korean_service.grading_sessions
+            WHERE multiple_choice_answers IS NOT NULL
+        """)
+        sessions_result = db.execute(sessions_query).fetchall()
+        sessions_with_answers = []
+        for row in sessions_result:
+            session = db.query(KoreanGradingSession).filter(KoreanGradingSession.id == row.id).first()
+            if session:
+                session._multiple_choice_answers = row.multiple_choice_answers
+                sessions_with_answers.append(session)
 
         print(f"📊 마이그레이션 대상 세션: {len(sessions_with_answers)}개")
 
@@ -50,10 +59,10 @@ def migrate_multiple_choice_to_problem_results():
 
             # multiple_choice_answers 파싱
             try:
-                if isinstance(session.multiple_choice_answers, str):
-                    answers = json.loads(session.multiple_choice_answers)
+                if isinstance(session._multiple_choice_answers, str):
+                    answers = json.loads(session._multiple_choice_answers)
                 else:
-                    answers = session.multiple_choice_answers or {}
+                    answers = session._multiple_choice_answers or {}
 
                 if not answers:
                     print(f"  ⚠️  multiple_choice_answers가 비어있음, 건너뛰기")
