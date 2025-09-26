@@ -1,18 +1,14 @@
 """
-문제 재생성 서비스
+영어 문제 재생성 서비스
 """
 import json
 from typing import Dict, Any, Optional, Tuple, List
-from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Question, Passage, Worksheet
 from app.schemas.regeneration import (
-    QuestionRegenerationRequest,
-    RegenerationPromptData,
-    QuestionType,
-    QuestionSubject,
-    Difficulty
+    EnglishQuestion,
+    EnglishPassage,
+    EnglishRegenerationRequest
 )
 from app.core.config import get_settings
 
@@ -26,7 +22,7 @@ settings = get_settings()
 
 
 class QuestionRegenerator:
-    """문제 재생성 클래스"""
+    """영어 문제 재생성 클래스"""
 
     def __init__(self):
         if GEMINI_AVAILABLE and settings.gemini_api_key:
@@ -35,312 +31,209 @@ class QuestionRegenerator:
         else:
             self.model = None
 
-    def regenerate_question_from_data(
+    def regenerate_from_data(
         self,
-        question_data: Dict[str, Any],
-        passage_data: Optional[Dict[str, Any]],
-        request: QuestionRegenerationRequest
-    ) -> Tuple[bool, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        questions: List[EnglishQuestion],
+        passage: Optional[EnglishPassage],
+        form_data: EnglishRegenerationRequest
+    ) -> Tuple[bool, str, Optional[List[EnglishQuestion]], Optional[EnglishPassage]]:
         """
-        전달받은 데이터로 문제를 재생성합니다. (DB 저장 없음)
+        프론트엔드에서 전달받은 데이터로 문제를 재생성합니다.
 
         Args:
-            question_data: 원본 문제 데이터
-            passage_data: 원본 지문 데이터 (선택적)
-            request: 재생성 요청
+            questions: 재생성할 문제들
+            passage: 연관 지문 (있을 경우)
+            form_data: 사용자 요청사항
 
         Returns:
-            (success, message, regenerated_question, regenerated_passage)
+            (성공여부, 메시지, 재생성된 문제들, 재생성된 지문)
         """
-        try:
-            # 1. 최종 조건 결정
-            final_conditions = self._determine_final_conditions_from_data(question_data, request)
-
-            # 2. AI 프롬프트 데이터 준비
-            prompt_data = RegenerationPromptData(
-                original_question=question_data,
-                original_passage=passage_data,
-                user_feedback=request.feedback,
-                worksheet_context=request.worksheet_context,
-                final_question_type=final_conditions["question_type"],
-                final_subject=final_conditions["subject"],
-                final_detail_type=final_conditions["detail_type"],
-                final_difficulty=final_conditions["difficulty"],
-                keep_passage=request.keep_passage,
-                additional_requirements=request.additional_requirements
-            )
-
-            # 3. AI로 문제 재생성
-            regenerated_data = self._generate_with_ai(prompt_data)
-            if not regenerated_data:
-                return False, "AI 문제 생성에 실패했습니다.", None, None
-
-            # 4. 재생성된 데이터 반환 (DB 저장 없음)
-            regenerated_question = regenerated_data.get("question", {})
-            regenerated_passage = regenerated_data.get("passage") if not request.keep_passage and passage_data else None
-
-            # 5. 최종 조건 적용
-            regenerated_question.update({
-                "question_type": final_conditions["question_type"].value if hasattr(final_conditions["question_type"], 'value') else final_conditions["question_type"],
-                "question_subject": final_conditions["subject"].value if hasattr(final_conditions["subject"], 'value') else final_conditions["subject"],
-                "question_detail_type": final_conditions["detail_type"],
-                "question_difficulty": final_conditions["difficulty"].value if hasattr(final_conditions["difficulty"], 'value') else final_conditions["difficulty"]
-            })
-
-            return True, "문제가 성공적으로 재생성되었습니다.", regenerated_question, regenerated_passage
-
-        except Exception as e:
-            return False, f"재생성 중 오류가 발생했습니다: {str(e)}", None, None
-
-    def regenerate_question(
-        self,
-        db: Session,
-        worksheet_id: int,
-        question_id: int,
-        request: QuestionRegenerationRequest
-    ) -> Tuple[bool, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        """
-        DB에서 문제를 조회하여 재생성하고 저장합니다.
-
-        Returns:
-            (success, message, regenerated_question, regenerated_passage)
-        """
-        try:
-            # 1. 기존 문제 조회
-            original_question = db.query(Question).filter(
-                Question.worksheet_id == worksheet_id,
-                Question.question_id == question_id
-            ).first()
-
-            if not original_question:
-                return False, "문제를 찾을 수 없습니다.", None, None
-
-            # 2. 지문 정보 조회 (있는 경우)
-            original_passage = None
-            if original_question.passage_id:
-                original_passage = db.query(Passage).filter(
-                    Passage.worksheet_id == worksheet_id,
-                    Passage.passage_id == original_question.passage_id
-                ).first()
-
-            # 3. 데이터 기반 재생성 호출
-            question_data = self._question_to_dict(original_question)
-            passage_data = self._passage_to_dict(original_passage) if original_passage else None
-
-            success, message, regenerated_question, regenerated_passage = self.regenerate_question_from_data(
-                question_data, passage_data, request
-            )
-
-            if not success:
-                return False, message, None, None
-
-            # 4. 데이터베이스 업데이트
-            success = self._update_question_in_db(db, original_question, {"question": regenerated_question}, self._determine_final_conditions(original_question, request))
-            if not success:
-                return False, "데이터베이스 업데이트에 실패했습니다.", None, None
-
-            # 5. 지문도 재생성된 경우 업데이트
-            if regenerated_passage and original_passage:
-                success = self._update_passage_in_db(db, original_passage, regenerated_passage)
-
-            # 6. 연계된 문제들도 재생성하는 경우
-            regenerated_related_questions = []
-            if request.regenerate_related_questions and original_passage and not request.keep_passage:
-                regenerated_related_questions = self._regenerate_related_questions(
-                    db, worksheet_id, original_passage, regenerated_passage, request
-                )
-
-            db.commit()
-
-            result_data = {
-                "regenerated_question": self._question_to_dict(original_question),
-                "regenerated_passage": self._passage_to_dict(original_passage) if original_passage else None,
-                "regenerated_related_questions": regenerated_related_questions
-            }
-
-            return True, "문제가 성공적으로 재생성되었습니다.", result_data, None
-
-        except Exception as e:
-            db.rollback()
-            return False, f"재생성 중 오류가 발생했습니다: {str(e)}", None, None
-
-    def _determine_final_conditions_from_data(
-        self,
-        question_data: Dict[str, Any],
-        request: QuestionRegenerationRequest
-    ) -> Dict[str, Any]:
-        """데이터에서 최종 적용될 조건들을 결정합니다."""
-        return {
-            "question_type": request.target_question_type if not request.keep_question_type
-                           else question_data.get("question_type", "객관식"),
-            "subject": request.target_subject if not request.keep_subject
-                      else question_data.get("question_subject", "독해"),
-            "detail_type": request.target_detail_type if not request.keep_detail_type
-                          else question_data.get("question_detail_type", ""),
-            "difficulty": request.target_difficulty if not request.keep_difficulty
-                         else question_data.get("question_difficulty", "중")
-        }
-
-    def _determine_final_conditions(
-        self,
-        original_question: Question,
-        request: QuestionRegenerationRequest
-    ) -> Dict[str, Any]:
-        """최종 적용될 조건들을 결정합니다."""
-        return {
-            "question_type": request.target_question_type if not request.keep_question_type
-                           else QuestionType(original_question.question_type),
-            "subject": request.target_subject if not request.keep_subject
-                      else QuestionSubject(original_question.question_subject),
-            "detail_type": request.target_detail_type if not request.keep_detail_type
-                          else original_question.question_detail_type,
-            "difficulty": request.target_difficulty if not request.keep_difficulty
-                         else Difficulty(original_question.question_difficulty)
-        }
-
-    def _generate_with_ai(self, prompt_data: RegenerationPromptData) -> Optional[Dict[str, Any]]:
-        """AI를 사용하여 문제를 재생성합니다."""
-        if not self.model:
-            return None
+        if not questions:
+            return False, "재생성할 문제가 없습니다.", None, None
 
         try:
-            prompt = self._build_regeneration_prompt(prompt_data)
+            # AI 모델이 없으면 실패
+            if not self.model:
+                return False, "AI 모델을 사용할 수 없습니다.", None, None
+
+            # 프롬프트 생성
+            prompt = self._create_regeneration_prompt(questions, passage, form_data)
+
+            print(f"\n🤖 재생성 프롬프트:")
+            print("="*100)
+            print(prompt)
+            print("="*100)
+
+            # AI 호출
             response = self.model.generate_content(prompt)
 
-            # JSON 파싱
-            response_text = response.text.strip()
-            if response_text.startswith('```json'):
-                response_text = response_text[7:-3]
-            elif response_text.startswith('```'):
-                response_text = response_text[3:-3]
+            if not response.text:
+                return False, "AI 응답이 비어있습니다.", None, None
 
-            return json.loads(response_text)
+            print(f"\n📝 AI 응답:")
+            print("="*100)
+            print(response.text)
+            print("="*100)
+
+            # 응답 파싱
+            regenerated_data = self._parse_ai_response(response.text)
+
+            if not regenerated_data:
+                return False, "AI 응답 파싱에 실패했습니다.", None, None
+
+            # 결과 추출
+            regenerated_questions = regenerated_data.get("questions", [])
+            regenerated_passage = regenerated_data.get("passage")
+
+            # EnglishQuestion 객체로 변환
+            parsed_questions = []
+            for q_data in regenerated_questions:
+                try:
+                    question = EnglishQuestion(**q_data)
+                    parsed_questions.append(question)
+                except Exception as e:
+                    print(f"문제 파싱 오류: {e}")
+                    continue
+
+            # EnglishPassage 객체로 변환 (있을 경우)
+            parsed_passage = None
+            if regenerated_passage:
+                try:
+                    parsed_passage = EnglishPassage(**regenerated_passage)
+                except Exception as e:
+                    print(f"지문 파싱 오류: {e}")
+
+            if not parsed_questions:
+                return False, "재생성된 문제를 파싱할 수 없습니다.", None, None
+
+            return True, "문제가 성공적으로 재생성되었습니다.", parsed_questions, parsed_passage
 
         except Exception as e:
-            print(f"AI 생성 중 오류: {e}")
-            return None
+            print(f"재생성 오류: {e}")
+            return False, f"재생성 중 오류가 발생했습니다: {str(e)}", None, None
 
-    def _build_regeneration_prompt(self, data: RegenerationPromptData) -> str:
-        """재생성을 위한 AI 프롬프트를 구성합니다."""
+    def _create_regeneration_prompt(
+        self,
+        questions: List[EnglishQuestion],
+        passage: Optional[EnglishPassage],
+        form_data: EnglishRegenerationRequest
+    ) -> str:
+        """재생성 프롬프트를 생성합니다."""
 
-        prompt = f"""# 역할 설정
-당신은 **전문적인 영어 교육 문제 개발자**입니다.
-- 15년 이상의 영어 교육 경험을 가진 전문가
-- 학생 수준에 맞는 문제 설계 전문가
-- 교육과정과 평가 기준에 정통한 교육학 박사
+        # 기본 지시사항
+        prompt = f"""당신은 영어 문제 재생성 전문가입니다.
 
-# 임무
-기존 영어 문제를 사용자의 피드백과 요구사항에 따라 **체계적이고 교육적으로 개선된 문제로 재생성**하세요.
-
-## 기존 문제 정보
-{json.dumps(data.original_question, ensure_ascii=False, indent=2)}
-
-## 사용자 피드백
-{data.user_feedback}
-
-## 문제지 컨텍스트
-- 학교급: {data.worksheet_context.school_level}
-- 학년: {data.worksheet_context.grade}학년
-- 문제지 유형: {data.worksheet_context.worksheet_type}
-
-## 재생성 조건 (필수 준수)
-- 문제 유형: {data.final_question_type}
-- 문제 영역: {data.final_subject}
-- 세부 영역: {data.final_detail_type}
-- 난이도: {data.final_difficulty}
-- 지문 유지: {"예" if data.keep_passage else "아니오"}
+사용자 요청사항: {form_data.feedback}
 
 """
 
-        if data.original_passage and not data.keep_passage:
+        # 워크시트 컨텍스트가 있으면 추가
+        if form_data.worksheet_context and (form_data.worksheet_context.school_level or form_data.worksheet_context.grade):
+            prompt += "문제지 컨텍스트:\n"
+            if form_data.worksheet_context.school_level:
+                prompt += f"- 학교급: {form_data.worksheet_context.school_level}\n"
+            if form_data.worksheet_context.grade:
+                prompt += f"- 학년: {form_data.worksheet_context.grade}학년\n"
+            prompt += "\n"
+
+        prompt += """아래 조건에 따라 문제를 재생성해주세요:
+
+"""
+
+        # 지문 재생성 여부
+        if passage and form_data.regenerate_passage:
             prompt += f"""
-## 기존 지문 정보
-{json.dumps(data.original_passage, ensure_ascii=False, indent=2)}
-"""
+## 지문 재생성 요청
+기존 지문을 수정해서 새로운 지문을 만들어주세요.
 
-        if data.additional_requirements:
-            prompt += f"""
-## 추가 요구사항
-{data.additional_requirements}
-"""
-
-        # 지문 재생성 여부에 따른 응답 형식 구분
-        if data.original_passage and not data.keep_passage:
-            # 지문도 재생성하는 경우
-            prompt += """
-# ⚠️ 응답 형식 - 절대 준수 사항
-
-**지문과 문제를 모두 재생성합니다. 반드시 다음 JSON 형식으로만 응답하세요.**
-
+기존 지문:
 ```json
-{
-  "question": {
-    "question_text": "재생성된 문제 텍스트",
-    "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": 0,
-    "example_content": "예문 내용",
-    "example_original_content": "예문 원본",
-    "example_korean_translation": "예문 한글 번역",
-    "explanation": "해설",
-    "learning_point": "학습 포인트"
-  },
-  "passage": {
-    "passage_type": "article",
-    "passage_content": {
-      "content": [
-        {"type": "title", "value": "재생성된 제목"},
-        {"type": "paragraph", "value": "재생성된 첫 번째 문단 (빈칸 [ A ] 포함 가능)"},
-        {"type": "paragraph", "value": "재생성된 두 번째 문단"}
-      ]
-    },
-    "original_content": {
-      "content": [
-        {"type": "title", "value": "완전한 제목"},
-        {"type": "paragraph", "value": "완전한 첫 번째 문단"},
-        {"type": "paragraph", "value": "완전한 두 번째 문단"}
-      ]
-    },
-    "korean_translation": {
-      "content": [
-        {"type": "title", "value": "한글 제목"},
-        {"type": "paragraph", "value": "첫 번째 문단 한글 번역"},
-        {"type": "paragraph", "value": "두 번째 문단 한글 번역"}
-      ]
-    }
-  }
-}
+{json.dumps(passage.dict(), ensure_ascii=False, indent=2)}
+```
+
+"""
+
+        # 문제들
+        prompt += f"""
+## 재생성할 문제들:
+"""
+        for i, question in enumerate(questions):
+            prompt += f"""
+### 문제 {i+1}:
+```json
+{json.dumps(question.dict(), ensure_ascii=False, indent=2)}
 ```
 """
-        else:
-            # 문제만 재생성하는 경우
-            prompt += """
-# ⚠️ 응답 형식 - 절대 준수 사항
 
-**문제만 재생성합니다. 반드시 다음 JSON 형식으로만 응답하세요.**
+        # 추가 지시사항
+        if form_data.new_difficulty:
+            prompt += f"\n- 난이도를 '{form_data.new_difficulty}'로 조정해주세요."
+
+        if form_data.additional_instructions:
+            prompt += f"\n- 추가 요청: {form_data.additional_instructions}"
+
+        # 응답 형식 지정
+        prompt += f"""
+
+## 응답 형식
+다음 JSON 형식으로 응답해주세요:
 
 ```json
-{
-  "question": {
-    "question_text": "재생성된 문제 텍스트",
-    "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": 0,
-    "example_content": "예문 내용",
-    "example_original_content": "예문 원본",
-    "example_korean_translation": "예문 한글 번역",
-    "explanation": "해설",
-    "learning_point": "학습 포인트"
-  }
-}
-```
-"""
+{{
+  "questions": [
+    {{
+      "question_id": 문제ID,
+      "question_text": "재생성된 문제 텍스트",
+      "question_type": "객관식|단답형|서술형",
+      "question_subject": "문제 영역",
+      "question_difficulty": "상|중|하",
+      "question_detail_type": "세부 유형",
+      "question_passage_id": 지문ID또는null,
+      "example_content": "예문 내용",
+      "example_original_content": "원문 예문",
+      "example_korean_translation": "한글 번역",
+      "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
+      "correct_answer": 정답인덱스또는텍스트,
+      "explanation": "해설",
+      "learning_point": "학습 포인트"
+    }}
+  ]"""
+
+        if passage and form_data.regenerate_passage:
+            prompt += f""",
+  "passage": {{
+    "passage_id": {passage.passage_id},
+    "passage_type": "article|correspondence|dialogue|informational|review",
+    "passage_content": {{내용구조}},
+    "original_content": {{원문구조}},
+    "korean_translation": {{번역구조}},
+    "related_questions": [문제ID배열]
+  }}"""
 
         prompt += """
-## 🔥 절대 준수 규칙
-1. **JSON 형식만 출력** - 설명이나 추가 텍스트 절대 금지
-2. **모든 필드 필수 포함** - 누락된 필드가 있으면 시스템 오류 발생
-3. **객관식이 아닌 경우** - question_choices는 빈 배열 []로 설정
-4. **따옴표와 쉼표** - JSON 문법 엄격히 준수
-5. **중괄호 { } 정확히 매칭** - 문법 오류 시 파싱 실패
+}
+```
+
+# 문제에 사용될 지문과 예문의 정의
+- 지문은 120~150단어 이상의 긴 글을 의미 난이도와 상관없이 길이를 준수하여 생성
+- 지문에는 2개 이상 3개 이하의 문제를 연계하여 출제
+- 예문은 40단어 이하의 짧은 글을 의미(1~3줄) 난이도와 상관없이 길이를 준수하여 생성
+- 지문은 반드시 유형별 json형식을 참고하여 생성
+- 예문의 소재는 글의 소재를 참고하여 생성
+- 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
+
+# 문제 질문과 예문 분리 규칙 (절대 위반 금지)
+
+## 핵심 원칙
+- **example_content에는 절대 지시문을 포함하지 마세요!**
+- **example_content는 순수한 영어 예문, 보기, 문제만 포함해야 합니다!**
+- **모든 지시문과 한국어 설명은 question_text에만 들어가야 합니다!**
+
+## 세부 규칙
+- **문제의 질문(question_text)**: 순수한 한국어 지시문만 (예: "다음과 같이 소유격을 사용하여 쓰시오")
+- **예문 내용(example_content)**: 순수한 영어 예문만 (예: "<보기> The book of Tom → Tom's book\\n<문제> The car of my father")
+- **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
+- **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
 
 ## 📋 지문 JSON 구조화 규칙 (지문 재생성 시)
 
@@ -528,20 +421,8 @@ class QuestionRegenerator:
 }
 ```
 
-**⚠️ 중요: 지문 내용을 보고 가장 적합한 유형을 선택하고, 해당 형식을 정확히 따르세요!**"""
+**⚠️ 중요: 지문 내용을 보고 가장 적합한 유형을 선택하고, 해당 형식을 정확히 따르세요!**
 
-        # 원본 지문 유형 감지 및 적절한 형식 지정
-        passage_type_guidance = ""
-        if data.original_passage:
-            original_type = data.original_passage.get("passage_type", "article")
-            passage_type_guidance = f"""
-
-## 🎯 지문 유형 지정
-**원본 지문 유형: {original_type}**
-반드시 위에서 제시한 {original_type} 형식을 정확히 따라 JSON을 구성하세요!
-"""
-
-        prompt += passage_type_guidance + """
 ## 🔥 절대 준수 규칙
 1. **JSON 형식만 출력** - 설명이나 추가 텍스트 절대 금지
 2. **모든 필드 필수 포함** - 누락된 필드가 있으면 시스템 오류 발생
@@ -561,166 +442,30 @@ class QuestionRegenerator:
 
         return prompt
 
-    def _regenerate_related_questions(
-        self,
-        db: Session,
-        worksheet_id: int,
-        original_passage: 'Passage',
-        regenerated_passage_data: Dict[str, Any],
-        request: QuestionRegenerationRequest
-    ) -> List[Dict[str, Any]]:
-        """지문과 연계된 다른 문제들을 재생성합니다."""
+    def _parse_ai_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """AI 응답을 파싱합니다."""
         try:
-            regenerated_questions = []
+            # JSON 블록 추출
+            if "```json" in response_text:
+                start = response_text.find("```json") + 7
+                end = response_text.find("```", start)
+                if end != -1:
+                    json_text = response_text[start:end].strip()
+                else:
+                    json_text = response_text[start:].strip()
+            else:
+                # JSON 블록이 없으면 전체 텍스트에서 JSON 찾기
+                json_text = response_text.strip()
 
-            # 연계된 문제들 조회
-            if hasattr(original_passage, 'related_questions') and original_passage.related_questions:
-                related_question_ids = original_passage.related_questions
+            # JSON 파싱
+            parsed_data = json.loads(json_text)
 
-                for q_id in related_question_ids:
-                    # 현재 재생성 중인 문제는 제외
-                    if str(q_id) == str(request.current_question_id if hasattr(request, 'current_question_id') else ''):
-                        continue
+            return parsed_data
 
-                    related_question = db.query(Question).filter(
-                        Question.worksheet_id == worksheet_id,
-                        Question.question_id == q_id
-                    ).first()
-
-                    if related_question:
-                        # 연계 문제용 재생성 요청 생성
-                        related_request = QuestionRegenerationRequest(
-                            feedback=f"지문이 변경되어 연계된 문제를 자동 재생성합니다: {request.feedback}",
-                            worksheet_context=request.worksheet_context,
-                            current_question_type=related_question.question_type,
-                            current_subject=related_question.question_subject,
-                            current_detail_type=related_question.question_detail_type,
-                            current_difficulty=related_question.question_difficulty,
-                            keep_passage=True,  # 지문은 이미 변경됨
-                            regenerate_related_questions=False,  # 무한 루프 방지
-                            additional_requirements="새로운 지문 내용에 맞게 문제를 조정해주세요."
-                        )
-
-                        # 개별 문제 재생성
-                        question_data = self._question_to_dict(related_question)
-                        passage_data = regenerated_passage_data
-
-                        success, message, regenerated_q, _ = self.regenerate_question_from_data(
-                            question_data, passage_data, related_request
-                        )
-
-                        if success and regenerated_q:
-                            # DB 업데이트
-                            update_success = self._update_question_in_db(
-                                db, related_question, {"question": regenerated_q},
-                                self._determine_final_conditions(related_question, related_request)
-                            )
-
-                            if update_success:
-                                regenerated_questions.append(self._question_to_dict(related_question))
-
-            return regenerated_questions
-
-        except Exception as e:
-            print(f"연계 문제 재생성 중 오류: {e}")
-            return []
-
-    def _update_question_in_db(
-        self,
-        db: Session,
-        question: Question,
-        regenerated_data: Dict[str, Any],
-        final_conditions: Dict[str, Any]
-    ) -> bool:
-        """데이터베이스의 문제를 업데이트합니다."""
-        try:
-            question_data = regenerated_data.get("question", {})
-
-            # 기본 필드 업데이트
-            question.question_text = question_data.get("question_text", question.question_text)
-            question.question_type = final_conditions["question_type"]
-            question.question_subject = final_conditions["subject"]
-            question.question_detail_type = final_conditions["detail_type"]
-            question.question_difficulty = final_conditions["difficulty"]
-
-            # 선택적 필드 업데이트
-            if "question_choices" in question_data:
-                question.question_choices = question_data["question_choices"]
-            if "correct_answer" in question_data:
-                question.correct_answer = question_data["correct_answer"]
-            if "example_content" in question_data:
-                question.example_content = question_data["example_content"]
-            if "example_original_content" in question_data:
-                question.example_original_content = question_data["example_original_content"]
-            if "example_korean_translation" in question_data:
-                question.example_korean_translation = question_data["example_korean_translation"]
-            if "explanation" in question_data:
-                question.explanation = question_data["explanation"]
-            if "learning_point" in question_data:
-                question.learning_point = question_data["learning_point"]
-
-            return True
-
-        except Exception as e:
-            print(f"문제 업데이트 중 오류: {e}")
-            return False
-
-    def _update_passage_in_db(
-        self,
-        db: Session,
-        passage: Passage,
-        passage_data: Dict[str, Any]
-    ) -> bool:
-        """데이터베이스의 지문을 업데이트합니다."""
-        try:
-            if "passage_content" in passage_data:
-                passage.passage_content = passage_data["passage_content"]
-            if "original_content" in passage_data:
-                passage.original_content = passage_data["original_content"]
-            if "korean_translation" in passage_data:
-                passage.korean_translation = passage_data["korean_translation"]
-
-            return True
-
-        except Exception as e:
-            print(f"지문 업데이트 중 오류: {e}")
-            return False
-
-    def _question_to_dict(self, question: Question) -> Dict[str, Any]:
-        """Question 객체를 딕셔너리로 변환합니다."""
-        return {
-            "id": question.id,
-            "worksheet_id": question.worksheet_id,
-            "question_id": question.question_id,
-            "question_text": question.question_text,
-            "question_type": question.question_type,
-            "question_subject": question.question_subject,
-            "question_detail_type": question.question_detail_type,
-            "question_difficulty": question.question_difficulty,
-            "question_choices": question.question_choices,
-            "passage_id": question.passage_id,
-            "correct_answer": question.correct_answer,
-            "example_content": question.example_content,
-            "example_original_content": question.example_original_content,
-            "example_korean_translation": question.example_korean_translation,
-            "explanation": question.explanation,
-            "learning_point": question.learning_point,
-            "created_at": question.created_at.isoformat() if question.created_at else None
-        }
-
-    def _passage_to_dict(self, passage: Optional[Passage]) -> Optional[Dict[str, Any]]:
-        """Passage 객체를 딕셔너리로 변환합니다."""
-        if not passage:
+        except json.JSONDecodeError as e:
+            print(f"JSON 파싱 오류: {e}")
+            print(f"응답 텍스트: {response_text}")
             return None
-
-        return {
-            "id": passage.id,
-            "worksheet_id": passage.worksheet_id,
-            "passage_id": passage.passage_id,
-            "passage_type": passage.passage_type,
-            "passage_content": passage.passage_content,
-            "original_content": passage.original_content,
-            "korean_translation": passage.korean_translation,
-            "related_questions": passage.related_questions,
-            "created_at": passage.created_at.isoformat() if passage.created_at else None
-        }
+        except Exception as e:
+            print(f"응답 파싱 오류: {e}")
+            return None
