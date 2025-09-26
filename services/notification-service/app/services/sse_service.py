@@ -34,9 +34,9 @@ class SSEService:
             for notification in stored_notifications:
                 yield f"data: {json.dumps(notification)}\n\n"
 
-            # 저장된 알림들 삭제
-            if stored_notifications:
-                redis_client.clear_stored_notifications(user_type, user_id)
+            # 저장된 알림들 삭제 (정책 변경: 이제 클라이언트가 직접 삭제/읽음 처리 요청을 보내야 하므로 주석 처리)
+            # if stored_notifications:
+            #     redis_client.clear_stored_notifications(user_type, user_id)
 
             # 실시간 알림 스트리밍
             heartbeat_counter = 0
