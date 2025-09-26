@@ -59,7 +59,7 @@ async def send_message(
 ):
     """메시지 전송"""
     try:
-        sent_messages = message_service.send_message(
+        sent_messages = await message_service.send_message_async(
             current_user["user_id"],
             current_user["user_type"],
             message_request
