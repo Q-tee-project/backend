@@ -80,6 +80,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
     ports:
       - "8003:8000"
     depends_on:
@@ -139,6 +140,28 @@ services:
     volumes:
       - ./services/market-service:/app
       - ./uploads:/app/uploads
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
+  # Notification Service
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification_service
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - PORT=8000
+    ports:
+      - "8006:8000"
+    depends_on:
+      - redis
+    volumes:
+      - ./services/notification-service:/app
     networks:
       - qt_project_network
     restart: unless-stopped

@@ -6,10 +6,32 @@ from ..models.user import Teacher, Student, ClassRoom, StudentJoinRequest
 from ..schemas.message import MessageSendRequest, MessageRecipient, MessageResponse
 from datetime import datetime
 import math
+import httpx
+import os
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MessageService:
     def __init__(self, db: Session):
         self.db = db
+        self.notification_service_url = os.getenv('NOTIFICATION_SERVICE_URL', 'http://localhost:8003')
+
+    async def _send_notification_to_service(self, notification_data: dict) -> bool:
+        """notification-service로 알림 전송"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(
+                    f"{self.notification_service_url}/api/notifications/message",
+                    json=notification_data
+                )
+                response.raise_for_status()
+                logger.info(f"Notification sent successfully for message {notification_data['message_id']}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to send notification: {e}")
+            return False
 
     def get_user_classrooms(self, user_id: int, user_type: str) -> List[int]:
         """사용자가 속한 클래스룸 ID 목록 반환"""
@@ -85,9 +107,9 @@ class MessageService:
 
         return recipients
 
-    def send_message(self, sender_id: int, sender_type: str,
-                    message_request: MessageSendRequest) -> List[Message]:
-        """메시지 전송"""
+    async def send_message_async(self, sender_id: int, sender_type: str,
+                                message_request: MessageSendRequest) -> List[Message]:
+        """메시지 전송 (비동기)"""
         sent_messages = []
 
         for receiver_id in message_request.recipient_ids:
@@ -103,7 +125,7 @@ class MessageService:
             receiver_classrooms = set(self.get_user_classrooms(receiver_id, receiver_type))
             common_classroom = list(sender_classrooms & receiver_classrooms)[0]
 
-            # 메시지 생성
+            # 메시지 생성 및 저장
             message = Message(
                 subject=message_request.subject,
                 content=message_request.content,
@@ -115,10 +137,73 @@ class MessageService:
             )
 
             self.db.add(message)
+            self.db.flush()  # ID 생성을 위해 flush
+
+            # 발신자 정보 조회
+            if sender_type == "teacher":
+                sender = self.db.query(Teacher).filter(Teacher.id == sender_id).first()
+            else:
+                sender = self.db.query(Student).filter(Student.id == sender_id).first()
+
+            # 알림 데이터 준비
+            notification_data = {
+                "message_id": message.id,
+                "sender_id": sender_id,
+                "sender_name": sender.name if sender else "Unknown",
+                "sender_type": sender_type,
+                "receiver_id": receiver_id,
+                "receiver_type": receiver_type,
+                "subject": message_request.subject,
+                "preview": message_request.content[:50] + "..." if len(message_request.content) > 50 else message_request.content,
+                "classroom_id": common_classroom
+            }
+
+            # 알림 전송 (비동기, 실패해도 메시지 전송은 계속)
+            try:
+                await self._send_notification_to_service(notification_data)
+            except Exception as e:
+                logger.warning(f"Failed to send notification for message {message.id}: {e}")
+
             sent_messages.append(message)
 
         self.db.commit()
         return sent_messages
+
+    def send_message(self, sender_id: int, sender_type: str,
+                    message_request: MessageSendRequest) -> List[Message]:
+        """메시지 전송 (동기 - 기존 호환성 유지)"""
+        try:
+            return asyncio.run(self.send_message_async(sender_id, sender_type, message_request))
+        except Exception as e:
+            logger.error(f"Error in async message sending, falling back to sync: {e}")
+            # 알림 없이 메시지만 전송하는 폴백
+            sent_messages = []
+
+            for receiver_id in message_request.recipient_ids:
+                receiver_type = "student" if sender_type == "teacher" else "teacher"
+
+                if not self.validate_message_permission(sender_id, sender_type, receiver_id, receiver_type):
+                    continue
+
+                sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
+                receiver_classrooms = set(self.get_user_classrooms(receiver_id, receiver_type))
+                common_classroom = list(sender_classrooms & receiver_classrooms)[0]
+
+                message = Message(
+                    subject=message_request.subject,
+                    content=message_request.content,
+                    sender_id=sender_id,
+                    sender_type=sender_type,
+                    receiver_id=receiver_id,
+                    receiver_type=receiver_type,
+                    classroom_id=common_classroom
+                )
+
+                self.db.add(message)
+                sent_messages.append(message)
+
+            self.db.commit()
+            return sent_messages
 
     def get_messages(self, user_id: int, user_type: str,
                     page: int = 1, page_size: int = 15,

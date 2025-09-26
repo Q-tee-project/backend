@@ -140,11 +140,11 @@ class QuestionRegenerator:
 
 """
 
-        # 지문 재생성 여부
-        if passage and form_data.regenerate_passage:
+        # 지문 정보 (있는 경우)
+        if passage:
             prompt += f"""
-## 지문 재생성 요청
-기존 지문을 수정해서 새로운 지문을 만들어주세요.
+## 기존 지문 참고
+기존 지문을 참고하여 새로운 지문을 생성하거나 수정해주세요.
 
 기존 지문:
 ```json
@@ -182,16 +182,16 @@ class QuestionRegenerator:
 {{
   "questions": [
     {{
-      "question_id": 문제ID,
+      "question_id": 기존 문제ID 유지,
       "question_text": "재생성된 문제 텍스트",
       "question_type": "객관식|단답형|서술형",
       "question_subject": "문제 영역",
       "question_difficulty": "상|중|하",
       "question_detail_type": "세부 유형",
       "question_passage_id": 지문ID또는null,
-      "example_content": "예문 내용",
-      "example_original_content": "원문 예문",
-      "example_korean_translation": "한글 번역",
+      "example_content": "짧은 예문 텍스트 (40단어 이하, 1-3줄)",
+      "example_original_content": "원문 예문 텍스트",
+      "example_korean_translation": "예문 한글 번역",
       "question_choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
       "correct_answer": 정답인덱스또는텍스트,
       "explanation": "해설",
@@ -199,7 +199,7 @@ class QuestionRegenerator:
     }}
   ]"""
 
-        if passage and form_data.regenerate_passage:
+        if passage:
             prompt += f""",
   "passage": {{
     "passage_id": {passage.passage_id},
@@ -214,13 +214,32 @@ class QuestionRegenerator:
 }
 ```
 
-# 문제에 사용될 지문과 예문의 정의
-- 지문은 120~150단어 이상의 긴 글을 의미 난이도와 상관없이 길이를 준수하여 생성
-- 지문에는 2개 이상 3개 이하의 문제를 연계하여 출제
-- 예문은 40단어 이하의 짧은 글을 의미(1~3줄) 난이도와 상관없이 길이를 준수하여 생성
-- 지문은 반드시 유형별 json형식을 참고하여 생성
-- 예문의 소재는 글의 소재를 참고하여 생성
-- 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
+# 🚨 중요: 예문 규칙 🚨
+
+## 예문 (example) - 짧은 글 (40단어 이하, 1-3줄)
+- **example_content 필드에만 저장**: 단순 문자열로만 저장
+- 문제 해결에 필요한 짧은 예시 텍스트
+- JSON 구조 사용 금지 - 오직 평문 문자열만
+- 예: "The book is on the table.", "I like apples." 같은 짧은 문장
+
+## ⚠️ 절대 금지사항
+- example_content에 복잡한 JSON 구조 저장 금지"""
+
+        # 지문 관련 프롬프트는 지문이 있을 때만 추가
+        if passage:
+            prompt += """
+
+## 지문 (passage) - 긴 글 (120~150단어 이상)
+- **passage 필드에만 저장**: 긴 글을 복잡한 JSON 구조로 저장
+- 2개 이상 3개 이하의 문제가 연계되는 긴 글
+- 유형별 JSON 형식(article, correspondence, dialogue 등)을 정확히 사용
+- 예: 기사, 편지, 대화문, 안내문 등
+
+## ⚠️ 지문 관련 절대 금지사항
+- passage 내용을 example_content에 중복 저장 금지
+- 긴 글을 example_content에 넣지 말 것"""
+
+        prompt += """
 
 # 문제 질문과 예문 분리 규칙 (절대 위반 금지)
 
@@ -233,13 +252,18 @@ class QuestionRegenerator:
 - **문제의 질문(question_text)**: 순수한 한국어 지시문만 (예: "다음과 같이 소유격을 사용하여 쓰시오")
 - **예문 내용(example_content)**: 순수한 영어 예문만 (예: "<보기> The book of Tom → Tom's book\\n<문제> The car of my father")
 - **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
-- **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
+- **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**"""
+
+        # 지문 JSON 구조화 규칙은 지문이 있을 때만 추가
+        if passage:
+            prompt += """
 
 ## 📋 지문 JSON 구조화 규칙 (지문 재생성 시)
 
-**지문 유형을 정확히 식별하고 해당 형식에 맞게 JSON을 구성하세요:**
+**해당 형식에 맞게 JSON을 구성하세요:**
+**사용자의 요청사항에 적합한 passage_type을 선택하세요.**
 
-### 1. article (기사/에세이/스토리)
+### 1. article (설명문, 논설문, 기사, 연구 보고서, 블로그 포스트, 책의 한 부분 등 가장 기본적인 '만능' 유형)
 ```json
 "passage": {
   "passage_type": "article",
@@ -267,7 +291,7 @@ class QuestionRegenerator:
 }
 ```
 
-### 2. correspondence (편지/이메일/공문)
+### 2. correspondence (이메일, 편지, 메모, 사내 공지 등 소통 유형)
 ```json
 "passage": {
   "passage_type": "correspondence",
@@ -307,7 +331,7 @@ class QuestionRegenerator:
 }
 ```
 
-### 3. dialogue (대화)
+### 3. dialogue (문자 메시지, 채팅, 인터뷰, 연극 대본 등 대화 유형)
 ```json
 "passage": {
   "passage_type": "dialogue",
@@ -341,7 +365,7 @@ class QuestionRegenerator:
 }
 ```
 
-### 4. informational (안내문/포스터)
+### 4. informational (광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등 정보성 양식)
 ```json
 "passage": {
   "passage_type": "informational",
@@ -381,7 +405,7 @@ class QuestionRegenerator:
 }
 ```
 
-### 5. review (리뷰/후기)
+### 5. review (상품 후기, 영화 평점, 식당 리뷰 등 리뷰 유형)
 ```json
 "passage": {
   "passage_type": "review",
@@ -421,7 +445,9 @@ class QuestionRegenerator:
 }
 ```
 
-**⚠️ 중요: 지문 내용을 보고 가장 적합한 유형을 선택하고, 해당 형식을 정확히 따르세요!**
+**⚠️ 중요: 지문 내용을 보고 가장 적합한 유형을 선택하고, 해당 형식을 정확히 따르세요!**"""
+
+        prompt += """
 
 ## 🔥 절대 준수 규칙
 1. **JSON 형식만 출력** - 설명이나 추가 텍스트 절대 금지
@@ -429,7 +455,15 @@ class QuestionRegenerator:
 3. **객관식이 아닌 경우** - question_choices는 빈 배열 []로 설정
 4. **따옴표와 쉼표** - JSON 문법 엄격히 준수
 5. **중괄호 { } 정확히 매칭** - 문법 오류 시 파싱 실패
-6. **지문 유형 정확성** - 위에서 명시한 passage_type에 맞는 정확한 구조 사용
+6. **🚨 example_content는 반드시 단순 문자열** - JSON 구조나 복잡한 객체 절대 금지"""
+
+        # 지문 관련 규칙은 지문이 있을 때만 추가
+        if passage:
+            prompt += """
+7. **지문 유형 정확성** - 위에서 명시한 passage_type에 맞는 정확한 구조 사용
+8. **🚨 passage와 example 중복 금지** - 같은 내용을 두 곳에 저장하지 말 것"""
+
+        prompt += """
 
 ## 📚 교육적 품질 기준
 1. **학년 수준 적합성** - 어휘와 문법 난이도 정확히 맞춤
