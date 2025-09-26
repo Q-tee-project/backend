@@ -157,8 +157,12 @@ class ExternalService:
                 url = f"{base_url}/api/worksheets/copy"
             elif service == "korean":
                 url = f"{base_url}/api/korean-generation/copy"
+            elif service == "english":
+                url = f"{base_url}/market/worksheets/copy"
             else:
                 url = f"{base_url}/worksheets/copy"
+
+            print(f"[DEBUG] Calling copy API: {url} with data: {copy_data}")
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -167,13 +171,21 @@ class ExternalService:
                     timeout=20.0
                 )
 
+                print(f"[DEBUG] Copy API response: status={response.status_code}, text={response.text}")
+
                 if response.status_code == 201:
                     result = response.json()
-                    return result.get("new_worksheet_id")
+                    new_id = result.get("new_worksheet_id")
+                    print(f"[DEBUG] Copy successful: new_worksheet_id={new_id}")
+                    return new_id
+                else:
+                    print(f"[ERROR] Copy failed: status={response.status_code}, response={response.text}")
                 return None
 
         except Exception as e:
             print(f"Error copying worksheet from {service}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
 
     @staticmethod

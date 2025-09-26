@@ -593,3 +593,35 @@ async def copy_worksheet_endpoint(
         )
 
     return {"new_worksheet_id": new_worksheet_id}
+
+
+@router.post("/copy", status_code=status.HTTP_201_CREATED)
+async def copy_worksheet_market_endpoint(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """마켓플레이스용 워크시트 복사 엔드포인트 (/api/korean-generation/copy)"""
+    source_worksheet_id = request.get("source_worksheet_id")
+    target_user_id = request.get("target_user_id")
+    new_title = request.get("new_title")
+
+    if not all([source_worksheet_id, target_user_id, new_title]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_worksheet_id, target_user_id, new_title are required."
+        )
+
+    new_worksheet_id = KoreanGenerationService.copy_worksheet(
+        db,
+        source_worksheet_id=source_worksheet_id,
+        target_user_id=target_user_id,
+        new_title=new_title
+    )
+
+    if not new_worksheet_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source worksheet not found."
+        )
+
+    return {"new_worksheet_id": new_worksheet_id}
