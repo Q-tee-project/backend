@@ -152,7 +152,13 @@ class ExternalService:
                 "copy_type": "purchase"  # 구매로 인한 복사임을 명시
             }
 
-            url = f"{service_urls[service]}/worksheets/copy"
+            base_url = service_urls[service]
+            if service == "math":
+                url = f"{base_url}/api/worksheets/copy"
+            elif service == "korean":
+                url = f"{base_url}/api/korean-generation/copy"
+            else:
+                url = f"{base_url}/worksheets/copy"
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(

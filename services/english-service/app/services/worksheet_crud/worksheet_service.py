@@ -2,48 +2,90 @@
 워크시트 제목 수정 서비스
 워크시트의 제목만 수정할 수 있는 서비스
 """
-from typing import Dict, Any
 from sqlalchemy.orm import Session
-
-from app.models.worksheet import Worksheet
-
+from typing import List, Optional, Dict, Any
+from ....models.english_learning import Worksheet, Question, Passage
 
 class WorksheetService:
-    """워크시트 제목 수정을 담당하는 서비스 클래스"""
+    @staticmethod
+    def create_worksheet(db: Session, worksheet_data: Dict[str, Any]) -> Worksheet:
+        db_worksheet = Worksheet(**worksheet_data)
+        db.add(db_worksheet)
+        db.commit()
+        db.refresh(db_worksheet)
+        return db_worksheet
 
-    def __init__(self, db: Session):
-        self.db = db
+    @staticmethod
+    def get_worksheet(db: Session, worksheet_id: int) -> Optional[Worksheet]:
+        return db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
 
-    def update_worksheet_title(self, worksheet_id: int, new_title: str) -> Worksheet:
-        """워크시트 제목을 업데이트합니다"""
-        worksheet = self._get_worksheet_or_404(worksheet_id)
+    @staticmethod
+    def get_worksheets_by_user(db: Session, user_id: int) -> List[Worksheet]:
+        return db.query(Worksheet).filter(Worksheet.user_id == user_id).all()
 
-        # 제목 유효성 검사
-        self._validate_title(new_title)
+    @staticmethod
+    def update_worksheet(db: Session, worksheet_id: int, worksheet_data: Dict[str, Any]) -> Optional[Worksheet]:
+        db_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        if db_worksheet:
+            for key, value in worksheet_data.items():
+                setattr(db_worksheet, key, value)
+            db.commit()
+            db.refresh(db_worksheet)
+        return db_worksheet
 
-        worksheet.worksheet_name = new_title
-        self.db.commit()
-        self.db.refresh(worksheet)
-        return worksheet
+    @staticmethod
+    def delete_worksheet(db: Session, worksheet_id: int) -> bool:
+        db_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        if db_worksheet:
+            db.delete(db_worksheet)
+            db.commit()
+            return True
+        return False
 
-    def _get_worksheet_or_404(self, worksheet_id: int) -> Worksheet:
-        """워크시트를 조회하거나 404 에러 발생"""
-        worksheet = self.db.query(Worksheet).filter(
-            Worksheet.worksheet_id == worksheet_id
-        ).first()
+    @staticmethod
+    def copy_worksheet(db: Session, source_worksheet_id: int, target_user_id: int, new_title: str) -> Optional[int]:
+        """워크시트와 포함된 문제들을 복사"""
+        try:
+            # 1. 원본 워크시트 조회
+            source_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == source_worksheet_id).first()
+            if not source_worksheet:
+                return None
 
-        if not worksheet:
-            raise ValueError("문제지를 찾을 수 없습니다.")
+            # 2. 새 워크시트 생성 (기본 정보 복사)
+            new_worksheet = Worksheet(
+                user_id=target_user_id,
+                worksheet_name=new_title,
+                school_level=source_worksheet.school_level,
+                grade=source_worksheet.grade,
+                problem_type=source_worksheet.problem_type,
+                total_questions=source_worksheet.total_questions,
+                status="completed"
+            )
+            db.add(new_worksheet)
+            db.flush()
 
-        return worksheet
+            # 3. 원본 문제들 조회
+            source_questions = db.query(Question).filter(Question.worksheet_id == source_worksheet_id).all()
 
-    def _validate_title(self, title: str) -> None:
-        """제목 유효성 검사"""
-        if not title or not isinstance(title, str):
-            raise ValueError("제목은 문자열이어야 합니다.")
+            # 4. 문제들을 새 워크시트에 복사
+            for source_question in source_questions:
+                new_question = Question(
+                    worksheet_id=new_worksheet.worksheet_id,
+                    question_number=source_question.question_number,
+                    question_text=source_question.question_text,
+                    question_type=source_question.question_type,
+                    passage_id=source_question.passage_id,
+                    options=source_question.options,
+                    answer=source_question.answer,
+                    explanation=source_question.explanation,
+                    score=source_question.score
+                )
+                db.add(new_question)
+            
+            db.commit()
+            return new_worksheet.worksheet_id
 
-        if not title.strip():
-            raise ValueError("제목은 공백일 수 없습니다.")
-
-        if len(title.strip()) > 200:
-            raise ValueError("제목은 200자를 초과할 수 없습니다.")
+        except Exception as e:
+            db.rollback()
+            print(f"Error copying worksheet: {str(e)}")
+            return None

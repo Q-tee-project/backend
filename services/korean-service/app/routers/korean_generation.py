@@ -562,3 +562,34 @@ async def regenerate_problem_async(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"비동기 국어 문제 재생성 요청 중 오류 발생: {str(e)}"
         )
+
+@router.post("/worksheets/copy", status_code=status.HTTP_201_CREATED)
+async def copy_worksheet_endpoint(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """워크시트 복사 엔드포인트"""
+    source_worksheet_id = request.get("source_worksheet_id")
+    target_user_id = request.get("target_user_id")
+    new_title = request.get("new_title")
+
+    if not all([source_worksheet_id, target_user_id, new_title]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_worksheet_id, target_user_id, new_title are required."
+        )
+
+    new_worksheet_id = KoreanGenerationService.copy_worksheet(
+        db,
+        source_worksheet_id=source_worksheet_id,
+        target_user_id=target_user_id,
+        new_title=new_title
+    )
+
+    if not new_worksheet_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source worksheet not found."
+        )
+
+    return {"new_worksheet_id": new_worksheet_id}

@@ -85,7 +85,14 @@ async def create_product(
         if existing:
             raise HTTPException(status_code=400, detail="이미 등록된 워크시트입니다.")
 
-        # 3. 상품 생성
+        # 3. 구매한 워크시트 재등록 방지
+        is_purchased = await MarketService.check_purchased_worksheet(
+            db, current_user["id"], product_data.original_service, product_data.original_worksheet_id
+        )
+        if is_purchased:
+            raise HTTPException(status_code=400, detail="구매한 워크시트는 다시 등록할 수 없습니다.")
+
+        # 4. 상품 생성
         product = await MarketService.create_product_from_worksheet(
             db=db,
             product_data=product_data,
@@ -285,16 +292,27 @@ async def get_purchased_worksheet(
     current_user: dict = Depends(get_current_user)
 ):
     """구매한 워크시트 조회 (구매자의 워크시트 서비스에 추가된 것)"""
-    worksheet = await MarketService.get_purchased_worksheet_by_purchase_id(
-        db=db,
-        purchase_id=purchase_id,
-        buyer_id=current_user["id"]
-    )
+    try:
+        print(f"[DEBUG] 구매 기록 조회 - purchase_id: {purchase_id}, user_id: {current_user['id']}")
 
-    if not worksheet:
-        raise HTTPException(status_code=404, detail="구매 기록을 찾을 수 없습니다.")
+        worksheet = await MarketService.get_purchased_worksheet_by_purchase_id(
+            db=db,
+            purchase_id=purchase_id,
+            buyer_id=current_user["id"]
+        )
 
-    return worksheet
+        if not worksheet:
+            print(f"[DEBUG] 구매 기록을 찾을 수 없음 - purchase_id: {purchase_id}")
+            raise HTTPException(status_code=404, detail="구매 기록을 찾을 수 없습니다.")
+
+        print(f"[DEBUG] 구매 기록 찾음: {worksheet}")
+        return worksheet
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] 구매 기록 조회 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="구매 기록 조회 중 오류가 발생했습니다.")
 
 
 # ==================== 리뷰 시스템 API ====================

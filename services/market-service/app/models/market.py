@@ -97,6 +97,9 @@ class MarketPurchase(Base):
     payment_method = Column(String(50), nullable=True)
     payment_status = Column(String(20), default="completed")
 
+    # 복사된 워크시트 정보
+    copied_worksheet_id = Column(Integer, nullable=True)  # 복사된 워크시트 ID
+
     # 시간 관리
     purchased_at = Column(DateTime(timezone=True), server_default=func.now())
 

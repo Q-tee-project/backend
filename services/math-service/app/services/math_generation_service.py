@@ -622,3 +622,68 @@ JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인�
             import traceback
             traceback.print_exc()
             return []
+
+    @staticmethod
+    def copy_worksheet(db: Session, source_worksheet_id: int, target_user_id: int, new_title: str) -> Optional[int]:
+        """워크시트와 포함된 문제들을 복사"""
+        try:
+            # 1. 원본 워크시트 조회
+            source_worksheet = db.query(Worksheet).filter(Worksheet.id == source_worksheet_id).first()
+            if not source_worksheet:
+                return None
+
+            # 2. 새로운 generation_id 생성
+            new_generation_id = str(uuid.uuid4())
+
+            # 3. 새 워크시트 생성 (필수 필드 포함 모든 정보 복사)
+            new_worksheet = Worksheet(
+                title=new_title,
+                school_level=source_worksheet.school_level,
+                grade=source_worksheet.grade,
+                semester=source_worksheet.semester,
+                unit_number=source_worksheet.unit_number,
+                unit_name=source_worksheet.unit_name,
+                chapter_number=source_worksheet.chapter_number,
+                chapter_name=source_worksheet.chapter_name,
+                problem_count=source_worksheet.problem_count,
+                difficulty_ratio=source_worksheet.difficulty_ratio,
+                problem_type_ratio=source_worksheet.problem_type_ratio,
+                user_prompt=source_worksheet.user_prompt,
+                generation_id=new_generation_id,  # 새로운 generation_id 추가
+                actual_difficulty_distribution=source_worksheet.actual_difficulty_distribution,
+                actual_type_distribution=source_worksheet.actual_type_distribution,
+                status=WorksheetStatus.COMPLETED,
+                teacher_id=target_user_id,
+                created_by=target_user_id
+            )
+            db.add(new_worksheet)
+            db.flush()
+
+            # 4. 원본 문제들 조회
+            source_problems = db.query(Problem).filter(Problem.worksheet_id == source_worksheet_id).all()
+
+            # 5. 문제들을 새 워크시트에 복사
+            for source_problem in source_problems:
+                new_problem = Problem(
+                    worksheet_id=new_worksheet.id,
+                    sequence_order=source_problem.sequence_order,
+                    problem_type=source_problem.problem_type,
+                    difficulty=source_problem.difficulty,
+                    question=source_problem.question,
+                    choices=source_problem.choices,
+                    correct_answer=source_problem.correct_answer,
+                    explanation=source_problem.explanation,
+                    latex_content=source_problem.latex_content,
+                    has_diagram=source_problem.has_diagram,
+                    diagram_type=source_problem.diagram_type,
+                    diagram_elements=source_problem.diagram_elements
+                )
+                db.add(new_problem)
+            
+            db.commit()
+            return new_worksheet.id
+
+        except Exception as e:
+            db.rollback()
+            print(f"Error copying worksheet: {str(e)}")
+            return None
