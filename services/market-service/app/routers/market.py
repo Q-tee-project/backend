@@ -47,7 +47,8 @@ async def get_products(
 @router.get("/products/{product_id}", response_model=MarketProductResponse)
 async def get_product(
     product_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     """상품 상세 조회"""
     product = await MarketService.get_product_detail_with_preview(db, product_id)
@@ -55,8 +56,9 @@ async def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
 
-    # 조회수 증가
-    await MarketService.increment_view_count(db, product_id)
+    # 조회수 증가 (자기 상품이 아닌 경우에만)
+    if product.seller_id != current_user["id"]:
+        await MarketService.increment_view_count(db, product_id)
 
     return product
 

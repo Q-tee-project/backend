@@ -53,6 +53,7 @@ class MarketProductResponse(MarketProductBase):
     # 통계
     view_count: int
     purchase_count: int
+    total_revenue: int
     total_reviews: int
     satisfaction_rate: float
 
@@ -78,6 +79,7 @@ class MarketProductListResponse(BaseModel):
     satisfaction_rate: float
     view_count: int
     purchase_count: int
+    total_revenue: int
     created_at: datetime
 
     class Config:

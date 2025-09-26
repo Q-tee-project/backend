@@ -46,22 +46,35 @@ class MarketService:
         db: Session, user_id: int, service: str, worksheet_id: int
     ) -> bool:
         """사용자가 구매한 워크시트인지 확인 (구매한 워크시트는 재등록 불가)"""
-        # 해당 워크시트를 원본으로 하는 마켓 상품이 있는지 확인
+        print(f"[DEBUG] check_purchased_worksheet - user_id: {user_id}, service: {service}, worksheet_id: {worksheet_id}")
+
+        # 방법 1: 해당 워크시트를 원본으로 하는 마켓 상품이 있고, 그것을 구매했는지 확인
         original_product = db.query(MarketProduct).filter(
             MarketProduct.original_service == service,
             MarketProduct.original_worksheet_id == worksheet_id
         ).first()
 
-        if not original_product:
-            return False
+        if original_product:
+            purchase = db.query(MarketPurchase).filter(
+                MarketPurchase.buyer_id == user_id,
+                MarketPurchase.product_id == original_product.id
+            ).first()
+            if purchase:
+                print(f"[DEBUG] Found purchase via original worksheet - purchase_id: {purchase.id}")
+                return True
 
-        # 해당 사용자가 이 상품을 구매했는지 확인
-        purchase = db.query(MarketPurchase).filter(
+        # 방법 2: 해당 worksheet_id가 구매 기록의 copied_worksheet_id와 일치하는지 확인
+        copied_purchase = db.query(MarketPurchase).filter(
             MarketPurchase.buyer_id == user_id,
-            MarketPurchase.product_id == original_product.id
+            MarketPurchase.copied_worksheet_id == worksheet_id
         ).first()
 
-        return purchase is not None
+        if copied_purchase:
+            print(f"[DEBUG] Found purchase via copied worksheet - purchase_id: {copied_purchase.id}")
+            return True
+
+        print(f"[DEBUG] No purchase found for this worksheet")
+        return False
 
     @staticmethod
     async def create_product_from_worksheet(
@@ -113,7 +126,11 @@ class MarketService:
             # 메타데이터
             school_level=worksheet_info.get('school_level', ''),
             grade=worksheet_info.get('grade', 1),
-            subject_type=worksheet_info.get('subject_type', ''),
+            subject_type={
+                'math': '수학',
+                'korean': '국어',
+                'english': '영어'
+            }.get(product_data.original_service, worksheet_info.get('subject_type', '')),
             semester=worksheet_info.get('semester'),
             unit_info=worksheet_info.get('unit_info'),
             tags=tags,
@@ -151,6 +168,7 @@ class MarketService:
             original_worksheet_id=db_product.original_worksheet_id,
             view_count=db_product.view_count,
             purchase_count=db_product.purchase_count,
+            total_revenue=db_product.total_revenue,
             total_reviews=db_product.total_reviews,
             satisfaction_rate=db_product.satisfaction_rate,
             created_at=db_product.created_at,
@@ -219,6 +237,7 @@ class MarketService:
                 satisfaction_rate=product.satisfaction_rate,
                 view_count=product.view_count,
                 purchase_count=product.purchase_count,
+                total_revenue=product.total_revenue,
                 created_at=product.created_at
             ))
 
@@ -258,6 +277,7 @@ class MarketService:
             original_worksheet_id=product.original_worksheet_id,
             view_count=product.view_count,
             purchase_count=product.purchase_count,
+            total_revenue=product.total_revenue,
             total_reviews=product.total_reviews,
             satisfaction_rate=product.satisfaction_rate,
             created_at=product.created_at,
@@ -313,6 +333,7 @@ class MarketService:
                 satisfaction_rate=product.satisfaction_rate,
                 view_count=product.view_count,
                 purchase_count=product.purchase_count,
+                total_revenue=product.total_revenue,
                 created_at=product.created_at
             ))
 
@@ -447,6 +468,7 @@ class MarketService:
 
         # 5. 상품 통계 업데이트
         product.purchase_count += 1
+        product.total_revenue += int(price)
 
         db.commit()
         db.refresh(purchase)

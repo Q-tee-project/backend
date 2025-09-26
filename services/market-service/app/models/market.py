@@ -63,6 +63,7 @@ class MarketProduct(Base):
     # 통계
     view_count = Column(Integer, default=0)
     purchase_count = Column(Integer, default=0)
+    total_revenue = Column(Integer, default=0)  # 누적 판매금액
 
     # 리뷰 통계 (자동 계산)
     total_reviews = Column(Integer, default=0)
