@@ -105,6 +105,85 @@ async def clear_stored_notifications(user_type: str, user_id: int):
         logger.error(f"Error clearing stored notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.patch("/stored/{user_type}/{user_id}/{notification_id}/read")
+async def mark_notification_as_read(user_type: str, user_id: int, notification_id: str):
+    """특정 알림을 읽음 처리"""
+    if user_type not in ["teacher", "student"]:
+        raise HTTPException(status_code=400, detail="Invalid user type")
+
+    try:
+        success = redis_client.mark_notification_as_read(user_type, user_id, notification_id)
+
+        if success:
+            return {"success": True, "message": f"Notification {notification_id} marked as read"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Notification {notification_id} not found")
+
+    except Exception as e:
+        logger.error(f"Error marking notification as read: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/stored/{user_type}/{user_id}/read-all")
+async def mark_all_notifications_as_read(user_type: str, user_id: int):
+    """모든 알림을 읽음 처리"""
+    if user_type not in ["teacher", "student"]:
+        raise HTTPException(status_code=400, detail="Invalid user type")
+
+    try:
+        success = redis_client.mark_all_notifications_as_read(user_type, user_id)
+
+        if success:
+            return {"success": True, "message": "All notifications marked as read"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to mark all notifications as read")
+
+    except Exception as e:
+        logger.error(f"Error marking all notifications as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/stored/{user_type}/{user_id}/type/{notification_type}")
+async def delete_notifications_by_type(user_type: str, user_id: int, notification_type: str):
+    """특정 타입의 모든 알림 삭제"""
+    if user_type not in ["teacher", "student"]:
+        raise HTTPException(status_code=400, detail="Invalid user type")
+
+    try:
+        success = redis_client.delete_notifications_by_type(user_type, user_id, notification_type)
+
+        if success:
+            return {"success": True, "message": f"All {notification_type} notifications deleted"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete notifications by type")
+
+    except Exception as e:
+        logger.error(f"Error deleting notifications by type: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/stored/{user_type}/{user_id}/{notification_type}/{notification_id}")
+async def delete_single_notification(user_type: str, user_id: int, notification_type: str, notification_id: str):
+    """ID와 Type으로 특정 알림 하나만 삭제"""
+    if user_type not in ["teacher", "student"]:
+        raise HTTPException(status_code=400, detail="Invalid user type")
+
+    try:
+        success = redis_client.delete_notification_by_id(user_type, user_id, notification_id, notification_type)
+
+        if success:
+            return {"success": True, "message": f"Notification {notification_id} deleted."}
+        else:
+            # 404 Not Found를 반환하는 것이 더 적절할 수 있습니다.
+            raise HTTPException(status_code=404, detail=f"Notification {notification_id} not found.")
+
+    except Exception as e:
+        logger.error(f"Error deleting single notification: {e}")
+        # 이미 HTTPException인 경우 다시 감싸지 않도록 확인
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/test/{user_type}/{user_id}")
 async def send_test_notification(user_type: str, user_id: int):
     """테스트 알림 전송"""
