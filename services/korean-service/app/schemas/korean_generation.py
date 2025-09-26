@@ -15,8 +15,6 @@ class KoreanType(str, Enum):
 
 class QuestionType(str, Enum):
     MULTIPLE_CHOICE = "객관식"
-    ESSAY = "서술형"
-    SHORT_ANSWER = "단답형"
 
 class Difficulty(str, Enum):
     HIGH = "상"
@@ -33,7 +31,7 @@ class KoreanProblemGenerationRequest(BaseModel):
     user_text: Optional[str] = Field(None, max_length=500, description="사용자 요구사항")
 
     # 비율 설정 (단일 도메인 내에서만)
-    question_type_ratio: Optional[Dict[str, int]] = Field(None, description="문제 형식별 비율")
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = Field(None, description="난이도별 비율")
 
 class KoreanWorksheetCreate(BaseModel):
@@ -45,7 +43,7 @@ class KoreanWorksheetCreate(BaseModel):
     difficulty: Difficulty
     problem_count: int
     user_text: Optional[str] = None
-    question_type_ratio: Optional[Dict[str, int]] = None
+    # question_type_ratio: 국어는 객관식만 지원하므로 제거
     difficulty_ratio: Optional[Dict[str, int]] = None
 
 class KoreanWorksheetResponse(BaseModel):
@@ -107,6 +105,21 @@ class AssignmentDeploymentResponse(BaseModel):
     status: str
     deployed_at: str
 
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """ORM 객체에서 deployed_at을 문자열로 변환"""
+        return cls(
+            id=deployment.id,
+            assignment_id=deployment.assignment_id,
+            student_id=deployment.student_id,
+            classroom_id=deployment.classroom_id,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat() if deployment.deployed_at else ""
+        )
+
 class StudentAssignmentResponse(BaseModel):
     id: int
     title: str
@@ -116,3 +129,21 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: str
     assignment_id: int
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """AssignmentDeployment 객체에서 필요한 정보 추출"""
+        assignment = deployment.assignment
+        return cls(
+            id=deployment.id,
+            title=assignment.title,
+            korean_type=assignment.korean_type,
+            question_type=assignment.question_type,
+            problem_count=assignment.problem_count,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat(),
+            assignment_id=assignment.id
+        )

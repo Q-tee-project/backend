@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
       POSTGRES_DB: ${DB_NAME:-qt_project_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
@@ -35,6 +35,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
       - "8001:8000"
@@ -56,6 +57,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
       - "8002:8000"
@@ -76,8 +78,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${AUTH_SECRET_KEY:-your-secret-key-change-in-production}
+      - SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
     ports:
       - "8003:8000"
     depends_on:
@@ -100,14 +103,65 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - PORT=8004
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
+      - PORT=8000
     ports:
-      - "8004:8004"
+      - "8004:8000"
     depends_on:
       - postgres
       - redis
     volumes:
       - ./services/korean-service:/app
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
+  # Market Service
+  market-service:
+    build:
+      context: ./services/market-service
+      dockerfile: Dockerfile
+    container_name: market_service
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
+      - KOREAN_SERVICE_URL=http://korean-service:8000
+      - MATH_SERVICE_URL=http://math-service:8000
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
+      - PORT=8000
+    ports:
+      - "8005:8000"
+    depends_on:
+      - postgres
+      - korean-service
+      - math-service
+      - auth-service
+    volumes:
+      - ./services/market-service:/app
+      - ./uploads:/app/uploads
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
+  # Notification Service
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification_service
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - PORT=8000
+    ports:
+      - "8006:8000"
+    depends_on:
+      - redis
+    volumes:
+      - ./services/notification-service:/app
     networks:
       - qt_project_network
     restart: unless-stopped
@@ -123,6 +177,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
     depends_on:
       - postgres
       - redis
@@ -143,6 +198,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
     depends_on:
       - postgres
       - redis

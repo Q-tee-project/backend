@@ -57,7 +57,7 @@ echo "Auth 서비스 테이블 생성 중... 10초 대기"
 sleep 10
 
 # 5. 나머지 서비스 시작
-docker-compose up -d math-service english-service celery-worker flower
+docker-compose up -d math-service english-service korean-service celery-worker flower
 
 # 6. 모든 서비스 상태 확인
 docker-compose ps

@@ -39,7 +39,7 @@ docker-compose up -d postgres redis
 sleep 20
 docker-compose up -d auth-service  
 sleep 10
-docker-compose up -d math-service english-service celery-worker flower
+docker-compose up -d math-service english-service korean-service celery-worker flower
 
 # 3. 상태 확인
 docker-compose ps

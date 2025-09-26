@@ -38,13 +38,12 @@ class DifficultyRatio(BaseModel):
 
 
 class ProblemTypeRatio(BaseModel):
-    """문제 유형 비율 설정 (객관식:주관식:단답형)"""
+    """문제 유형 비율 설정 (객관식:단답형)"""
     multiple_choice: int = Field(ge=0, le=100, description="객관식 비율")
-    essay: int = Field(ge=0, le=100, description="주관식 비율")
     short_answer: int = Field(ge=0, le=100, description="단답형 비율")
-    
+
     def model_post_init(self, __context):
-        total = self.multiple_choice + self.essay + self.short_answer
+        total = self.multiple_choice + self.short_answer
         if total != 100:
             raise ValueError("문제 유형 비율의 합은 100이어야 합니다")
 
@@ -97,7 +96,7 @@ class GenerationSummary(BaseModel):
     """생성 요약 정보"""
     total_problems: int
     difficulty_distribution: Dict[str, int]  # {"A": 3, "B": 4, "C": 3}
-    type_distribution: Dict[str, int]  # {"multiple_choice": 5, "essay": 3, "short_answer": 2}
+    type_distribution: Dict[str, int]  # {"multiple_choice": 5, "short_answer": 5}
 
 
 class MathProblemGenerationResponse(BaseModel):
@@ -162,6 +161,21 @@ class AssignmentDeploymentResponse(BaseModel):
     status: str
     deployed_at: str
 
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """ORM 객체에서 deployed_at을 문자열로 변환"""
+        return cls(
+            id=deployment.id,
+            assignment_id=deployment.assignment_id,
+            student_id=deployment.student_id,
+            classroom_id=deployment.classroom_id,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat() if deployment.deployed_at else ""
+        )
+
 
 class StudentAssignmentResponse(BaseModel):
     """학생용 과제 응답"""
@@ -173,6 +187,24 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: str
     assignment_id: int
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, deployment):
+        """AssignmentDeployment 객체에서 필요한 정보 추출"""
+        assignment = deployment.assignment
+        return cls(
+            id=deployment.id,
+            title=assignment.title,
+            unit_name=assignment.unit_name,
+            chapter_name=assignment.chapter_name,
+            problem_count=assignment.problem_count,
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat() if deployment.deployed_at else "",
+            assignment_id=assignment.id
+        )
 
 
 # ===== 테스트 세션 관련 스키마 =====

@@ -46,11 +46,9 @@ celery_app.conf.update(
     worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
     worker_task_log_format='[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s',
     # 수학 서비스 전용 큐 설정
+    task_default_queue='math_queue',
     task_routes={
-        'app.tasks.generate_math_problems_task': {'queue': 'math_queue'},
-        'app.tasks.grade_problems_task': {'queue': 'math_queue'},
-        'app.tasks.grade_problems_mixed_task': {'queue': 'math_queue'},
-        'app.tasks.get_task_status': {'queue': 'math_queue'},
+        'app.tasks.*': {'queue': 'math_queue'},
     },
 )
 

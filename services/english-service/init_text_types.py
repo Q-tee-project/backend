@@ -6,8 +6,8 @@
 """
 
 from sqlalchemy.orm import sessionmaker
-from database import engine
-from models import TextType
+from app.database import engine
+from app.models import TextType
 from datetime import datetime
 
 # 세션 생성
