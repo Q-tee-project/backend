@@ -19,6 +19,71 @@ from typing import Dict, Any
 
 router = APIRouter()
 
+@router.post("/assignments/create", response_model=dict)
+async def create_assignment(
+    create_request: dict,
+    db: Session = Depends(get_db)
+):
+    """과제 생성 (배포하지 않고 생성만)"""
+    try:
+        worksheet_id = create_request.get("worksheet_id")
+        classroom_id = create_request.get("classroom_id")
+
+        # 워크시트 존재 확인
+        worksheet = db.query(Worksheet).filter(
+            Worksheet.worksheet_id == worksheet_id
+        ).first()
+
+        if not worksheet:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="워크시트를 찾을 수 없습니다"
+            )
+
+        # 기존 Assignment 확인 (같은 워크시트, 같은 클래스룸)
+        existing_assignment = db.query(Assignment).filter(
+            Assignment.worksheet_id == worksheet_id,
+            Assignment.classroom_id == classroom_id
+        ).first()
+
+        if existing_assignment:
+            return {
+                "success": True,
+                "message": "이미 생성된 과제입니다.",
+                "assignment_id": existing_assignment.id,
+                "worksheet_id": worksheet_id
+            }
+
+        # 새 Assignment 생성 (배포하지 않음)
+        assignment = Assignment(
+            title=worksheet.worksheet_name,
+            worksheet_id=worksheet.worksheet_id,
+            classroom_id=classroom_id,
+            teacher_id=worksheet.teacher_id,
+            problem_type=worksheet.problem_type,
+            total_questions=worksheet.total_questions,
+            is_deployed="draft"  # 초안 상태로 생성 (배포되지 않음)
+        )
+        db.add(assignment)
+        db.commit()
+        db.refresh(assignment)
+
+        return {
+            "success": True,
+            "message": "과제가 성공적으로 생성되었습니다.",
+            "assignment_id": assignment.id,
+            "worksheet_id": worksheet_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"과제 생성 중 오류 발생: {str(e)}"
+        )
+
 @router.post("/assignments/deploy", response_model=dict)
 async def deploy_assignment_simple(
     deploy_request: SimpleAssignmentDeployRequest,
@@ -247,10 +312,10 @@ async def get_deployed_assignments(
 ):
     """특정 클래스룸의 배포된 과제 목록 조회"""
     try:
-        # 클래스룸에 배포된 과제들 조회
+        # 클래스룸의 모든 과제들 조회 (초안 + 배포된 과제)
         assignments = db.query(Assignment).filter(
             Assignment.classroom_id == classroom_id,
-            Assignment.is_deployed == "deployed"
+            Assignment.is_deployed.in_(["draft", "deployed"])
         ).all()
 
         response_data = []
@@ -290,6 +355,24 @@ async def get_deployed_assignments(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"배포된 과제 목록 조회 중 오류 발생: {str(e)}"
+        )
+
+@router.get("/assignments/classrooms/{class_id}/assignments")
+async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get_db)):
+    """특정 클래스룸의 모든 과제 목록 조회 (선생님용) - 국어/수학과 동일"""
+    try:
+        # 클래스룸의 모든 과제들 조회 (초안 + 배포된 과제)
+        assignments = db.query(Assignment).filter(
+            Assignment.classroom_id == class_id,
+            Assignment.is_deployed.in_(["draft", "deployed"])
+        ).all()
+
+        return assignments
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"클래스룸 과제 목록 조회 중 오류 발생: {str(e)}"
         )
 
 @router.get("/assignments/{assignment_id}/student/{student_id}", response_model=dict)
@@ -517,7 +600,7 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
                 status_text = "완료" if grading_result else "제출완료"
                 completed_at = deployment.submitted_at.isoformat() if deployment.submitted_at else None
             elif deployment.status == "assigned":
-                status_text = "미시작"
+                status_text = "미응시"  # "미시작"에서 "미응시"로 변경
                 completed_at = None
             else:
                 status_text = "미완료"

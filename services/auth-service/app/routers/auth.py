@@ -120,3 +120,17 @@ async def get_teacher_profile(current_teacher: Teacher = Depends(get_current_tea
 @router.get("/student/me", response_model=StudentResponse)
 async def get_student_profile(current_student: Student = Depends(get_current_student)):
     return current_student
+
+@router.get("/students/{student_id}", response_model=StudentResponse)
+async def get_student_by_id(
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    """특정 학생 정보 조회 (과제 결과 표시용)"""
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Student with id {student_id} not found"
+        )
+    return student
