@@ -79,14 +79,16 @@ class PassageService:
             if not isinstance(new_content.get("content"), list):
                 raise ValueError("content는 배열 형태를 유지해야 합니다.")
 
-            # content 항목 개수와 type 구조 확인
+            # content 항목의 type 구조 확인 (길이는 가변 허용)
             existing_content_list = existing_content["content"]
             new_content_list = new_content["content"]
 
-            if len(existing_content_list) != len(new_content_list):
-                raise ValueError("content 배열의 길이를 유지해야 합니다.")
+            # 각 항목의 type과 구조만 검증 (길이 검증 제거)
+            min_length = min(len(existing_content_list), len(new_content_list))
 
-            for i, (existing_item, new_item) in enumerate(zip(existing_content_list, new_content_list)):
+            for i in range(min_length):
+                existing_item = existing_content_list[i]
+                new_item = new_content_list[i]
                 if existing_item.get("type") != new_item.get("type"):
                     raise ValueError(f"content[{i}]의 type을 변경할 수 없습니다.")
 
