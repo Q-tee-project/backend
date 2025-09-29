@@ -12,9 +12,9 @@ class EnglishQuestion(BaseModel):
     question_difficulty: Literal["상", "중", "하"]
     question_detail_type: str
     question_passage_id: Optional[int] = None
-    example_content: str
-    example_original_content: str
-    example_korean_translation: str
+    example_content: Optional[str] = ""
+    example_original_content: Optional[str] = ""
+    example_korean_translation: Optional[str] = ""
     question_choices: List[str]
     correct_answer: Union[str, int]
     explanation: str
