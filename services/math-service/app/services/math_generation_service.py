@@ -134,14 +134,10 @@ class MathGenerationService:
         
         # 2. 교육과정 데이터 가져오기
         curriculum_data = self._get_curriculum_data(request)
-        
-        # 3. 문제 유형 데이터 가져오기
-        problem_types = self._get_problem_types(request.chapter.chapter_name)
-        
-        # 4. AI 서비스를 통한 문제 생성
+
+        # 3. AI 서비스를 통한 문제 생성
         generated_problems = self._generate_problems_with_ai(
             curriculum_data=curriculum_data,
-            problem_types=problem_types,
             request=request
         )
         
@@ -297,25 +293,7 @@ class MathGenerationService:
             'keywords': getattr(request.chapter, 'keywords', request.chapter.chapter_name)
         }
     
-    def _get_problem_types(self, chapter_name: str) -> List[str]:
-        """챕터명에 해당하는 문제 유형들 조회"""
-        try:
-            problem_types_file_path = os.path.join(os.path.dirname(__file__), "../../data/math_problem_types.json")
-            
-            with open(problem_types_file_path, 'r', encoding='utf-8') as f:
-                problem_types_data = json.load(f)
-            
-            # 챕터명으로 문제 유형 찾기
-            for chapter_data in problem_types_data["math_problem_types"]:
-                if chapter_data["chapter_name"] == chapter_name:
-                    return chapter_data["problem_types"]
-            
-            return []
-        except Exception as e:
-            print(f"문제 유형 로드 오류: {str(e)}")
-            return []
-    
-    def _generate_problems_with_ai(self, curriculum_data: Dict, problem_types: List[str], request: MathProblemGenerationRequest) -> List[Dict]:
+    def _generate_problems_with_ai(self, curriculum_data: Dict, request: MathProblemGenerationRequest) -> List[Dict]:
         """비율 기반 AI 문제 생성"""
 
         print(f"📊 비율 기반 문제 생성 시작")

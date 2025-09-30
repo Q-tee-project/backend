@@ -59,12 +59,6 @@ class ProblemGenerator:
         difficulty_distribution = self._calculate_difficulty_distribution(
             problem_count, difficulty_ratio
         )
-        
-        # 참고 문제 가져오기
-        reference_problems = self._get_reference_problems(
-            curriculum_data.get('chapter_name', ''),
-            difficulty_ratio
-        )
 
         # problem_type이 지정된 경우 강제 제약 추가
         enhanced_user_prompt = user_prompt
@@ -98,8 +92,7 @@ class ProblemGenerator:
             curriculum_data=curriculum_data,
             user_prompt=enhanced_user_prompt,
             problem_count=problem_count,
-            difficulty_distribution=difficulty_distribution,
-            reference_problems=reference_problems
+            difficulty_distribution=difficulty_distribution
         )
         
         # AI 호출 및 응답 처리 (target_count 전달)
@@ -117,54 +110,6 @@ class ProblemGenerator:
             return f"A단계 {a_count}개, B단계 {b_count}개, C단계 {c_count}개"
         else:
             return f"모든 문제 B단계"
-    
-    def _get_reference_problems(self, chapter_name: str, difficulty_ratio: Dict) -> str:
-        """참고 문제 가져오기"""
-        try:
-            problem_types_file_path = os.path.join(
-                os.path.dirname(__file__), 
-                "../../data/math_problem_types.json"
-            )
-            
-            with open(problem_types_file_path, 'r', encoding='utf-8') as f:
-                problem_types_data = json.load(f)
-            
-            # 챕터명으로 문제 유형 찾기
-            chapter_problem_types = []
-            for chapter_data in problem_types_data["math_problem_types"]:
-                if chapter_data["chapter_name"] == chapter_name:
-                    chapter_problem_types = chapter_data["problem_types"]
-                    break
-            
-            if not chapter_problem_types:
-                return f"'{chapter_name}' 챕터의 참고 문제를 찾을 수 없습니다."
-            
-            # 난이도별 문제 유형 분배
-            total_types = len(chapter_problem_types)
-            a_types = chapter_problem_types[:total_types//3] if total_types >= 3 else [chapter_problem_types[0]]
-            b_types = chapter_problem_types[total_types//3:2*total_types//3] if total_types >= 6 else chapter_problem_types[1:2] if total_types >= 2 else []
-            c_types = chapter_problem_types[2*total_types//3:] if total_types >= 3 else chapter_problem_types[-1:] if total_types >= 3 else []
-            
-            # 참고 문제 텍스트 구성 - 난이도별 차별화
-            reference_text = f"**{chapter_name} 참고 문제 유형:**\n\n"
-
-            if difficulty_ratio and difficulty_ratio.get('A', 0) > 0 and a_types:
-                reference_text += f"**A단계 유형**: {', '.join(a_types[:4])}\n"
-                reference_text += "   → 쎈 A단계: 공식 대입 수준의 기본 문제 (1~2줄, 정답률 80~90%)\n\n"
-
-            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:
-                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n"
-                reference_text += "   → 쎈 B단계: 실생활 응용/유형 문제 (3~4줄, 정답률 50~60%)\n\n"
-
-            if difficulty_ratio and difficulty_ratio.get('C', 0) > 0 and c_types:
-                reference_text += f"**C단계 유형**: {', '.join(c_types[:4])}\n"
-                reference_text += "   → 쎈 C단계: 창의적 사고 필요한 심화 문제 (5~7줄, 정답률 20~30%)\n\n"
-            
-            return reference_text
-            
-        except Exception as e:
-            print(f"참고 문제 로드 오류: {str(e)}")
-            return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
     
     def _call_ai_and_parse_response(self, prompt: str, max_retries: int = 3, target_count: int = None) -> List[Dict]:
         """AI 호출 및 응답 파싱 - 부분 재생성 로직 포함"""
