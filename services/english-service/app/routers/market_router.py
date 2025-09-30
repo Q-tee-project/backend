@@ -124,29 +124,38 @@ async def get_worksheet_problems_for_market(
     }
 
 
-@router.post("/worksheets/copy")
+@router.post("/worksheets/copy", status_code=201)
 async def copy_worksheet_for_purchase(
     copy_request: dict,
     db: Session = Depends(get_db)
 ):
     """워크시트 복사 (Market service 구매 시 사용)"""
+    print(f"[DEBUG] English copy request: {copy_request}")
+
     source_worksheet_id = copy_request.get("source_worksheet_id")
     target_user_id = copy_request.get("target_user_id")
     new_title = copy_request.get("new_title")
 
+    print(f"[DEBUG] Parsed params: source_id={source_worksheet_id}, target_user={target_user_id}, title={new_title}")
+
     if not all([source_worksheet_id, target_user_id, new_title]):
+        print(f"[ERROR] Missing required parameters")
         raise HTTPException(
             status_code=400,
             detail="source_worksheet_id, target_user_id, new_title are required"
         )
 
     # 원본 워크시트 조회
+    print(f"[DEBUG] Querying source worksheet with ID: {source_worksheet_id}")
     source_worksheet = db.query(Worksheet).filter(
         Worksheet.worksheet_id == source_worksheet_id
     ).first()
 
     if not source_worksheet:
+        print(f"[ERROR] Source worksheet not found: {source_worksheet_id}")
         raise HTTPException(status_code=404, detail="Source worksheet not found")
+
+    print(f"[DEBUG] Found source worksheet: {source_worksheet.worksheet_name}")
 
     try:
         # 새 워크시트 생성
@@ -211,12 +220,17 @@ async def copy_worksheet_for_purchase(
 
         db.commit()
 
+        print(f"[DEBUG] English worksheet copy successful: new_id={new_worksheet.worksheet_id}")
+
         return {
             "new_worksheet_id": new_worksheet.worksheet_id,
             "message": "Worksheet copied successfully"
         }
 
     except Exception as e:
+        print(f"[ERROR] English worksheet copy failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
         raise HTTPException(
             status_code=500,

@@ -236,13 +236,19 @@ async def purchase_with_points(
 ):
     """포인트로 상품 구매"""
     try:
+        print(f"[DEBUG] 구매 요청 시작 - product_id: {purchase_data.product_id}, buyer_id: {current_user['id']}")
+
         # 1. 상품 정보 확인
         product = await MarketService.get_product_by_id(db, purchase_data.product_id)
         if not product:
+            print(f"[ERROR] 상품을 찾을 수 없음 - product_id: {purchase_data.product_id}")
             raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+
+        print(f"[DEBUG] 상품 정보 - title: {product.title}, seller_id: {product.seller_id}, service: {product.original_service}")
 
         # 2. 자기 상품 구매 방지
         if product.seller_id == current_user["id"]:
+            print(f"[ERROR] 자기 상품 구매 시도 - seller_id: {product.seller_id}")
             raise HTTPException(status_code=400, detail="자신의 상품은 구매할 수 없습니다.")
 
         # 3. 중복 구매 확인
@@ -250,7 +256,10 @@ async def purchase_with_points(
             db, current_user["id"], purchase_data.product_id
         )
         if already_purchased:
+            print(f"[ERROR] 중복 구매 시도 - buyer_id: {current_user['id']}, product_id: {purchase_data.product_id}")
             raise HTTPException(status_code=400, detail="이미 구매한 상품입니다.")
+
+        print(f"[DEBUG] 구매 검증 완료, 구매 처리 시작")
 
         # 4. 포인트로 구매 처리
         purchase_result = await MarketService.purchase_with_points(
@@ -260,13 +269,19 @@ async def purchase_with_points(
             product_id=purchase_data.product_id
         )
 
+        print(f"[DEBUG] 구매 처리 완료 - purchase_id: {purchase_result}")
+
         return purchase_result
 
     except HTTPException:
         raise
     except ValueError as e:
+        print(f"[ERROR] 구매 처리 중 ValueError: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print(f"[ERROR] 구매 처리 중 예상치 못한 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="구매 처리 중 오류가 발생했습니다.")
 
 

@@ -74,25 +74,18 @@ async def deploy_assignment(
     from ..models.worksheet import Worksheet
     from ..models.math_generation import Assignment, AssignmentDeployment
 
-    worksheet = db.query(Worksheet).filter(Worksheet.id == deploy_request.assignment_id).first()
+    # 먼저 assignment_id로 Assignment를 찾기
+    assignment = db.query(Assignment).filter(Assignment.id == deploy_request.assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # assignment에서 worksheet_id로 Worksheet 찾기
+    worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
     if not worksheet:
         raise HTTPException(status_code=404, detail="Worksheet not found")
 
-    assignment = db.query(Assignment).filter(
-        Assignment.worksheet_id == worksheet.id, 
-        Assignment.classroom_id == deploy_request.classroom_id
-    ).first()
-
-    if not assignment:
-        assignment = Assignment(
-            title=worksheet.title, worksheet_id=worksheet.id, classroom_id=deploy_request.classroom_id,
-            teacher_id=worksheet.teacher_id, unit_name=worksheet.unit_name, chapter_name=worksheet.chapter_name,
-            problem_count=worksheet.problem_count, is_deployed="deployed"
-        )
-        db.add(assignment)
-        db.flush()
-    else:
-        assignment.is_deployed = "deployed"
+    # assignment 상태를 deployed로 변경
+    assignment.is_deployed = "deployed"
 
     deployments = []
     for student_id in deploy_request.student_ids:

@@ -72,7 +72,7 @@ class KoreanGenerationService:
                 problem_count=source_worksheet.problem_count,
                 status=WorksheetStatus.COMPLETED,
                 teacher_id=target_user_id,
-                created_by=target_user_id
+                generation_id=f"copy_{source_worksheet_id}_{target_user_id}"
             )
             db.add(new_worksheet)
             db.flush()

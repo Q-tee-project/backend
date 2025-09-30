@@ -128,6 +128,30 @@ class KoreanProblemGenerator:
             # 문제 데이터 변환
             problems = []
             for idx, problem_data in enumerate(problems_data.get('problems', [])):
+                # 문서 타입별 source_text 처리
+                if korean_type == "문법":
+                    # 문법: LLM이 생성한 지문은 표시, grammar.txt 원본은 숨김
+                    # problem_data에서 LLM이 생성한 source_text가 있으면 사용
+                    llm_generated_text = problem_data.get('source_text', '')
+                    if llm_generated_text and llm_generated_text != source_text:
+                        # LLM이 새로 생성한 지문이면 사용
+                        rendered_source_text = llm_generated_text
+                    else:
+                        # grammar.txt 원본이면 숨김
+                        rendered_source_text = ""
+                elif korean_type == "시":
+                    # 시: 전체 지문 렌더링
+                    rendered_source_text = source_text
+                elif korean_type == "소설":
+                    # 소설: LLM이 추출한 중요부분 전체 렌더링
+                    rendered_source_text = source_text
+                elif korean_type == "수필/비문학":
+                    # 수필/비문학: 전체 지문 렌더링
+                    rendered_source_text = source_text
+                else:
+                    # 기본값: 전체 지문
+                    rendered_source_text = source_text
+
                 problem = {
                     'korean_type': korean_type,
                     'question_type': '객관식',  # 국어는 모두 객관식
@@ -135,7 +159,7 @@ class KoreanProblemGenerator:
                     'question': problem_data.get('question', ''),
                     'correct_answer': problem_data.get('correct_answer', ''),
                     'explanation': problem_data.get('explanation', ''),
-                    'source_text': source_text[:500] + "..." if len(source_text) > 500 else source_text,
+                    'source_text': rendered_source_text,
                     'source_title': source_info.get('title', ''),
                     'source_author': source_info.get('author', ''),
                     'sequence_order': idx + 1
@@ -233,6 +257,30 @@ class KoreanProblemGenerator:
 
                 problem_data = json.loads(json_text)
 
+                # 문서 타입별 source_text 처리
+                if korean_type == "문법":
+                    # 문법: LLM이 생성한 지문은 표시, grammar.txt 원본은 숨김
+                    # problem_data에서 LLM이 생성한 source_text가 있으면 사용
+                    llm_generated_text = problem_data.get('source_text', '')
+                    if llm_generated_text and llm_generated_text != source_text:
+                        # LLM이 새로 생성한 지문이면 사용
+                        rendered_source_text = llm_generated_text
+                    else:
+                        # grammar.txt 원본이면 숨김
+                        rendered_source_text = ""
+                elif korean_type == "시":
+                    # 시: 전체 지문 렌더링
+                    rendered_source_text = source_text
+                elif korean_type == "소설":
+                    # 소설: LLM이 추출한 중요부분 전체 렌더링
+                    rendered_source_text = source_text
+                elif korean_type == "수필/비문학":
+                    # 수필/비문학: 전체 지문 렌더링
+                    rendered_source_text = source_text
+                else:
+                    # 기본값: 전체 지문
+                    rendered_source_text = source_text
+
                 # 필수 필드 검증 및 설정
                 problem = {
                     'korean_type': korean_type,
@@ -241,7 +289,7 @@ class KoreanProblemGenerator:
                     'question': problem_data.get('question', ''),
                     'correct_answer': problem_data.get('correct_answer', ''),
                     'explanation': problem_data.get('explanation', ''),
-                    'source_text': source_text[:500] + "..." if len(source_text) > 500 else source_text,
+                    'source_text': rendered_source_text,
                     'source_title': problem_data.get('source_title', ''),
                     'source_author': problem_data.get('source_author', '')
                 }

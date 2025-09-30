@@ -15,6 +15,8 @@ from app.models import (
     GradingResult, QuestionResult, Worksheet, Passage, Question
 )
 from app.services.generation.question_generator import PromptGenerator
+from app.tasks import generate_english_worksheet_task
+from app.celery_app import celery_app
 
 try:
     import google.generativeai as genai
@@ -28,174 +30,167 @@ settings = get_settings()
 
 @router.post("/worksheet-generate")
 async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = Depends(get_db)):
-    """사용자로부터 문제 생성 옵션을 입력받습니다."""
-    print("🚨 함수 시작 - 요청이 서버에 도달했습니다!")
-    
+    """비동기 영어 문제 생성을 시작합니다."""
+    print("🚨 비동기 문제 생성 요청 시작!")
+
     try:
         print("\n" + "="*80)
         print("🎯 문제 생성 옵션 입력 받음!")
-        
+
         print(f" 학교급: {request.school_level}")
         print(f" 학년: {request.grade}학년")
         print(f" 총 문제 수: {request.total_questions}개")
-        
-        print(f"\n🎯 선택된 영역: {', '.join(request.subjects)}")
-        
+        print(f" 선택된 영역: {', '.join(request.subjects)}")
+
         # 세부 영역 정보 출력
         if request.subject_details:
             print("\n📋 세부 영역 선택:")
-            
             if request.subject_details.reading_types:
                 print(f"  📖 독해 유형: {', '.join(map(str, request.subject_details.reading_types))}")
-            
             if request.subject_details.grammar_categories:
                 print(f"  📝 문법 카테고리: {', '.join(map(str, request.subject_details.grammar_categories))}")
-                
-            
             if request.subject_details.vocabulary_categories:
                 print(f"  📚 어휘 카테고리: {', '.join(map(str, request.subject_details.vocabulary_categories))}")
-        
-        # 영역별 비율 출력
-        if request.subject_ratios:
-            print("\n⚖️ 영역별 비율:")
-            for ratio in request.subject_ratios:
-                print(f"  {ratio.subject}: {ratio.ratio}%")
-        
-        # 문제 형식 출력
-        print(f"\n📋 문제 형식: {request.question_format}")
-        if request.format_ratios:
-            print("📊 형식별 비율:")
-            for format_ratio in request.format_ratios:
-                print(f"  {format_ratio.format}: {format_ratio.ratio}%")
-        
-        # 난이도 분배 출력
-        if request.difficulty_distribution:
-            print("\n🎯 난이도 분배:")
-            for diff in request.difficulty_distribution:
-                print(f"  {diff.difficulty}: {diff.ratio}%")
-        
-        # 추가 요구사항 출력
-        if request.additional_requirements:
-            print(f"\n📝 추가 요구사항:")
-            print(f"  {request.additional_requirements}")
-        
-        print("="*80)
-        
-        # 프롬프트 생성기 초기화 및 실행
-        print("\n🎯 프롬프트 생성 시작...")
-        generator = PromptGenerator()
-        
-        # 요청 데이터를 딕셔너리로 변환
-        request_dict = request.dict()
-        
-        # 분배 요약 생성
-        distribution_summary = generator.get_distribution_summary(request_dict)
-        
-        print("📊 분배 결과:")
-        print(f"  총 문제 수: {distribution_summary['total_questions']}")
-        print("  영역별 분배:")
-        for item in distribution_summary['subject_distribution']:
-            print(f"    {item['subject']}: {item['count']}문제 ({item['ratio']}%)")
-        print("  형식별 분배:")
-        for item in distribution_summary['format_distribution']:
-            print(f"    {item['format']}: {item['count']}문제 ({item['ratio']}%)")
-        print("  난이도별 분배:")
-        for item in distribution_summary['difficulty_distribution']:
-            print(f"    {item['difficulty']}: {item['count']}문제 ({item['ratio']}%)")
-        print(f"  검증 통과: {distribution_summary['validation_passed']}")
-        
-        # 프롬프트 생성
-        try:
-            print("🔍 프롬프트 생성 시도 중...")
-            
-            # 디버깅: difficulty_distribution 데이터 확인
-            print(f"\n🔍 디버깅 - request_dict['difficulty_distribution']: {request_dict.get('difficulty_distribution', 'NOT_FOUND')}")
-            if 'difficulty_distribution' in request_dict:
-                for i, diff in enumerate(request_dict['difficulty_distribution']):
-                    print(f"  [{i}] difficulty: '{diff.get('difficulty')}', ratio: {diff.get('ratio')} (type: {type(diff.get('ratio'))})")
-            
-            prompt = generator.generate_prompt(request_dict, db=db)
-            print("✅ 프롬프트 생성 성공!")
-            print(f"🔍 프롬프트: {prompt}")
-        except Exception as prompt_error:
-            print(f"❌ 프롬프트 생성 오류: {prompt_error}")
-            raise prompt_error
-        
-        # LLM에 프롬프트 전송 및 응답 받기
-        llm_response = None
-        llm_error = None
-        
-        if GEMINI_AVAILABLE:
-            try:
-                print("🤖 Gemini API 호출 시작...")
 
-                # Gemini API 키 설정
-                if not settings.gemini_api_key:
-                    raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
-                
-                genai.configure(api_key=settings.gemini_api_key)
-                
-                # Gemini 모델 생성
-                model = genai.GenerativeModel(settings.gemini_model)
-                
-                # 통합 프롬프트로 API 한 번만 호출 (JSON 응답 요청)
-                print("📝 통합 문제지/답안지 생성 중...")
-                response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-                llm_response = response.text
-                print("✅ 통합 생성 완료!")
-                
-            except Exception as api_error:
-                print(f"❌ Gemini API 호출 오류: {api_error}")
-                llm_error = str(api_error)
-        else:
-            llm_error = "Gemini 라이브러리가 설치되지 않았습니다."
-        
-        print("\n🎯 영역별 출제 유형 확인:")
-        subject_details = request_dict.get('subject_details', {})
-        print(f"  독해 유형: {subject_details.get('reading_types', [])}")
-        print(f"  문법 카테고리: {subject_details.get('grammar_categories', [])}")
-        print(f"  문법 토픽: {subject_details.get('grammar_topics', [])}")
-        print(f"  어휘 카테고리: {subject_details.get('vocabulary_categories', [])}")
-        
-        print("\n✅ 프롬프트 생성 완료!")
         print("="*80)
-        
-        # JSON 파싱 처리
-        parsed_llm_response = None
-        
-        if llm_response:
-            try:
-                # 통합 JSON 파싱
-                parsed_llm_response = json.loads(llm_response)
-                print("✅ 통합 JSON 파싱 완료!")
-            except json.JSONDecodeError as e:
-                print(f"⚠️ 통합 JSON 파싱 실패: {e}")
-                parsed_llm_response = None
-        
-        # 백엔드에서 결과 출력
-        print("=" * 80)
-        print("🎉 문제지 및 답안지 생성 완료!")
-        print("=" * 80)
-        if parsed_llm_response:
-            print(f"📄 문제지 ID: {parsed_llm_response.get('worksheet_id', 'N/A')}")
-            print(f"📝 문제지 제목: {parsed_llm_response.get('worksheet_name', 'N/A')}")
-            print(f"📊 총 문제 수: {parsed_llm_response.get('total_questions', 'N/A')}개")
-            print(f"🔍 문제 유형: {parsed_llm_response.get('problem_type', 'N/A')}")
-        print("=" * 80)
+
+        # 비동기 태스크 시작
+        task = generate_english_worksheet_task.delay(request.model_dump())
+
+        print(f"🚀 Celery 태스크 시작됨: {task.id}")
 
         return {
-            "message": "문제지와 답안지 생성이 완료되었습니다!" if llm_response else "프롬프트가 생성되었습니다!",
-            "status": "success",
-            "llm_response": parsed_llm_response,  # 파싱된 객체 전달
-            "llm_error": llm_error,
+            "task_id": task.id,
+            "status": "started",
+            "message": "영어 문제 생성이 시작되었습니다. 태스크 ID로 진행 상황을 확인하세요."
         }
-        
+
     except Exception as e:
-        print(f"❌ 옵션 입력 오류: {str(e)}")
+        print(f"❌ 비동기 문제 생성 시작 실패: {str(e)}")
         return {
-            "message": f"옵션 입력 중 오류가 발생했습니다: {str(e)}",
+            "message": f"문제 생성 시작 중 오류가 발생했습니다: {str(e)}",
             "status": "error"
         }
+
+
+@router.get("/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    """태스크 진행 상황 조회"""
+    try:
+        print(f"🔍 태스크 상태 조회: {task_id}")
+
+        # Celery AsyncResult로 태스크 상태 확인
+        result = celery_app.AsyncResult(task_id)
+
+        if result.state == 'PENDING':
+            return {
+                "task_id": task_id,
+                "state": result.state,
+                "status": "대기 중...",
+                "current": 0,
+                "total": 100
+            }
+        elif result.state == 'PROGRESS':
+            info = result.info or {}
+            return {
+                "task_id": task_id,
+                "state": result.state,
+                "status": info.get('status', '처리 중...'),
+                "current": info.get('current', 0),
+                "total": info.get('total', 100)
+            }
+        elif result.state == 'SUCCESS':
+            return {
+                "task_id": task_id,
+                "state": result.state,
+                "status": "완료",
+                "current": 100,
+                "total": 100,
+                "result": result.info
+            }
+        else:  # FAILURE
+            error_msg = str(result.info) if result.info else "알 수 없는 오류"
+            return {
+                "task_id": task_id,
+                "state": result.state,
+                "status": "실패",
+                "current": 0,
+                "total": 100,
+                "error": error_msg
+            }
+
+    except Exception as e:
+        print(f"❌ 태스크 상태 조회 실패 {task_id}: {str(e)}")
+        return {
+            "task_id": task_id,
+            "state": "FAILURE",
+            "status": "상태 조회 실패",
+            "current": 0,
+            "total": 100,
+            "error": f"태스크 상태 조회 실패: {str(e)}"
+        }
+
+
+@router.delete("/task/{task_id}")
+async def cancel_task(task_id: str):
+    """태스크 취소"""
+    try:
+        print(f"🛑 태스크 취소: {task_id}")
+
+        # Celery 태스크 취소
+        celery_app.control.revoke(task_id, terminate=True)
+
+        return {
+            "task_id": task_id,
+            "status": "cancelled",
+            "message": "태스크가 취소되었습니다."
+        }
+
+    except Exception as e:
+        print(f"❌ 태스크 취소 실패 {task_id}: {str(e)}")
+        return {
+            "task_id": task_id,
+            "status": "error",
+            "message": f"태스크 취소 실패: {str(e)}"
+        }
+
+
+@router.get("/celery-health")
+async def check_celery_health():
+    """Celery 워커 상태 확인"""
+    try:
+        # Celery 워커들의 상태 확인
+        inspect = celery_app.control.inspect()
+
+        # 활성 워커 확인
+        active_workers = inspect.active()
+        registered_tasks = inspect.registered()
+
+        if not active_workers:
+            return {
+                "status": "unhealthy",
+                "message": "활성화된 Celery 워커가 없습니다.",
+                "active_workers": 0,
+                "workers": {}
+            }
+
+        return {
+            "status": "healthy",
+            "message": "Celery 워커가 정상 작동 중입니다.",
+            "active_workers": len(active_workers),
+            "workers": active_workers,
+            "registered_tasks": registered_tasks
+        }
+
+    except Exception as e:
+        print(f"❌ Celery 상태 확인 실패: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "message": f"Celery 상태 확인 실패: {str(e)}",
+            "active_workers": 0,
+            "workers": {}
+        }
+
 
 @router.post("/worksheet-save", response_model=Dict[str, Any])
 async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(get_db)):
@@ -601,3 +596,5 @@ async def delete_worksheet(worksheet_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"문제지 삭제 중 오류: {str(e)}")
+
+

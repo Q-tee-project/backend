@@ -131,7 +131,15 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
                 continue
 
             # Enum 값 처리
-            korean_type_enum = getattr(KoreanType, problem_data.get('korean_type', 'POEM').upper().replace('/', '_').replace(' ', '_'), KoreanType.POEM)
+            korean_type_str = problem_data.get('korean_type', '시')
+            korean_type_mapping = {
+                '시': 'POEM',
+                '소설': 'NOVEL',
+                '수필/비문학': 'NON_FICTION',
+                '문법': 'GRAMMAR'
+            }
+            korean_type_enum_name = korean_type_mapping.get(korean_type_str, 'POEM')
+            korean_type_enum = getattr(KoreanType, korean_type_enum_name, KoreanType.POEM)
             problem_type_enum = getattr(ProblemType, problem_data.get('question_type', '객관식').replace('객관식', 'MULTIPLE_CHOICE').replace('서술형', 'ESSAY').replace('단답형', 'SHORT_ANSWER'), ProblemType.MULTIPLE_CHOICE)
             difficulty_enum = getattr(Difficulty, problem_data.get('difficulty', '중').replace('상', 'HIGH').replace('중', 'MEDIUM').replace('하', 'LOW'), Difficulty.MEDIUM)
 

@@ -11,7 +11,7 @@ class NotificationService:
         """쪽지 알림 전송"""
         try:
             notification = {
-                "type": "new_message",
+                "type": "message",
                 "id": f"msg_{message_data['message_id']}_{int(datetime.now().timestamp())}",
                 "data": {
                     "message_id": message_data['message_id'],

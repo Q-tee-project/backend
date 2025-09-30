@@ -19,7 +19,30 @@ class MultipleProblemTemplate(BaseKoreanPromptTemplate):
         for i, (q_type, difficulty) in enumerate(zip(question_types, difficulties)):
             question_type_info.append(f"- 문제 {i+1}: {q_type} ({difficulty} - {self.difficulty_descriptions.get(difficulty, '')})")
 
-        prompt = f"""
+        # 문법 문제인 경우 특별 처리
+        if korean_type == '문법':
+            prompt = f"""
+다음 문법 참고 자료를 활용하여 {korean_type} 영역의 객관식 문제 {count}개를 생성해주세요.
+
+**참고 자료:**
+{source_text}
+
+**문제 요구사항:**
+- 학교급: {korean_data.get('school_level', '중학교')}
+- 학년: {korean_data.get('grade', 1)}학년
+- 문제 유형: {korean_type}
+- 문제 형식: 객관식 (모든 문제)
+
+**문제별 세부 요구사항:**
+{chr(10).join(question_type_info)}
+
+**중요한 지침:**
+1. 참고 자료의 내용을 직접 언급하지 마세요 (예: "지문의 [01. 단어의 발음과 표기]를 바탕으로" 금지)
+2. 필요한 경우 문제 안에 새로운 예시 문장이나 상황을 만들어 사용하세요
+3. 문법 개념을 묻는 독립적인 문제로 구성하세요
+"""
+        else:
+            prompt = f"""
 다음 지문을 바탕으로 {korean_type} 영역의 객관식 문제 {count}개를 생성해주세요.
 
 **지문 정보:**
@@ -42,12 +65,53 @@ class MultipleProblemTemplate(BaseKoreanPromptTemplate):
         if user_prompt:
             prompt += f"\n**추가 요구사항:** {user_prompt}\n"
 
-        prompt += self.get_multiple_output_format(source_info)
+        if korean_type == '문법':
+            prompt += self.get_grammar_output_format()
+        else:
+            prompt += self.get_multiple_output_format(source_info)
         prompt += self.get_problem_generation_rules()
         prompt += self.get_korean_type_characteristics(korean_type)
         prompt += self.get_general_instructions()
 
         return prompt
+
+    def get_grammar_output_format(self) -> str:
+        """문법 문제 전용 출력 형식"""
+        return f"""
+**출력 형식 (JSON):**
+```json
+{{
+    "problems": [
+        {{
+            "question": "문제 내용",
+            "choices": ["1번 선택지", "2번 선택지", "3번 선택지", "4번 선택지"],
+            "correct_answer": "A",
+            "explanation": "해설",
+            "source_text": "문제에 사용된 예시 지문 (있는 경우만)",
+            "source_title": "예시 제목 (있는 경우만)",
+            "source_author": "예시 작성자 (있는 경우만)"
+        }},
+        {{
+            "question": "문제 내용",
+            "choices": ["1번 선택지", "2번 선택지", "3번 선택지", "4번 선택지"],
+            "correct_answer": "B",
+            "explanation": "해설",
+            "source_text": "문제에 사용된 예시 지문 (있는 경우만)",
+            "source_title": "예시 제목 (있는 경우만)",
+            "source_author": "예시 작성자 (있는 경우만)"
+        }}
+    ]
+}}
+```
+
+**주의사항:**
+- 모든 문제는 객관식으로 출제됩니다.
+- 각 문제마다 4개의 선택지를 제공해야 합니다.
+- correct_answer는 반드시 A, B, C, D 중 하나여야 합니다.
+- A는 첫 번째 선택지, B는 두 번째 선택지, C는 세 번째 선택지, D는 네 번째 선택지입니다.
+- source_text, source_title, source_author는 문제에 예시 지문이 필요한 경우에만 포함하세요.
+- 예시 지문은 참고 자료와 별개의 새로운 내용이어야 합니다.
+"""
 
     def get_multiple_output_format(self, source_info: Dict) -> str:
         """다중 문제 출력 형식 - 모든 문제는 객관식"""
@@ -63,13 +127,13 @@ class MultipleProblemTemplate(BaseKoreanPromptTemplate):
         {{
             "question": "문제 내용",
             "choices": ["1번 선택지", "2번 선택지", "3번 선택지", "4번 선택지"],
-            "correct_answer": "정답 선택지 내용",
+            "correct_answer": "A",
             "explanation": "해설"
         }},
         {{
             "question": "문제 내용",
             "choices": ["1번 선택지", "2번 선택지", "3번 선택지", "4번 선택지"],
-            "correct_answer": "정답 선택지 내용",
+            "correct_answer": "B",
             "explanation": "해설"
         }}
     ]
@@ -79,6 +143,8 @@ class MultipleProblemTemplate(BaseKoreanPromptTemplate):
 **주의사항:**
 - 모든 문제는 객관식으로 출제됩니다.
 - 각 문제마다 4개의 선택지를 제공해야 합니다.
+- correct_answer는 반드시 A, B, C, D 중 하나여야 합니다.
+- A는 첫 번째 선택지, B는 두 번째 선택지, C는 세 번째 선택지, D는 네 번째 선택지입니다.
 """
 
     def get_problem_generation_rules(self) -> str:

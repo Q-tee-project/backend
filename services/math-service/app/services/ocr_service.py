@@ -284,19 +284,61 @@ class OCRService:
         return cleaned.strip()
 
     def _clean_math_text(self, text: str) -> str:
-        """수학 답안용 텍스트 정리 - 비라틴 문자 제거 및 기본 정리"""
+        """수학 답안용 텍스트 정리 - 비라틴 문자 제거 및 분수 인식 개선"""
         import re
 
         if not text or not text.strip():
             return ""
 
         cleaned = text.strip()
+        original_text = cleaned
 
         # 1. 비라틴 문자 제거 (한글, 일본어, 중국어 등)
         # 수학 답안은 영어, 숫자, 기본 기호만 있어야 함
         cleaned = re.sub(r'[^\x00-\x7F]', '', cleaned)
 
-        # 2. "메ーン 5" 같은 패턴에서 숫자만 추출
+        # 2. 분수 패턴 인식 개선
+        # "17\n4", "17 4", "17/4" 등의 패턴을 분수로 인식
+
+        # 2-1. 줄바꿈이나 공백으로 분리된 두 숫자 (분수 형태)
+        fraction_patterns = [
+            r'(\d+)\s*[\n\r]+\s*(\d+)',  # 세로 정렬 분수: "17\n4"
+            r'(\d+)\s+(\d+)$',           # 공백으로 분리된 두 숫자: "17 4"
+            r'(\d+)\s*/\s*(\d+)',        # 슬래시 분수: "17/4", "17 / 4"
+        ]
+
+        for pattern in fraction_patterns:
+            match = re.search(pattern, cleaned)
+            if match:
+                numerator, denominator = match.groups()
+                print(f"🔍 OCR 분수 인식: '{original_text}' -> '{numerator}/{denominator}'")
+                return f"{numerator}/{denominator}"
+
+        # 2-2. "Elt", "EIt" 같은 OCR 오인식을 분수로 변환 시도
+        # 숫자와 문자가 혼재된 경우 숫자 추출 시도
+        if re.search(r'[A-Za-z]', cleaned) and re.search(r'\d', cleaned):
+            # 숫자만 추출
+            numbers = re.findall(r'\d+', cleaned)
+            if len(numbers) == 2:
+                print(f"🔍 OCR 분수 복구: '{original_text}' -> '{numbers[0]}/{numbers[1]}'")
+                return f"{numbers[0]}/{numbers[1]}"
+            elif len(numbers) == 1:
+                # 단일 숫자가 포함된 경우, 문자 부분을 분석
+                # "E17" -> "1/7" 또는 "17" 등으로 해석 시도
+                number = numbers[0]
+                letters = re.sub(r'\d', '', cleaned).strip()
+
+                # 특정 패턴 매칭
+                if letters in ['E', 'l', 'I'] and len(number) >= 2:
+                    # "E17" -> "1/7" 같은 패턴
+                    if len(number) == 2:
+                        print(f"🔍 OCR 분수 복구: '{original_text}' -> '{number[0]}/{number[1]}'")
+                        return f"{number[0]}/{number[1]}"
+
+                # 기본적으로 숫자만 반환
+                return number
+
+        # 3. "메ーン 5" 같은 패턴에서 숫자만 추출 (기존 로직)
         if re.search(r'\d+', cleaned):
             # 숫자가 포함된 경우, 의미있는 패턴 찾기
             # 공백으로 분리된 마지막 숫자를 분모로 가정
@@ -304,7 +346,11 @@ class OCRService:
             numbers = [p for p in parts if re.match(r'^-?\d+\.?\d*$', p)]
             letters = [p for p in parts if re.match(r'^[a-zA-Z\-\+]+$', p)]
 
-            if len(numbers) == 1 and len(letters) >= 1:
+            if len(numbers) == 2 and not letters:
+                # 두 개의 숫자만 있는 경우 분수로 처리
+                print(f"🔍 OCR 분수 인식: '{original_text}' -> '{numbers[0]}/{numbers[1]}'")
+                return f"{numbers[0]}/{numbers[1]}"
+            elif len(numbers) == 1 and len(letters) >= 1:
                 # "x-y 5" 패턴으로 해석
                 numerator = ''.join(letters).replace(' ', '')
                 denominator = numbers[0]
@@ -313,8 +359,12 @@ class OCRService:
                 # 숫자만 남은 경우
                 cleaned = numbers[0]
 
-        # 3. 기본 정리
+        # 4. 기본 정리
         cleaned = re.sub(r'\s+', ' ', cleaned)  # 연속 공백 제거
         cleaned = cleaned.strip()
+
+        # 변경사항이 있으면 로그 출력
+        if cleaned != original_text:
+            print(f"🔍 OCR 텍스트 정리: '{original_text}' -> '{cleaned}'")
 
         return cleaned
