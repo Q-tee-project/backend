@@ -593,23 +593,7 @@ def _clean_ocr_answer(answer: str) -> str:
     return _normalize_math_answer(answer)
 
 
-# 테스트용 로그 함수
-def _test_normalization():
-    """정규화 함수 테스트"""
-    test_cases = [
-        ("X-Y/5", r"\frac{x-y}{5}"),  # 실제 케이스: OCR vs LaTeX
-        ("10", "10"),                 # 숫자 매칭
-        ("-7", "-7"),                 # 음수 매칭
-        ("3x+3", "3x+3"),            # 대수식 매칭
-        ("x-y/5", "x-y/5"),          # 일반 분수 표기
-    ]
 
-    print("🧪 수학 답안 정규화 테스트:")
-    for student, correct in test_cases:
-        norm_student = _normalize_math_answer(student)
-        norm_correct = _normalize_math_answer(correct)
-        match = norm_student == norm_correct
-        print(f"   학생: '{student}' → '{norm_student}' vs 정답: '{correct}' → '{norm_correct}' {'✅' if match else '❌'}")
 
 # 서버 시작 시 테스트 실행
-_test_normalization()
+# _test_normalization()
