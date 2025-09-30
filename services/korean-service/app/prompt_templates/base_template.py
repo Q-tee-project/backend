@@ -39,7 +39,7 @@ class BaseKoreanPromptTemplate:
 {
     "question": "문제 내용",
     "choices": ["1번 선택지", "2번 선택지", "3번 선택지", "4번 선택지"],
-    "correct_answer": "정답 선택지 내용",
+    "correct_answer": "A",
     "explanation": "해설",
     "source_title": "지문 제목 (있는 경우)",
     "source_author": "지문 작가 (있는 경우)"
@@ -47,7 +47,9 @@ class BaseKoreanPromptTemplate:
 ```
 
 **주의사항:**
-- 4개의 선택지를 제공하고, 정답은 choices 배열의 실제 내용과 정확히 일치해야 합니다.
+- 4개의 선택지를 제공해야 합니다.
+- correct_answer는 반드시 A, B, C, D 중 하나여야 합니다.
+- A는 첫 번째 선택지, B는 두 번째 선택지, C는 세 번째 선택지, D는 네 번째 선택지입니다.
 - 선택지는 명확하고 구별되어야 합니다.
 - 모든 문제는 객관식으로 출제됩니다.
 """

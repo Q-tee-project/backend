@@ -243,14 +243,26 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
 
         self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': '제출된 세션 조회 중...'})
 
-        # 해당 과제의 모든 제출된 세션들을 찾기
-        submitted_sessions = db.query(TestSession).filter(
-            TestSession.assignment_id == assignment_id,
-            TestSession.status == 'submitted'
+        # 디버깅: 모든 세션 조회
+        all_sessions = db.query(TestSession).filter(
+            TestSession.assignment_id == assignment_id
         ).all()
 
+        print(f"🔍 [CELERY] Assignment {assignment_id}의 모든 세션:")
+        for session in all_sessions:
+            print(f"  - 세션 {session.id}: student_id={session.student_id}, status='{session.status}', started_at={session.started_at}, completed_at={session.completed_at}, submitted_at={session.submitted_at}")
+
+        # 해당 과제의 모든 제출된 세션들을 찾기 (completed 또는 submitted 상태)
+        submitted_sessions = db.query(TestSession).filter(
+            TestSession.assignment_id == assignment_id,
+            TestSession.status.in_(['completed', 'submitted'])
+        ).all()
+
+        print(f"🔍 [CELERY] 제출된 세션 개수: {len(submitted_sessions)}")
+
         if not submitted_sessions:
-            return {"message": "제출된 세션이 없습니다.", "processed_count": 0}
+            print(f"🔍 [CELERY] 상태 분포: {[s.status for s in all_sessions]}")
+            return {"message": f"제출된 세션이 없습니다. 전체 세션 {len(all_sessions)}개, 상태: {[s.status for s in all_sessions]}", "processed_count": 0}
 
         self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'OCR 처리 중...'})
 

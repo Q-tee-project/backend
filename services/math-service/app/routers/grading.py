@@ -187,13 +187,25 @@ async def start_ai_grading(
 
     # 해당 과제의 모든 제출된 세션들을 찾기
     from ..models.math_generation import TestSession
+
+    # 디버깅: 모든 세션 조회
+    all_sessions = db.query(TestSession).filter(
+        TestSession.assignment_id == assignment_id
+    ).all()
+
+    print(f"🔍 Assignment {assignment_id}의 모든 세션:")
+    for session in all_sessions:
+        print(f"  - 세션 {session.id}: student_id={session.student_id}, status='{session.status}', started_at={session.started_at}, completed_at={session.completed_at}, submitted_at={session.submitted_at}")
+
     submitted_sessions = db.query(TestSession).filter(
         TestSession.assignment_id == assignment_id,
         TestSession.status.in_(['completed', 'submitted'])
     ).all()
 
+    print(f"🔍 제출된 세션 개수: {len(submitted_sessions)}")
+
     if not submitted_sessions:
-        return {"message": "제출된 세션이 없습니다.", "task_id": None}
+        return {"message": f"제출된 세션이 없습니다. 전체 세션 {len(all_sessions)}개 중 제출완료 상태가 없습니다.", "task_id": None, "debug_info": {"total_sessions": len(all_sessions), "session_statuses": [s.status for s in all_sessions]}}
 
     # Celery 태스크로 비동기 처리 시작
     task = process_assignment_ai_grading_task.delay(
