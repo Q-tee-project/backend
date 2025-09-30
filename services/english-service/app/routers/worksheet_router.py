@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
@@ -526,20 +526,19 @@ async def update_passage(
 async def update_worksheet_title(
     worksheet_id: int,
     request: Dict[str, str],
-    user_id: int,
+    user_id: int = Query(..., description="사용자 ID"),
     db: Session = Depends(get_db)
 ):
     """워크시트 제목을 수정합니다."""
     try:
         from app.services.worksheet_crud.worksheet_service import WorksheetService
 
-        service = WorksheetService(db)
         new_title = request.get("worksheet_name")
 
         if not new_title:
             raise HTTPException(status_code=400, detail="worksheet_name이 필요합니다.")
 
-        updated_worksheet = service.update_worksheet_title(worksheet_id, new_title)
+        updated_worksheet = WorksheetService.update_worksheet_title(db, worksheet_id, new_title)
 
         return {
             "status": "success",
@@ -553,6 +552,34 @@ async def update_worksheet_title(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"제목 수정 중 오류: {str(e)}")
+
+@router.delete("/worksheets/batch")
+async def batch_delete_worksheets(
+    request: Dict[str, List[int]],
+    user_id: int = Query(..., description="사용자 ID"),
+    db: Session = Depends(get_db)
+):
+    """여러 워크시트를 일괄 삭제합니다."""
+    try:
+        from app.services.worksheet_crud.worksheet_service import WorksheetService
+
+        worksheet_ids = request.get("worksheet_ids", [])
+
+        if not worksheet_ids:
+            raise HTTPException(status_code=400, detail="worksheet_ids가 필요합니다.")
+
+        deleted_count = WorksheetService.batch_delete_worksheets(db, worksheet_ids, user_id)
+
+        return {
+            "status": "success",
+            "message": f"{deleted_count}개의 워크시트가 삭제되었습니다.",
+            "deleted_count": deleted_count,
+            "deleted_ids": worksheet_ids
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"일괄 삭제 중 오류: {str(e)}")
 
 @router.delete("/worksheets/{worksheet_id}", response_model=Dict[str, Any])
 async def delete_worksheet(worksheet_id: int, db: Session = Depends(get_db)):

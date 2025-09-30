@@ -4,7 +4,9 @@
 """
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from ....models.english_learning import Worksheet, Question, Passage
+from app.models.worksheet import Worksheet, Question, Passage
+from app.models.grading import GradingResult, QuestionResult
+from app.models.assignment import Assignment, AssignmentDeployment
 
 class WorksheetService:
     @staticmethod
@@ -32,6 +34,85 @@ class WorksheetService:
             db.commit()
             db.refresh(db_worksheet)
         return db_worksheet
+
+    @staticmethod
+    def update_worksheet_title(db: Session, worksheet_id: int, new_title: str) -> Optional[Worksheet]:
+        """워크시트 제목만 수정합니다."""
+        db_worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == worksheet_id).first()
+        if not db_worksheet:
+            raise ValueError(f"워크시트 ID {worksheet_id}를 찾을 수 없습니다.")
+
+        db_worksheet.worksheet_name = new_title
+        db.commit()
+        db.refresh(db_worksheet)
+        return db_worksheet
+
+    @staticmethod
+    def batch_delete_worksheets(db: Session, worksheet_ids: List[int], user_id: int) -> int:
+        """여러 워크시트를 일괄 삭제합니다."""
+        try:
+            deleted_count = 0
+
+            for worksheet_id in worksheet_ids:
+                # 워크시트 존재 및 소유권 확인
+                db_worksheet = db.query(Worksheet).filter(
+                    Worksheet.worksheet_id == worksheet_id,
+                    Worksheet.teacher_id == user_id  # 소유권 확인
+                ).first()
+
+                if not db_worksheet:
+                    print(f"워크시트 ID {worksheet_id}를 찾을 수 없거나 권한이 없습니다.")
+                    continue
+
+                # 외래키 제약 조건 순서에 맞게 삭제
+
+                # 1. 먼저 question_results 삭제 (grading_results를 참조)
+                question_results = db.query(QuestionResult).join(GradingResult).filter(
+                    GradingResult.worksheet_id == worksheet_id
+                ).all()
+                for qr in question_results:
+                    db.delete(qr)
+
+                # 2. grading_results 삭제 (worksheets를 참조)
+                grading_results = db.query(GradingResult).filter(GradingResult.worksheet_id == worksheet_id).all()
+                for gr in grading_results:
+                    db.delete(gr)
+
+                # 3. assignment_deployments 삭제 (assignments를 참조)
+                assignments = db.query(Assignment).filter(Assignment.worksheet_id == worksheet_id).all()
+                assignment_ids = [assignment.id for assignment in assignments]
+
+                # 먼저 모든 assignment_deployments 삭제
+                if assignment_ids:
+                    db.query(AssignmentDeployment).filter(AssignmentDeployment.assignment_id.in_(assignment_ids)).delete(synchronize_session=False)
+
+                # 4. assignments 삭제 (worksheets를 참조)
+                if assignment_ids:
+                    db.query(Assignment).filter(Assignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+
+                # 5. questions 삭제 (worksheets를 참조)
+                related_questions = db.query(Question).filter(Question.worksheet_id == worksheet_id).all()
+                for question in related_questions:
+                    db.delete(question)
+
+                # 6. passages 삭제 (worksheets를 참조, 필요시)
+                related_passages = db.query(Passage).filter(Passage.worksheet_id == worksheet_id).all()
+                for passage in related_passages:
+                    db.delete(passage)
+
+                # 7. 마지막으로 worksheet 삭제
+                db.delete(db_worksheet)
+                deleted_count += 1
+
+                print(f"워크시트 ID {worksheet_id} 삭제 완료")
+
+            db.commit()
+            return deleted_count
+
+        except Exception as e:
+            db.rollback()
+            print(f"일괄 삭제 중 오류 발생: {str(e)}")
+            raise e
 
     @staticmethod
     def delete_worksheet(db: Session, worksheet_id: int) -> bool:
