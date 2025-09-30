@@ -56,6 +56,7 @@ services:
     container_name: english_service
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
@@ -63,6 +64,7 @@ services:
       - "8002:8000"
     depends_on:
       - postgres
+      - redis
     volumes:
       - ./services/english-service:/app
     networks:
@@ -208,6 +210,26 @@ services:
       - qt_project_network
     restart: unless-stopped
 
+  # Celery Worker for English Service
+  english-celery-worker:
+    build:
+      context: ./services/english-service
+      dockerfile: Dockerfile.celery
+    container_name: english_celery_worker
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
+      - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/english-service:/app
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
   # Flower for Celery Monitoring
   flower:
     build:
@@ -223,6 +245,28 @@ services:
     depends_on:
       - postgres
       - redis
+    networks:
+      - qt_project_network
+    restart: unless-stopped
+
+  # Flower for English Service Celery Monitoring
+  english-flower:
+    build:
+      context: ./services/english-service
+      dockerfile: Dockerfile.celery
+    container_name: english_flower
+    command: celery -A app.celery_app flower --broker=redis://redis:6379/0
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
+      - REDIS_URL=redis://redis:6379/0
+      - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
+    ports:
+      - "5556:5555"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/english-service:/app
     networks:
       - qt_project_network
     restart: unless-stopped

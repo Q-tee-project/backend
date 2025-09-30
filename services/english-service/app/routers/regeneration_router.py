@@ -8,16 +8,18 @@ from app.schemas.regeneration import (
     EnglishPassage
 )
 from app.services.regeneration.question_regenerator import QuestionRegenerator
+from app.tasks import regenerate_english_question_task
+from app.celery_app import celery_app
 
 router = APIRouter(tags=["English Question Regeneration"])
 
 
-@router.post("/questions/regenerate", response_model=RegenerationResponse)
+@router.post("/questions/regenerate")
 async def regenerate_english_question(
     request: RegenerateEnglishQuestionRequest
 ):
     """
-    영어 문제를 재생성합니다.
+    영어 문제를 비동기로 재생성합니다.
 
     ## 요청 형식
     ```json
@@ -56,45 +58,38 @@ async def regenerate_english_question(
     }
     ```
 
-    ## 응답 형식
+    ## 응답 형식 (비동기)
     ```json
     {
-      "success": true,
-      "message": "문제가 성공적으로 재생성되었습니다.",
-      "regenerated_questions": [...],
-      "regenerated_passage": null
+      "task_id": "celery-task-uuid",
+      "status": "started",
+      "message": "문제 재생성 작업이 시작되었습니다."
     }
     ```
     """
 
     try:
-        regenerator = QuestionRegenerator()
+        print("🚨 비동기 문제 재생성 요청 시작!")
 
-        # 재생성 실행
-        success, message, regenerated_questions, regenerated_passage = regenerator.regenerate_from_data(
-            questions=request.questions,
-            passage=request.passage,
-            form_data=request.formData
-        )
+        # 요청 데이터를 딕셔너리로 변환
+        request_data = request.model_dump()
 
-        if success:
-            return RegenerationResponse(
-                success=True,
-                message=message,
-                regenerated_questions=regenerated_questions,
-                regenerated_passage=regenerated_passage
-            )
-        else:
-            return RegenerationResponse(
-                success=False,
-                message=message,
-                error_details=message
-            )
+        # 비동기 재생성 태스크 시작
+        task = regenerate_english_question_task.delay(request_data)
+
+        print(f"🎯 재생성 태스크 ID: {task.id}")
+
+        return {
+            "task_id": task.id,
+            "status": "started",
+            "message": "문제 재생성 작업이 시작되었습니다."
+        }
 
     except Exception as e:
+        print(f"❌ 비동기 문제 재생성 시작 실패: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"재생성 중 오류가 발생했습니다: {str(e)}"
+            detail=f"재생성 작업 시작 실패: {str(e)}"
         )
 
 
