@@ -5,6 +5,9 @@ from .services.math_generation_service import MathGenerationService
 from .schemas.math_generation import MathProblemGenerationRequest
 from .models.worksheet import Worksheet, WorksheetStatus
 from .models.problem import Problem
+
+# Celery 워커가 로드될 때 MathGenerationService 인스턴스를 한 번만 생성합니다.
+math_generation_service_instance = MathGenerationService()
 from .services.math_grading_service import MathGradingService
 from .models.grading_result import GradingSession, ProblemGradingResult
 from .models.math_generation import Assignment, TestSession, TestAnswer
@@ -45,11 +48,10 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
         db.refresh(worksheet)
 
         self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'AI 문제 생성 중...'})
-        math_service = MathGenerationService()
-        curriculum_data = math_service._get_curriculum_data(request)
         
-        # MathGenerationService의 비율 기반 로직 사용
-        generated_problems = math_service._generate_problems_with_ratio(curriculum_data, request)
+        # MathGenerationService의 비율 기반 로직 사용 (싱글톤 인스턴스 사용)
+        curriculum_data = math_generation_service_instance._get_curriculum_data(request)
+        generated_problems = math_generation_service_instance._generate_problems_with_ratio(curriculum_data, request)
 
         if not isinstance(generated_problems, list):
             raise AIResponseError(f"AI 응답이 잘못된 형식입니다. 리스트가 아닌 {type(generated_problems)} 타입을 받았습니다.")
@@ -85,8 +87,8 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
 
             worksheet.status = WorksheetStatus.COMPLETED
             worksheet.completed_at = datetime.now()
-            worksheet.actual_difficulty_distribution = math_service._calculate_difficulty_distribution(generated_problems)
-            worksheet.actual_type_distribution = math_service._calculate_type_distribution(generated_problems)
+            worksheet.actual_difficulty_distribution = math_generation_service_instance._calculate_difficulty_distribution(generated_problems)
+            worksheet.actual_type_distribution = math_generation_service_instance._calculate_type_distribution(generated_problems)
             
             db.commit()
             print(f"✅ 워크시트 {worksheet.id}와 문제 {len(problems_to_save)}개 저장 완료.")

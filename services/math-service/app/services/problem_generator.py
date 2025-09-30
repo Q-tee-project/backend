@@ -5,6 +5,7 @@ import os
 import json
 import re
 import google.generativeai as genai
+from openai import OpenAI
 from typing import Dict, List, Any, Optional
 from .prompt_templates import PromptTemplates
 from dotenv import load_dotenv
@@ -22,6 +23,13 @@ class ProblemGenerator:
 
         genai.configure(api_key=gemini_api_key)
 
+        # OpenAI 클라이언트 초기화 (AI Judge용)
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+
+        self.openai_client = OpenAI(api_key=openai_api_key)
+
         # 기본 설정으로 복원 (타임아웃 해결을 위해 토큰 수 조정)
         generation_config = genai.types.GenerationConfig(
             temperature=0.7,
@@ -33,38 +41,6 @@ class ProblemGenerator:
         self.model = genai.GenerativeModel(
             'gemini-2.5-pro',
             generation_config=generation_config
-        )
-
-        # 검증용 빠른 모델 (gemini-2.5-flash)
-        validation_config = genai.types.GenerationConfig(
-            temperature=0.1,  # 일관성을 위해 0에 가깝게 설정
-            max_output_tokens=512,  # 예상 출력 길이에 맞춰 여유있게 설정
-        )
-
-        # 안전 필터 완화 설정
-        safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_NONE"
-            }
-        ]
-
-        self.validation_model = genai.GenerativeModel(
-            'gemini-2.5-flash',
-            generation_config=validation_config,
-            safety_settings=safety_settings
         )
 
         self.prompt_templates = PromptTemplates()
@@ -606,137 +582,61 @@ class ProblemGenerator:
 
     def _validate_with_ai_judge(self, problem: Dict) -> tuple:
         """
-        AI Judge로 문제 검증 (gemini-2.5-flash) - 수식 단순화로 안전 필터 우회
+        AI Judge로 문제 검증 (OpenAI GPT-4o-mini) - 안전 필터 문제 해결
 
         Returns:
             (is_valid: bool, scores: dict, feedback: str)
         """
         try:
-            # --- 수식 단순화 헬퍼 함수 ---
-            def simplify_latex(text: str) -> str:
-                """검증을 위해 LaTeX 수식을 단순한 텍스트로 변경"""
-                if not text:
-                    return text
-
-                # 1. LaTeX 명령어를 먼저 치환 (백슬래시 제거 전에!)
-                text = text.replace('\\times', ' × ')  # 곱하기 기호
-                text = text.replace('\\div', ' ÷ ')    # 나누기 기호
-                text = text.replace('\\cdot', ' · ')   # 점 곱하기
-                text = text.replace('\\frac', 'frac')  # 분수
-                text = text.replace('\\sqrt', 'sqrt')  # 제곱근
-
-                # 2. $ 기호 제거
-                text = text.replace('$', '')
-
-                # 3. 남은 백슬래시 제거 (LaTeX 명령어 치환 후)
-                text = text.replace('\\', '')
-
-                # 4. 지수 표기를 더 자연스럽게 변경 (^를 그대로 두되, 공백 추가)
-                text = re.sub(r'(\d)\^(\w)', r'\1^\2', text)  # 2^a 유지 (안전 필터 우회용)
-
-                # 5. 다중 공백 정리
-                text = re.sub(r'\s+', ' ', text)
-
-                return text.strip()
-
-            # 각 필드를 자연어 형식으로 전달 + 수식 단순화 적용
-            question = simplify_latex(problem.get('question', ''))
-            correct_answer = simplify_latex(problem.get('correct_answer', ''))
-            explanation = simplify_latex(problem.get('explanation', ''))
+            # 원본 데이터 그대로 사용 (OpenAI는 LaTeX 처리 가능)
+            question = problem.get('question', '')
+            correct_answer = problem.get('correct_answer', '')
+            explanation = problem.get('explanation', '')
             problem_type = problem.get('problem_type', '')
             choices = problem.get('choices', [])
             choices_text = ', '.join(map(str, choices)) if choices else 'None'
 
-            validation_prompt = f"""당신은 수학 교육 전문가입니다. 다음 수학 문제의 품질을 검증해주세요.
+            validation_prompt = f"""You are a math education expert. Please validate the following math problem.
 
-문제 정보 (수식은 간소화됨):
-- 문제: {question}
-- 정답: {correct_answer}
-- 해설: {explanation}
-- 문제유형: {problem_type}
-- 선택지: {choices_text}
+The problem data is as follows:
+- Question: {question}
+- Correct Answer: {correct_answer}
+- Explanation: {explanation}
+- Problem Type: {problem_type}
+- Choices: {choices_text}
 
-평가 기준:
-1. mathematical_accuracy (1-5점): 수학적 논리 오류가 없는가
-2. consistency (1-5점): 해설의 최종 답이 정답과 일치하는가
-3. completeness (1-5점): 필수 정보가 모두 있는가 (객관식은 4개 선택지 필수)
-4. logic_flow (1-5점): 해설이 논리적으로 전개되는가
+Evaluation criteria:
+1. mathematical_accuracy (1-5): No mathematical or logical errors.
+2. consistency (1-5): The final answer in the explanation matches the correct_answer.
+3. completeness (1-5): All required fields are present (e.g., multiple_choice must have 4 choices).
+4. logic_flow (1-5): The explanation is logical and easy to follow.
 
-JSON 형식으로 반환:
+Return ONLY valid JSON (no markdown, no code blocks):
 {{
-  "scores": {{"mathematical_accuracy": <점수>, "consistency": <점수>, "completeness": <점수>, "logic_flow": <점수>}},
-  "overall_score": <평균>,
-  "decision": "VALID" 또는 "INVALID",
-  "feedback": "<간단한 피드백>"
+  "scores": {{"mathematical_accuracy": <score>, "consistency": <score>, "completeness": <score>, "logic_flow": <score>}},
+  "overall_score": <average>,
+  "decision": "VALID" or "INVALID",
+  "feedback": "<brief feedback>"
 }}
 
-판정 규칙: consistency >= 4 AND 나머지 평균 >= 3.5 -> VALID
+Decision rule: `consistency` must be 4 or higher, AND the average of the other scores must be 3.5 or higher to be "VALID".
 """
 
-            # 안전 필터 완화 설정을 호출 시에도 명시적으로 전달
-            safety_settings_runtime = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ]
-
-            response = self.validation_model.generate_content(
-                validation_prompt,
-                safety_settings=safety_settings_runtime
+            # OpenAI API 호출
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a math education expert who validates math problems and returns structured JSON responses."},
+                    {"role": "user", "content": validation_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=500,
+                response_format={"type": "json_object"}  # JSON 모드 강제
             )
 
-            # finish_reason 체크 (안전 필터 차단 처리) - response.text 접근 전에 먼저 체크
-            if hasattr(response, 'candidates') and response.candidates:
-                finish_reason = response.candidates[0].finish_reason
-                if finish_reason == 2:  # SAFETY
-                    print(f"⚠️ Gemini 안전 필터 발동 (finish_reason=SAFETY), 기본 통과 처리")
-                    print(f"   [차단된 문제] Question: {question[:100]}...")
-                    print(f"   [차단된 문제] Answer: {correct_answer[:50]}...")
-                    return True, {
-                        'mathematical_accuracy': 4,
-                        'consistency': 4,
-                        'completeness': 4,
-                        'logic_flow': 4,
-                        'overall_score': 4.0
-                    }, "Safety filter triggered, passed by default"
-                elif finish_reason not in [0, 1]:  # 0=UNSPECIFIED, 1=STOP (정상)
-                    print(f"⚠️ Gemini 비정상 종료 (finish_reason={finish_reason}), 기본 통과 처리")
-                    return True, {
-                        'mathematical_accuracy': 4,
-                        'consistency': 4,
-                        'completeness': 4,
-                        'logic_flow': 4,
-                        'overall_score': 4.0
-                    }, f"Abnormal finish_reason={finish_reason}, passed by default"
+            result_text = response.choices[0].message.content.strip()
 
-            # response.text 접근 시도 (안전 필터 차단 시 예외 발생 가능)
-            try:
-                result_text = response.text
-            except Exception as text_error:
-                # response.text 접근 실패 시 (안전 필터 등)
-                print(f"⚠️ response.text 접근 실패 ({str(text_error)}), 기본 통과 처리")
-                return True, {
-                    'mathematical_accuracy': 4,
-                    'consistency': 4,
-                    'completeness': 4,
-                    'logic_flow': 4,
-                    'overall_score': 4.0
-                }, "Failed to access response.text, passed by default"
-
-            # JSON 추출
-            result_text = result_text.strip()
-            if "```json" in result_text:
-                json_start = result_text.find("```json") + 7
-                json_end = result_text.find("```", json_start)
-                if json_end != -1:
-                    result_text = result_text[json_start:json_end].strip()
-            elif "```" in result_text:
-                json_start = result_text.find("```") + 3
-                json_end = result_text.find("```", json_start)
-                if json_end != -1:
-                    result_text = result_text[json_start:json_end].strip()
-
+            # JSON 파싱
             result = json.loads(result_text)
 
             is_valid = result.get('decision') == 'VALID'
@@ -746,20 +646,10 @@ JSON 형식으로 반환:
 
             return is_valid, scores, feedback
 
-        except (TimeoutError, ConnectionError, OSError) as e:
-            # 네트워크 관련 오류만 기본 통과 처리
-            print(f"⚠️ 네트워크 오류로 검증 생략, 기본 통과 처리: {str(e)}")
-            return True, {
-                'mathematical_accuracy': 4,
-                'consistency': 4,
-                'completeness': 4,
-                'logic_flow': 4,
-                'overall_score': 4.0
-            }, "Network error, passed by default"
-
         except json.JSONDecodeError as e:
             # JSON 파싱 오류는 재발생시켜 재시도 유도
             print(f"❌ AI Judge 응답 JSON 파싱 실패: {str(e)}")
+            print(f"   응답 내용: {result_text[:200]}...")
             raise Exception(f"AI Judge validation failed - invalid JSON response: {str(e)}")
 
         except Exception as e:

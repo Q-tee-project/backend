@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from ..schemas.math_generation import MathProblemGenerationRequest, MathProblemGenerationResponse
-from .problem_generator import ProblemGenerator
+from .ai_client import problem_generator_instance
 from ..models.math_generation import MathProblemGeneration
 from ..models.problem import Problem
 from ..models.worksheet import Worksheet, WorksheetStatus
@@ -15,7 +15,7 @@ class MathGenerationService:
     """수학 문제 생성 서비스"""
     
     def __init__(self):
-        self.problem_generator = ProblemGenerator()
+        self.problem_generator = problem_generator_instance
     
     def get_curriculum_structure(self, db: Session, school_level: Optional[str] = None) -> Dict:
         """교육과정 구조 조회 - 중1 1학기에 초점"""
