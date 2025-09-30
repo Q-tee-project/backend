@@ -2,7 +2,8 @@ from celery import current_task
 from sqlalchemy.orm import Session
 import json
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .celery_app import celery_app
 from .database import SessionLocal
@@ -24,6 +25,132 @@ settings = get_settings()
 def get_session():
     """데이터베이스 세션 생성"""
     return SessionLocal()
+
+
+def call_gemini_for_question(prompt_info: Dict[str, Any]) -> Dict[str, Any]:
+    """문제 생성을 위한 Gemini API 호출 (독해는 지문 포함)"""
+    try:
+        question_id = prompt_info['question_id']
+        needs_passage = prompt_info.get('needs_passage', False)
+        prompt = prompt_info['prompt']
+
+        if needs_passage:
+            print(f"📚❓ 독해 문제 {question_id} (지문 포함) 생성 시작...")
+        else:
+            print(f"❓ 문제 {question_id} 생성 시작...")
+
+        # Gemini API 키 설정
+        genai.configure(api_key=settings.gemini_api_key)
+
+        # Gemini 모델 생성 (2.5 Flash 사용)
+        model = genai.GenerativeModel(settings.gemini_flash_model)
+
+        # API 호출
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+
+        # JSON 파싱
+        result = json.loads(response.text)
+
+        if needs_passage:
+            print(f"✅ 독해 문제 {question_id} (지문 포함) 생성 완료!")
+        else:
+            print(f"✅ 문제 {question_id} 생성 완료!")
+
+        return result
+
+    except Exception as e:
+        print(f"❌ 문제 {prompt_info['question_id']} 생성 실패: {str(e)}")
+        raise Exception(f"문제 {prompt_info['question_id']} 생성 실패: {str(e)}")
+
+
+def generate_questions_parallel(question_prompts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """문제들을 병렬로 생성 (독해는 지문 포함)"""
+
+    print(f"🚀 문제 병렬 생성 시작 ({len(question_prompts)}개)...")
+
+    results = []
+
+    # ThreadPoolExecutor로 병렬 처리
+    with ThreadPoolExecutor(max_workers=len(question_prompts)) as executor:
+        future_to_prompt = {
+            executor.submit(call_gemini_for_question, prompt): prompt
+            for prompt in question_prompts
+        }
+
+        # 완료되는 순서대로 결과 수집
+        for future in as_completed(future_to_prompt):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                prompt_info = future_to_prompt[future]
+                print(f"❌ 문제 {prompt_info['question_id']} 처리 실패: {str(e)}")
+                raise
+
+    # question_id 순서로 정렬
+    results.sort(key=lambda x: x.get('question', x).get('question_id'))
+
+    # 독해 문제(passage 포함)와 일반 문제 분리
+    passages = []
+    questions = []
+
+    for result in results:
+        if 'passage' in result:
+            # 독해 문제: passage와 question 분리
+            passages.append(result['passage'])
+            questions.append(result['question'])
+        else:
+            # 문법/어휘 문제: question만
+            questions.append(result)
+
+    print(f"✅ 모든 문제 생성 완료! (지문 {len(passages)}개, 문제 {len(questions)}개)")
+    return {'passages': passages, 'questions': questions}
+
+
+def assemble_worksheet(passages: List[Dict[str, Any]], questions: List[Dict[str, Any]], request_data: Dict[str, Any]) -> str:
+    """워크시트 최종 조립"""
+
+    print(f"🔧 워크시트 조립 시작...")
+
+    school_level = request_data.get('school_level', '중학교')
+    grade = request_data.get('grade', 1)
+    total_questions = len(questions)
+
+    # 영역 분포 계산
+    subjects = set(q['question_subject'] for q in questions)
+    if len(subjects) == 1:
+        problem_type = list(subjects)[0]
+    else:
+        problem_type = '혼합형'
+
+    # related_questions 업데이트
+    for passage in passages:
+        passage['related_questions'] = [
+            q['question_id'] for q in questions
+            if q.get('question_passage_id') == passage['passage_id']
+        ]
+
+    worksheet = {
+        "worksheet_id": 1,
+        "worksheet_name": "",
+        "worksheet_date": datetime.now().strftime("%Y-%m-%d"),
+        "worksheet_time": datetime.now().strftime("%H:%M"),
+        "worksheet_duration": "60",
+        "worksheet_subject": "english",
+        "worksheet_level": school_level,
+        "worksheet_grade": grade,
+        "problem_type": problem_type,
+        "total_questions": total_questions,
+        "passages": passages,
+        "questions": questions
+    }
+
+    print(f"✅ 워크시트 조립 완료! (총 {total_questions}문제, {len(passages)}지문)")
+
+    return json.dumps(worksheet, ensure_ascii=False)
 
 
 @celery_app.task(bind=True, name="app.tasks.generate_english_worksheet_task")
@@ -74,73 +201,73 @@ def generate_english_worksheet_task(self, request_data: dict):
         for item in distribution_summary['subject_distribution']:
             print(f"    {item['subject']}: {item['count']}문제 ({item['ratio']}%)")
 
-        # 프롬프트 생성
-        try:
-            print("🔍 프롬프트 생성 시도 중...")
-            prompt = generator.generate_prompt(request_dict, db=db)
-            print("✅ 프롬프트 생성 성공!")
-        except Exception as prompt_error:
-            print(f"❌ 프롬프트 생성 오류: {prompt_error}")
-            db.close()
-            raise Exception(f"프롬프트 생성 실패: {str(prompt_error)}")
-
-        # 진행 상황 업데이트 - AI 호출 (60%)
+        # === 1단계: 문제 프롬프트 생성 (독해는 지문 생성 포함) ===
         current_task.update_state(
             state='PROGRESS',
-            meta={'current': 60, 'total': 100, 'status': 'AI 문제 생성 중...'}
+            meta={'current': 30, 'total': 100, 'status': '문제 프롬프트 생성 중...'}
         )
 
-        # LLM에 프롬프트 전송 및 응답 받기
-        llm_response = None
+        try:
+            print("🔍 1단계: 문제 프롬프트 생성 시도 중 (독해는 지문 포함)...")
+            question_prompts = generator.generate_question_prompts(request_dict, passages=None, db=db)
+            print(f"✅ 문제 프롬프트 생성 성공! ({len(question_prompts)}개)")
+        except Exception as prompt_error:
+            print(f"❌ 문제 프롬프트 생성 오류: {prompt_error}")
+            db.close()
+            raise Exception(f"문제 프롬프트 생성 실패: {str(prompt_error)}")
+
+        # === 2단계: 문제 병렬 생성 (독해는 지문 포함) ===
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 60, 'total': 100, 'status': '문제 및 지문 병렬 생성 중...'}
+        )
+
+        passages = []
+        questions = []
         llm_error = None
 
         if GEMINI_AVAILABLE:
             try:
-                print("🤖 Gemini API 호출 시작...")
-
-                # Gemini API 키 설정
+                # Gemini API 키 확인
                 if not settings.gemini_api_key:
                     raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
 
-                genai.configure(api_key=settings.gemini_api_key)
-
-                # Gemini 모델 생성
-                model = genai.GenerativeModel(settings.gemini_model)
-
-                # 통합 프롬프트로 API 한 번만 호출 (JSON 응답 요청)
-                print("📝 통합 문제지/답안지 생성 중...")
-                response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-                llm_response = response.text
-                print("✅ 통합 생성 완료!")
+                # 문제 병렬 생성 (독해는 지문 포함)
+                result = generate_questions_parallel(question_prompts)
+                passages = result['passages']
+                questions = result['questions']
 
             except Exception as api_error:
-                print(f"❌ Gemini API 호출 오류: {api_error}")
+                print(f"❌ 문제 생성 오류: {api_error}")
                 llm_error = str(api_error)
                 db.close()
-                raise Exception(f"AI 문제 생성 실패: {str(api_error)}")
+                raise Exception(f"문제 생성 실패: {str(api_error)}")
         else:
             llm_error = "Gemini 라이브러리가 설치되지 않았습니다."
             db.close()
             raise Exception(llm_error)
 
-        # 진행 상황 업데이트 - JSON 파싱 (80%)
+        # === 3단계: 워크시트 조립 ===
         current_task.update_state(
             state='PROGRESS',
-            meta={'current': 80, 'total': 100, 'status': 'AI 응답 처리 중...'}
+            meta={'current': 90, 'total': 100, 'status': '워크시트 조립 중...'}
         )
 
-        # JSON 파싱 처리
+        llm_response = None
         parsed_llm_response = None
 
-        if llm_response:
-            try:
-                # 통합 JSON 파싱
-                parsed_llm_response = json.loads(llm_response)
-                print("✅ 통합 JSON 파싱 완료!")
-            except json.JSONDecodeError as e:
-                print(f"⚠️ 통합 JSON 파싱 실패: {e}")
-                db.close()
-                raise Exception(f"AI 응답 파싱 실패: {str(e)}")
+        try:
+            # 워크시트 조립
+            llm_response = assemble_worksheet(passages, questions, request_dict)
+
+            # JSON 파싱
+            parsed_llm_response = json.loads(llm_response)
+            print("✅ 워크시트 조립 및 파싱 완료!")
+
+        except Exception as e:
+            print(f"❌ 워크시트 조립 오류: {e}")
+            db.close()
+            raise Exception(f"워크시트 조립 실패: {str(e)}")
 
         # 진행 상황 업데이트 - 완료 (100%)
         current_task.update_state(
