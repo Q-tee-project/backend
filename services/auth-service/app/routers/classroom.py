@@ -324,6 +324,57 @@ async def delete_classroom(
         )
 
 
+@router.delete("/{classroom_id}/students/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_student_from_classroom(
+    classroom_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher)
+):
+    """클래스룸에서 학생 삭제 (교사만 가능)"""
+    try:
+        # 클래스룸 존재 및 교사 권한 확인
+        classroom = db.query(ClassRoom).filter(
+            ClassRoom.id == classroom_id,
+            ClassRoom.teacher_id == current_teacher.id
+        ).first()
+
+        if not classroom:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 클래스룸에 대한 권한이 없거나 존재하지 않습니다"
+            )
+
+        # 학생의 가입 요청(관계) 확인
+        join_request = db.query(StudentJoinRequest).filter(
+            StudentJoinRequest.classroom_id == classroom_id,
+            StudentJoinRequest.student_id == student_id
+        ).first()
+
+        if not join_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="해당 학생은 이 클래스룸에 속해있지 않습니다"
+            )
+
+        # 학생-클래스룸 관계 삭제
+        db.delete(join_request)
+        db.commit()
+
+        logger.info(f"Teacher {current_teacher.id} removed student {student_id} from classroom {classroom_id}")
+        return
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error removing student {student_id} from classroom {classroom_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"학생 삭제 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
 @router.get("/student/{student_id}/classrooms-with-teachers", response_model=List[ClassroomWithTeacherResponse])
 async def get_student_classrooms_with_teachers(
     student_id: int,
