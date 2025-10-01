@@ -200,7 +200,8 @@ async def get_assignment_detail(
                 "image_url": problem.image_url,
                 "has_diagram": problem.has_diagram,
                 "diagram_type": problem.diagram_type,
-                "diagram_elements": problem.diagram_elements
+                "diagram_elements": problem.diagram_elements,
+                "tikz_code": problem.tikz_code
             }
             for problem in problems
         ]

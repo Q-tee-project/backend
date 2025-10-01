@@ -212,12 +212,13 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
         if not new_problem_data: raise AIResponseError("문제 재생성에 실패했습니다.")
 
         self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': '문제 정보 업데이트 중...'})
-        
+
         problem.question = new_problem_data.get("question", problem.question)
         problem.correct_answer = new_problem_data.get("correct_answer", problem.correct_answer)
         problem.explanation = new_problem_data.get("explanation", problem.explanation)
         if new_problem_data.get("choices"): problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
-        
+        if new_problem_data.get("tikz_code"): problem.tikz_code = new_problem_data.get("tikz_code")
+
         db.commit()
         db.refresh(problem)
 

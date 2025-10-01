@@ -48,6 +48,13 @@ Since this unit focuses on coordinate planes and graphs, you MUST include graph 
 \\end{tikzpicture}
 ```
 
+**AXIS SCALING RULES (CRITICAL):**
+- Choose axis ranges that fit the data points with minimal empty space
+- Keep x-axis and y-axis ranges proportional and visually balanced
+- Typical good ranges: -5 to 5, -1 to 10, 0 to 20 (avoid extremes like -2 to 45)
+- If data spans 0 to 40 on x-axis, consider using a smaller scale value (e.g., scale=0.3) instead of default scale=0.8
+- The goal is to create readable, well-proportioned graphs that display clearly
+
 **Graph Types to Use:**
 - For 좌표평면과 그래프: Show points on coordinate plane, geometric shapes
 - For 정비례: Show linear proportions (y = ax) passing through origin
