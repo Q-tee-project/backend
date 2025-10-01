@@ -68,8 +68,8 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
         # 새로운 생성기 사용 - 병렬 처리 적용
         generator = KoreanProblemGenerator()
 
-        # 병렬 처리로 문제 생성
-        print(f"🚀 병렬 문제 생성 시작: {request_data['problem_count']}개")
+        # 병렬 처리로 문제 생성 (AI Judge 검증 포함)
+        print(f"🚀 병렬 문제 생성 시작 (AI Judge 검증 포함): {request_data['problem_count']}개")
         problems = generator.generate_problems_parallel(
             korean_data=korean_data,
             user_prompt=request_data.get('user_text', ''),
@@ -78,27 +78,15 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             max_workers=min(request_data['problem_count'], 5)  # 최대 5개 동시 실행
         )
 
-        # 생성된 문제 검증 (2단계: 구조 + AI Judge)
-        print(f"📊 생성된 문제 검증 시작 (구조 검증 + AI Judge 내용 검증)...")
-        validation_result = generator.validate_problems_batch(problems, korean_data['korean_type'])
-        print(f"✅ 검증 완료: {validation_result['valid_problems']}/{validation_result['total_problems']} 유효")
-        print(f"📈 평균 품질 점수: {validation_result['average_quality_score']:.1f}/100")
+        # 생성 완료 로깅
+        print(f"✅ 문제 생성 완료: {len(problems)}개 (AI Judge 검증 통과)")
 
-        # AI Judge 점수 표시
-        if validation_result['ai_judge_enabled']:
-            print(f"🤖 AI Judge 평균 점수: {validation_result['average_ai_judge_score']:.2f}/5.0")
-
-        print(f"📊 난이도 분포: {validation_result['difficulty_distribution']}")
-
-        # 품질 점수가 너무 낮으면 경고
-        if validation_result['average_quality_score'] < 60:
-            print(f"⚠️ 경고: 평균 품질 점수가 낮습니다 ({validation_result['average_quality_score']:.1f})")
-
-        # 검증 실패한 문제가 있으면 로깅
-        if validation_result['invalid_problems'] > 0:
-            print(f"❌ 검증 실패 문제: {validation_result['invalid_problems']}개")
-            for issue in validation_result['issues']:
-                print(f"  - 문제 {issue['problem_index']}: {issue['errors']}")
+        # 난이도 분포 계산
+        difficulty_distribution = {}
+        for problem in problems:
+            diff = problem.get('difficulty', '중')
+            difficulty_distribution[diff] = difficulty_distribution.get(diff, 0) + 1
+        print(f"📊 난이도 분포: {difficulty_distribution}")
 
         # 진행 상황 업데이트
         current_task.update_state(
@@ -194,11 +182,11 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             question_type_counts[question_type_key] = question_type_counts.get(question_type_key, 0) + 1
             difficulty_counts[difficulty_key] = difficulty_counts.get(difficulty_key, 0) + 1
 
-        # 워크시트 상태 업데이트 - 검증 결과 분포 사용
+        # 워크시트 상태 업데이트
         worksheet.status = WorksheetStatus.COMPLETED
         worksheet.actual_korean_type_distribution = korean_type_counts
         worksheet.actual_question_type_distribution = question_type_counts
-        worksheet.actual_difficulty_distribution = validation_result['difficulty_distribution']
+        worksheet.actual_difficulty_distribution = difficulty_counts
 
         # 생성 세션 업데이트
         generation_session.status = 'completed'

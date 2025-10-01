@@ -1,10 +1,13 @@
 """
-OCR 서비스 로직 분리
+OCR 서비스 로직 분리 - 수학 필기체 답안 인식 최적화
 """
 import os
 import requests
 import base64
 from typing import Dict, Optional
+import io
+import re
+
 try:
     from PIL import Image, ImageEnhance, ImageFilter
     PIL_AVAILABLE = True
@@ -14,88 +17,98 @@ except ImportError:
 
 try:
     import numpy as np
-    NUMPY_AVAILABLE = True
+    import cv2
+    CV2_AVAILABLE = True
 except ImportError:
-    NUMPY_AVAILABLE = False
-    print("⚠️ NumPy not available - advanced image processing disabled")
+    CV2_AVAILABLE = False
+    print("⚠️ OpenCV/NumPy not available - advanced preprocessing disabled")
 
-import io
 
 class OCRService:
-    """OCR 전용 클래스"""
-    
+    """OCR 전용 클래스 - 수학 필기체 답안 인식에 특화"""
+
     def __init__(self):
         self.vision_api_key = os.getenv("GOOGLE_VISION_API_KEY")
         if not self.vision_api_key:
             raise ValueError("GOOGLE_VISION_API_KEY environment variable is required")
-    
+
+        # 디버그 모드 설정
+        self.debug_mode = os.getenv("OCR_DEBUG_MODE", "false").lower() == "true"
+        self.debug_dir = os.getenv("OCR_DEBUG_DIR", "/tmp")
+
+    def _log(self, message: str):
+        """디버그 로그 출력"""
+        if self.debug_mode:
+            print(f"🔍 OCR: {message}")
+
     def extract_text_from_image(self, image_data: bytes) -> str:
-        """Google Vision을 이용한 손글씨 OCR"""
+        """
+        Google Vision을 이용한 필기체 OCR
+
+        Args:
+            image_data: 이미지 바이너리 데이터 (PNG, JPG 등)
+
+        Returns:
+            인식된 텍스트 (수학 답안 형식)
+        """
         try:
-            print(f"🔍 OCR 디버그: image_data 타입: {type(image_data)}")
-            print(f"🔍 OCR 디버그: image_data 크기: {len(image_data) if image_data else 'None'}")
+            self._log(f"image_data 타입: {type(image_data)}, 크기: {len(image_data) if image_data else 0} bytes")
 
-            if not image_data:
-                print("🔍 OCR 디버그: image_data가 비어있음")
+            if not image_data or len(image_data) < 50:
+                self._log(f"이미지 데이터가 비어있거나 너무 작음")
                 return ""
 
-            # 디버깅용: 이미지를 파일로 저장
-            debug_path = f"/tmp/debug_ocr_{len(image_data)}.png"
-            try:
-                with open(debug_path, 'wb') as f:
-                    f.write(image_data)
-                print(f"🔍 OCR 디버그: 이미지 저장됨 - {debug_path}")
-            except Exception as save_error:
-                print(f"🔍 OCR 디버그: 이미지 저장 실패 - {save_error}")
+            # 디버그 모드: 원본 이미지 저장
+            if self.debug_mode:
+                self._save_debug_image(image_data, "original")
 
-            # 이미지 크기가 너무 작으면 스킵
-            if len(image_data) < 50:  # 50 bytes 미만으로 크게 낮춤
-                print(f"🔍 OCR 디버그: 이미지가 너무 작음 ({len(image_data)} bytes)")
-                return ""
+            # 이미지 전처리
+            processed_data = self._preprocess_image(image_data)
+            if processed_data:
+                image_data = processed_data
+                if self.debug_mode:
+                    self._save_debug_image(image_data, "processed")
 
-            # 이미지 전처리 시도 (PIL 사용 가능한 경우만)
-            if PIL_AVAILABLE:
-                try:
-                    processed_image_data = self._preprocess_image(image_data)
-                    if processed_image_data and len(processed_image_data) > len(image_data):
-                        print(f"🔍 OCR 디버그: 이미지 전처리 완료 ({len(image_data)} → {len(processed_image_data)} bytes)")
-                        image_data = processed_image_data
-                except Exception as preprocess_error:
-                    print(f"🔍 OCR 디버그: 이미지 전처리 실패 - {preprocess_error}")
-                    # 원본 이미지 사용
-            else:
-                print(f"🔍 OCR 디버그: PIL 미설치로 이미지 전처리 건너뜀")
-            
-            # 이미지 데이터를 base64로 인코딩
-            image_base64 = base64.b64encode(image_data).decode('utf-8')
-            
             # Google Vision API 호출
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
             result = self._call_vision_api(image_base64)
-            
+
             if result:
-                detected_text = result.strip()
-                print(f"🔍 OCR 디버그: 원본 인식 텍스트: {detected_text[:50]}...")
+                self._log(f"원본 인식 텍스트: {result[:100]}")
+                cleaned_text = self._clean_math_text(result)
+                self._log(f"후처리된 텍스트: {cleaned_text[:100]}")
+                return cleaned_text
 
-                # 수학 답안 후처리: 비라틴 문자 제거
-                cleaned_text = self._clean_math_text(detected_text)
-                print(f"🔍 OCR 디버그: 후처리된 텍스트: {cleaned_text[:50]}...")
-
-                return cleaned_text if cleaned_text else detected_text
-            else:
-                print("🔍 OCR 디버그: 텍스트 인식 실패")
-                return ""
-                
-        except Exception as e:
-            import traceback
-            print(f"OCR 처리 오류: {str(e)}")
-            print(f"OCR 오류 상세: {traceback.format_exc()}")
             return ""
-    
+
+        except Exception as e:
+            print(f"❌ OCR 처리 오류: {str(e)}")
+            if self.debug_mode:
+                import traceback
+                print(traceback.format_exc())
+            return ""
+
+    def _save_debug_image(self, image_data: bytes, suffix: str):
+        """디버그용 이미지 저장"""
+        try:
+            import time
+            timestamp = int(time.time() * 1000)
+            debug_path = f"{self.debug_dir}/ocr_{suffix}_{timestamp}.png"
+            with open(debug_path, 'wb') as f:
+                f.write(image_data)
+            self._log(f"디버그 이미지 저장: {debug_path}")
+        except Exception as e:
+            self._log(f"디버그 이미지 저장 실패: {e}")
+
     def _call_vision_api(self, image_base64: str) -> Optional[str]:
-        """Google Vision API REST 호출"""
+        """
+        Google Vision API REST 호출
+        - DOCUMENT_TEXT_DETECTION: 필기체 인식에 최적화
+        - 언어 힌트 제거: 숫자와 수학 기호 인식 개선
+        """
         try:
             url = f"https://vision.googleapis.com/v1/images:annotate?key={self.vision_api_key}"
-            
+
             payload = {
                 "requests": [
                     {
@@ -106,265 +119,279 @@ class OCRService:
                             {
                                 "type": "DOCUMENT_TEXT_DETECTION",
                                 "maxResults": 10
-                            },
-                            {
-                                "type": "TEXT_DETECTION",
-                                "maxResults": 10
                             }
-                        ],
-                        "imageContext": {
-                            "languageHints": ["en", "en-US"]  # 영어 우선 인식
-                        }
+                        ]
+                        # 언어 힌트 제거 - 숫자와 수학 기호는 언어 독립적
                     }
                 ]
             }
-            
-            headers = {
-                'Content-Type': 'application/json'
-            }
-            
-            print(f"🔍 OCR 디버그: Google Vision API 호출 시작")
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            print(f"🔍 OCR 디버그: 응답 상태코드: {response.status_code}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"🔍 OCR 디버그: 응답 데이터: {str(result)[:200]}...")
-                
-                if 'responses' in result and result['responses']:
-                    response_data = result['responses'][0]
 
-                    # DOCUMENT_TEXT_DETECTION 결과 먼저 확인
-                    if 'fullTextAnnotation' in response_data and response_data['fullTextAnnotation']:
-                        text = response_data['fullTextAnnotation'].get('text', '').strip()
-                        if text:
-                            print(f"🔍 OCR 디버그: DOCUMENT_TEXT_DETECTION 성공: {text[:50]}...")
-                            return text
+            self._log("Google Vision API 호출 시작")
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=30)
+            self._log(f"응답 상태코드: {response.status_code}")
 
-                    # TEXT_DETECTION 결과 확인
-                    if 'textAnnotations' in response_data and response_data['textAnnotations']:
-                        text = response_data['textAnnotations'][0]['description'].strip()
-                        if text:
-                            print(f"🔍 OCR 디버그: TEXT_DETECTION 성공: {text[:50]}...")
-                            return text
-
-                    print("🔍 OCR 디버그: 모든 텍스트 인식 결과가 비어있음")
-                    print(f"🔍 OCR 디버그: 전체 응답: {result}")
-                    return None
-                else:
-                    print("🔍 OCR 디버그: responses가 비어있음")
-                    return None
-            else:
-                error_msg = response.text
-                print(f"❌ OCR API 오류: {response.status_code} - {error_msg}")
+            if response.status_code != 200:
+                print(f"❌ Vision API 오류: {response.status_code} - {response.text}")
                 return None
-                
+
+            result = response.json()
+
+            if 'responses' in result and result['responses']:
+                response_data = result['responses'][0]
+
+                # DOCUMENT_TEXT_DETECTION 결과 확인
+                if 'fullTextAnnotation' in response_data:
+                    text = response_data['fullTextAnnotation'].get('text', '').strip()
+                    if text:
+                        return text
+
+                # TEXT_DETECTION fallback
+                if 'textAnnotations' in response_data and response_data['textAnnotations']:
+                    text = response_data['textAnnotations'][0]['description'].strip()
+                    if text:
+                        return text
+
+                self._log("텍스트 인식 결과 없음")
+
+            return None
+
         except requests.RequestException as e:
-            print(f"❌ OCR API 요청 오류: {str(e)}")
+            print(f"❌ Vision API 요청 오류: {str(e)}")
             return None
         except Exception as e:
-            print(f"❌ OCR API 처리 오류: {str(e)}")
+            print(f"❌ Vision API 처리 오류: {str(e)}")
             return None
 
     def _preprocess_image(self, image_data: bytes) -> Optional[bytes]:
-        """이미지 전처리로 OCR 인식률 향상"""
-        if not PIL_AVAILABLE:
+        """
+        필기체 수학 답안 인식을 위한 이미지 전처리
+        - OpenCV 우선 사용 (더 강력한 전처리)
+        - PIL fallback
+        """
+        if CV2_AVAILABLE:
+            return self._preprocess_with_cv2(image_data)
+        elif PIL_AVAILABLE:
+            return self._preprocess_with_pil(image_data)
+        else:
+            self._log("전처리 라이브러리 없음 - 원본 사용")
             return None
 
+    def _preprocess_with_cv2(self, image_data: bytes) -> Optional[bytes]:
+        """OpenCV를 이용한 고급 이미지 전처리"""
         try:
-            # PIL Image로 변환
-            image = Image.open(io.BytesIO(image_data))
-            original_size = image.size
-            print(f"🔍 OCR 디버그: 원본 이미지 크기: {original_size}")
+            # bytes -> numpy array
+            nparr = np.frombuffer(image_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            # RGBA를 RGB로 변환 (배경을 흰색으로)
+            if img is None:
+                self._log("OpenCV 이미지 디코딩 실패")
+                return None
+
+            self._log(f"원본 크기: {img.shape}")
+
+            # 1. 그레이스케일 변환
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # 2. 크기 조정 (작은 이미지는 확대)
+            h, w = gray.shape
+            min_size = 1000
+            if h < min_size or w < min_size:
+                scale = max(min_size / h, min_size / w, 3.0)
+                new_h, new_w = int(h * scale), int(w * scale)
+                gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+                self._log(f"크기 확대: {w}x{h} → {new_w}x{new_h} (x{scale:.1f})")
+
+            # 3. 노이즈 제거
+            denoised = cv2.fastNlMeansDenoising(gray, None, h=10, templateWindowSize=7, searchWindowSize=21)
+
+            # 4. 대비 향상 (CLAHE - Contrast Limited Adaptive Histogram Equalization)
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            enhanced = clahe.apply(denoised)
+
+            # 5. 선명화
+            kernel = np.array([[-1, -1, -1],
+                               [-1,  9, -1],
+                               [-1, -1, -1]])
+            sharpened = cv2.filter2D(enhanced, -1, kernel)
+
+            # 6. Adaptive Thresholding (필기체 강조)
+            binary = cv2.adaptiveThreshold(
+                sharpened,
+                255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                11,
+                2
+            )
+
+            # 7. 모폴로지 연산 (필기 선 연결)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+            morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+            # numpy array -> bytes (PNG)
+            success, buffer = cv2.imencode('.png', morph, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+            if not success:
+                self._log("OpenCV 인코딩 실패")
+                return None
+
+            processed_data = buffer.tobytes()
+            self._log(f"OpenCV 전처리 완료: {len(image_data)} → {len(processed_data)} bytes")
+            return processed_data
+
+        except Exception as e:
+            self._log(f"OpenCV 전처리 실패: {e}")
+            return None
+
+    def _preprocess_with_pil(self, image_data: bytes) -> Optional[bytes]:
+        """PIL을 이용한 기본 이미지 전처리 (fallback)"""
+        try:
+            image = Image.open(io.BytesIO(image_data))
+            self._log(f"원본 크기: {image.size}, 모드: {image.mode}")
+
+            # RGB 변환
             if image.mode == 'RGBA':
-                # 흰색 배경 생성
                 white_bg = Image.new('RGB', image.size, (255, 255, 255))
-                white_bg.paste(image, mask=image.split()[-1])  # alpha 채널을 마스크로 사용
+                white_bg.paste(image, mask=image.split()[-1])
                 image = white_bg
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
 
-            # 작은 이미지의 경우 더 적극적으로 확대
-            width, height = image.size
-            min_size = 800  # 최소 크기를 800픽셀로 설정
+            # 크기 조정
+            w, h = image.size
+            min_size = 1000
+            if w < min_size or h < min_size:
+                scale = max(min_size / w, min_size / h, 3.0)
+                new_w, new_h = int(w * scale), int(h * scale)
+                image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                self._log(f"크기 확대: {w}x{h} → {new_w}x{new_h}")
 
-            if width < min_size or height < min_size:
-                # 더 큰 배율로 확대
-                scale_factor = max(min_size/width, min_size/height, 4.0)  # 최소 4배 확대
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
+            # 대비, 선명도 향상
+            image = ImageEnhance.Contrast(image).enhance(2.0)
+            image = ImageEnhance.Sharpness(image).enhance(2.0)
+            image = ImageEnhance.Brightness(image).enhance(1.1)
 
-                # 고품질 리샘플링 사용
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                print(f"🔍 OCR 디버그: 이미지 크기 확대 {width}x{height} → {new_width}x{new_height} (배율: {scale_factor:.1f})")
-
-            # 더 간단하고 안전한 처리 방식으로 변경
-            # 직접 대비와 선명도만 조정
-
-            # 더 강한 대비 향상
-            enhancer = ImageEnhance.Contrast(image)
-            image = enhancer.enhance(2.0)  # 1.5에서 2.0으로 증가
-
-            # 더 강한 선명도 향상
-            enhancer = ImageEnhance.Sharpness(image)
-            image = enhancer.enhance(2.0)  # 1.2에서 2.0으로 증가
-
-            # 밝기 조정 (필기가 더 명확하게 보이도록)
-            enhancer = ImageEnhance.Brightness(image)
-            image = enhancer.enhance(1.1)
-
-            # 최종 이미지를 고품질로 저장
+            # PNG로 저장
             buffer = io.BytesIO()
-            image.save(buffer, format='PNG', quality=100, optimize=False)
+            image.save(buffer, format='PNG', quality=100)
             processed_data = buffer.getvalue()
 
-            # 전처리된 이미지도 디버그용으로 저장
-            debug_processed_path = f"/tmp/debug_processed_{len(processed_data)}.png"
-            try:
-                with open(debug_processed_path, 'wb') as f:
-                    f.write(processed_data)
-                print(f"🔍 OCR 디버그: 전처리된 이미지 저장됨 - {debug_processed_path}")
-            except Exception as save_error:
-                print(f"🔍 OCR 디버그: 전처리된 이미지 저장 실패 - {save_error}")
-
-            print(f"🔍 OCR 디버그: 이미지 전처리 완료 ({len(image_data)} → {len(processed_data)} bytes)")
+            self._log(f"PIL 전처리 완료: {len(image_data)} → {len(processed_data)} bytes")
             return processed_data
 
         except Exception as e:
-            print(f"🔍 OCR 디버그: 이미지 전처리 중 오류 - {str(e)}")
+            self._log(f"PIL 전처리 실패: {e}")
             return None
-    
-    def extract_answer_from_text(self, ocr_text: str, problem_id: int, problem_number: int) -> str:
-        """OCR 텍스트에서 특정 문제의 답안 추출"""
-        # OCR 후처리: 일반적인 오인식 패턴 수정
-        cleaned_text = self.clean_ocr_text(ocr_text)
-        
-        lines = cleaned_text.split('\n')
-        
-        # 문제 번호 패턴 찾기
-        for i, line in enumerate(lines):
-            if f"{problem_number}." in line or f"{problem_number})" in line:
-                # 해당 줄에서 답안 부분 추출
-                answer_part = line.split(f"{problem_number}.")[-1].split(f"{problem_number})")[-1]
-                return answer_part.strip()
-        
-        # 패턴을 찾지 못한 경우 전체 텍스트 반환
-        return cleaned_text.strip()
-    
-    def clean_ocr_text(self, text: str) -> str:
-        """OCR 텍스트의 일반적인 오인식 패턴을 수정"""
-        import re
-        
-        # 공통 오인식 패턴 수정
-        replacements = {
-            # 숫자 오인식 패턴
-            r'\.\.+': '1',  # .. -> 1
-            r'l': '1',      # l -> 1 (소문자 엘)
-            r'I': '1',      # I -> 1 (대문자 아이)
-            r'O': '0',      # O -> 0 (대문자 오)
-            r'o': '0',      # o -> 0 (소문자 오)
-            r'S': '5',      # S -> 5 
-            r'§': '5',      # § -> 5
-            r'Z': '2',      # Z -> 2
-            r'g': '9',      # g -> 9
-            r'b': '6',      # b -> 6
-            # 연속된 공백을 하나로
-            r'\s+': ' ',
-            # 특수문자 정리
-            r'[^\w\s,./\-+()=]': '',
-        }
-        
-        cleaned = text
-        for pattern, replacement in replacements.items():
-            cleaned = re.sub(pattern, replacement, cleaned)
-        
-        print(f"🔍 OCR 후처리: '{text[:30]}...' -> '{cleaned[:30]}...'")
-        return cleaned.strip()
 
     def _clean_math_text(self, text: str) -> str:
-        """수학 답안용 텍스트 정리 - 비라틴 문자 제거 및 분수 인식 개선"""
-        import re
-
+        """
+        수학 답안 텍스트 정리
+        - 비ASCII 문자 제거 (한글, 일본어 등)
+        - 분수 패턴 인식
+        - 컨텍스트 기반 오인식 수정
+        """
         if not text or not text.strip():
             return ""
 
         cleaned = text.strip()
-        original_text = cleaned
+        original = cleaned
 
-        # 1. 비라틴 문자 제거 (한글, 일본어, 중국어 등)
-        # 수학 답안은 영어, 숫자, 기본 기호만 있어야 함
+        # 1. 비ASCII 문자 제거 (수학 답안은 ASCII만 필요)
         cleaned = re.sub(r'[^\x00-\x7F]', '', cleaned)
 
-        # 2. 분수 패턴 인식 개선
-        # "17\n4", "17 4", "17/4" 등의 패턴을 분수로 인식
+        # 2. 분수 패턴 감지
+        fraction = self._detect_fraction(cleaned)
+        if fraction:
+            self._log(f"분수 인식: '{original}' → '{fraction}'")
+            return fraction
 
-        # 2-1. 줄바꿈이나 공백으로 분리된 두 숫자 (분수 형태)
-        fraction_patterns = [
-            r'(\d+)\s*[\n\r]+\s*(\d+)',  # 세로 정렬 분수: "17\n4"
-            r'(\d+)\s+(\d+)$',           # 공백으로 분리된 두 숫자: "17 4"
-            r'(\d+)\s*/\s*(\d+)',        # 슬래시 분수: "17/4", "17 / 4"
-        ]
+        # 3. 컨텍스트 기반 오인식 수정
+        cleaned = self._fix_ocr_errors(cleaned)
 
-        for pattern in fraction_patterns:
-            match = re.search(pattern, cleaned)
-            if match:
-                numerator, denominator = match.groups()
-                print(f"🔍 OCR 분수 인식: '{original_text}' -> '{numerator}/{denominator}'")
-                return f"{numerator}/{denominator}"
+        # 4. 공백 정리
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
-        # 2-2. "Elt", "EIt" 같은 OCR 오인식을 분수로 변환 시도
-        # 숫자와 문자가 혼재된 경우 숫자 추출 시도
-        if re.search(r'[A-Za-z]', cleaned) and re.search(r'\d', cleaned):
-            # 숫자만 추출
-            numbers = re.findall(r'\d+', cleaned)
-            if len(numbers) == 2:
-                print(f"🔍 OCR 분수 복구: '{original_text}' -> '{numbers[0]}/{numbers[1]}'")
-                return f"{numbers[0]}/{numbers[1]}"
-            elif len(numbers) == 1:
-                # 단일 숫자가 포함된 경우, 문자 부분을 분석
-                # "E17" -> "1/7" 또는 "17" 등으로 해석 시도
-                number = numbers[0]
-                letters = re.sub(r'\d', '', cleaned).strip()
-
-                # 특정 패턴 매칭
-                if letters in ['E', 'l', 'I'] and len(number) >= 2:
-                    # "E17" -> "1/7" 같은 패턴
-                    if len(number) == 2:
-                        print(f"🔍 OCR 분수 복구: '{original_text}' -> '{number[0]}/{number[1]}'")
-                        return f"{number[0]}/{number[1]}"
-
-                # 기본적으로 숫자만 반환
-                return number
-
-        # 3. "메ーン 5" 같은 패턴에서 숫자만 추출 (기존 로직)
-        if re.search(r'\d+', cleaned):
-            # 숫자가 포함된 경우, 의미있는 패턴 찾기
-            # 공백으로 분리된 마지막 숫자를 분모로 가정
-            parts = cleaned.split()
-            numbers = [p for p in parts if re.match(r'^-?\d+\.?\d*$', p)]
-            letters = [p for p in parts if re.match(r'^[a-zA-Z\-\+]+$', p)]
-
-            if len(numbers) == 2 and not letters:
-                # 두 개의 숫자만 있는 경우 분수로 처리
-                print(f"🔍 OCR 분수 인식: '{original_text}' -> '{numbers[0]}/{numbers[1]}'")
-                return f"{numbers[0]}/{numbers[1]}"
-            elif len(numbers) == 1 and len(letters) >= 1:
-                # "x-y 5" 패턴으로 해석
-                numerator = ''.join(letters).replace(' ', '')
-                denominator = numbers[0]
-                cleaned = f"{numerator}/{denominator}"
-            elif len(numbers) == 1 and not letters:
-                # 숫자만 남은 경우
-                cleaned = numbers[0]
-
-        # 4. 기본 정리
-        cleaned = re.sub(r'\s+', ' ', cleaned)  # 연속 공백 제거
-        cleaned = cleaned.strip()
-
-        # 변경사항이 있으면 로그 출력
-        if cleaned != original_text:
-            print(f"🔍 OCR 텍스트 정리: '{original_text}' -> '{cleaned}'")
+        if cleaned != original:
+            self._log(f"텍스트 정리: '{original}' → '{cleaned}'")
 
         return cleaned
+
+    def _detect_fraction(self, text: str) -> Optional[str]:
+        """분수 패턴 감지"""
+        # 패턴 1: "17\n4" (세로 분수)
+        match = re.search(r'^(\d+)\s*[\n\r]+\s*(\d+)$', text)
+        if match:
+            return f"{match.group(1)}/{match.group(2)}"
+
+        # 패턴 2: "17/4" (슬래시 분수)
+        match = re.search(r'^(\d+)\s*/\s*(\d+)$', text)
+        if match:
+            return f"{match.group(1)}/{match.group(2)}"
+
+        # 패턴 3: "17 4" (공백으로 분리된 두 숫자)
+        match = re.search(r'^(\d+)\s+(\d+)$', text)
+        if match:
+            return f"{match.group(1)}/{match.group(2)}"
+
+        # 패턴 4: 문자와 숫자 혼합 (예: "E17" → "1/7")
+        if re.search(r'[A-Za-z]', text):
+            numbers = re.findall(r'\d+', text)
+            if len(numbers) == 2:
+                return f"{numbers[0]}/{numbers[1]}"
+            elif len(numbers) == 1 and len(numbers[0]) == 2:
+                # "17" in "E17" → "1/7"
+                return f"{numbers[0][0]}/{numbers[0][1]}"
+
+        return None
+
+    def _fix_ocr_errors(self, text: str) -> str:
+        """
+        컨텍스트 기반 OCR 오인식 수정
+        - 완전 매칭이 아닌 패턴 기반
+        """
+        # 숫자만 있는 경우는 수정하지 않음
+        if re.match(r'^[\d\s\-+*/().=]+$', text):
+            return text
+
+        # 문자가 섞인 경우에만 수정
+        replacements = {
+            r'\bl\b': '1',      # 단어 경계의 소문자 l
+            r'\bI\b': '1',      # 단어 경계의 대문자 I
+            r'\bO\b': '0',      # 단어 경계의 대문자 O
+            r'\bS\b': '5',      # 단어 경계의 S
+            r'§': '5',          # 특수 문자
+        }
+
+        for pattern, replacement in replacements.items():
+            text = re.sub(pattern, replacement, text)
+
+        return text
+
+    def extract_answer_from_text(self, ocr_text: str, problem_id: int, problem_number: int) -> str:
+        """
+        OCR 텍스트에서 특정 문제의 답안 추출
+
+        Args:
+            ocr_text: 전체 OCR 텍스트
+            problem_id: 문제 ID
+            problem_number: 문제 번호
+
+        Returns:
+            추출된 답안
+        """
+        if not ocr_text:
+            return ""
+
+        lines = ocr_text.split('\n')
+
+        # 문제 번호로 답안 찾기
+        for i, line in enumerate(lines):
+            # "1.", "1)", "1:" 등의 패턴
+            pattern = rf'\b{problem_number}[\.\):]\s*(.+)'
+            match = re.search(pattern, line)
+            if match:
+                answer = match.group(1).strip()
+                self._log(f"문제 {problem_number} 답안 추출: {answer}")
+                return answer
+
+        # 패턴을 못 찾으면 전체 텍스트 반환
+        return ocr_text.strip()
