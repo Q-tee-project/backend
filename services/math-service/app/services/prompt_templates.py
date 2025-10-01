@@ -128,22 +128,35 @@ To ensure perfect separation, you must operate in three different "mental sandbo
   - Problems solvable by direct computation (that's A-Level).
   - Problems requiring the discovery of a hidden pattern or combining more than two distinct concepts (that's C-Level).
 ---
-### **C-LEVEL SANDBOX: Synthesis & Discovery**
-- **Core Principle**: Test if a student can synthesize multiple concepts in a novel way or discover a hidden pattern/strategy to find the solution.
-- **Mental Litmus Test**: "Is there an 'aha!' moment required? Is the solution path non-obvious and requires a clever strategy?"
+### **C-LEVEL SANDBOX: Synthesis & Discovery (HARDEST PROBLEMS)**
+- **Core Principle**: Test if a student can synthesize multiple concepts in a novel way or discover a hidden pattern/strategy to find the solution. **C-Level problems MUST be significantly harder than B-Level.**
+- **Mental Litmus Test**: "Would this problem challenge even a top student? Is there an 'aha!' moment required? Does it require creative thinking or non-obvious strategy?"
 - **Characteristics**:
-  - **Process**: 5+ steps, often involving strategic choices.
-  - **Style**: Asks for "the maximum value", "all possible cases", "proof", or finding a rule in a sequence.
-  - **Key Feature**: The complexity comes from **conceptual synthesis**, not just harder calculations. It often combines ideas from different sub-chapters.
+  - **Process**: 5+ steps, often involving strategic choices or insight.
+  - **Style**: Asks for "the maximum value", "all possible cases", "proof", finding a rule in a sequence, or combining multiple constraints.
+  - **Key Feature**: The complexity comes from **conceptual synthesis** or **discovering a non-obvious approach**, not just harder calculations.
+  - **Examples of C-Level complexity**:
+    * Combining 3+ different mathematical concepts from different sub-chapters
+    * Finding patterns in sequences that require insight (not just applying a formula)
+    * Optimization problems requiring case analysis or constraint handling
+    * Problems where the solution method is not immediately obvious
+    * Multi-step logic puzzles requiring strategic planning
 - **STRICTLY FORBIDDEN**:
-  - Problems that are just a harder version of a B-Level problem (e.g., using bigger numbers or more variables). It must require a different *kind* of thinking.
+  - Problems that are just a harder version of a B-Level problem (e.g., using bigger numbers or more variables).
+  - Problems that can be solved by straightforward application of a single concept.
+  - **WARNING**: If a problem feels similar to B-Level difficulty but with slightly harder numbers, it is NOT C-Level. Redesign it to require genuine insight or synthesis.
 ---
 
 **#3. STEP-BY-STEP GENERATION PROCESS (MANDATORY)**
 You must follow this exact thought process:
 1.  **Generate A-Level First**: Based on the `{difficulty_distribution}`, generate ALL A-Level problems. Adhere strictly to the A-Level Sandbox rules.
 2.  **Generate B-Level Next**: Generate ALL B-Level problems. Adhere strictly to the B-Level Sandbox rules.
-3.  **Generate C-Level Last**: Generate ALL C-Level problems. Adhere strictly to the C-Level Sandbox rules.
+3.  **Generate C-Level Last**: Generate ALL C-Level problems. **CRITICAL**: Before finalizing each C-Level problem, ask yourself:
+    - "Is this problem genuinely harder than my B-Level problems?"
+    - "Does this require insight, synthesis of multiple concepts, or a non-obvious strategy?"
+    - "Would this challenge even a top-performing student?"
+    - If the answer to any of these is NO, redesign the problem to be more challenging.
+    - **Remember**: C-Level is for the HARDEST problems that test deep understanding and creative problem-solving.
 4.  **Combine and Finalize**: Assemble all generated problems into a single JSON array. Ensure the total count is {problem_count}.
 
 **#4. FINAL OUTPUT FORMAT (JSON)**
