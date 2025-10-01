@@ -416,7 +416,7 @@ class MathGenerationService:
 
     def _generate_problems_with_ratio(self, curriculum_data: Dict, request) -> List[Dict]:
         """
-        비율에 따른 문제 생성
+        비율에 따른 문제 생성 - 병렬 처리
         """
         total_count = request.problem_count.value_int
         ratio_counts = self._calculate_problem_counts_by_ratio(
@@ -426,31 +426,51 @@ class MathGenerationService:
 
         print(f"🎯 문제 유형별 생성 목표: {ratio_counts}")
 
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         problems = []
 
-        # 객관식 문제 생성
-        if ratio_counts["multiple_choice"] > 0:
-            print(f"📝 객관식 문제 {ratio_counts['multiple_choice']}개 생성 중...")
-            mc_problems = self._generate_specific_type_problems(
-                count=ratio_counts["multiple_choice"],
-                problem_type="multiple_choice",
-                curriculum_data=curriculum_data,
-                request=request
-            )
-            problems.extend(mc_problems)
-            print(f"✅ 객관식 문제 {len(mc_problems)}개 생성 완료")
+        # 병렬 생성을 위한 작업 리스트
+        tasks = []
 
-        # 단답형 문제 생성
+        # 객관식 문제 생성 작업
+        if ratio_counts["multiple_choice"] > 0:
+            tasks.append({
+                "type": "multiple_choice",
+                "count": ratio_counts["multiple_choice"]
+            })
+
+        # 단답형 문제 생성 작업
         if ratio_counts["short_answer"] > 0:
-            print(f"📝 단답형 문제 {ratio_counts['short_answer']}개 생성 중...")
-            sa_problems = self._generate_specific_type_problems(
-                count=ratio_counts["short_answer"],
-                problem_type="short_answer",
-                curriculum_data=curriculum_data,
-                request=request
-            )
-            problems.extend(sa_problems)
-            print(f"✅ 단답형 문제 {len(sa_problems)}개 생성 완료")
+            tasks.append({
+                "type": "short_answer",
+                "count": ratio_counts["short_answer"]
+            })
+
+        # 병렬로 각 유형 생성
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            future_to_type = {}
+            for task in tasks:
+                print(f"📝 {task['type']} 문제 {task['count']}개 생성 시작...")
+                future = executor.submit(
+                    self._generate_specific_type_problems_parallel,
+                    count=task['count'],
+                    problem_type=task['type'],
+                    curriculum_data=curriculum_data,
+                    request=request
+                )
+                future_to_type[future] = task['type']
+
+            # 완료된 작업 수집
+            for future in as_completed(future_to_type):
+                problem_type = future_to_type[future]
+                try:
+                    type_problems = future.result()
+                    problems.extend(type_problems)
+                    print(f"✅ {problem_type} 문제 {len(type_problems)}개 생성 완료")
+                except Exception as e:
+                    print(f"❌ {problem_type} 문제 생성 실패: {str(e)}")
+                    raise
 
         # 문제 순서 랜덤 섞기 (선택사항)
         import random
@@ -459,6 +479,84 @@ class MathGenerationService:
 
         print(f"🎉 총 {len(problems)}개 문제 생성 완료")
         return problems
+
+    def _generate_specific_type_problems_parallel(self, count: int, problem_type: str, curriculum_data: Dict, request) -> List[Dict]:
+        """
+        특정 유형의 문제를 병렬로 생성 (개선된 버전)
+        """
+        print(f"🎯 {problem_type} 유형 {count}개 문제 병렬 생성 시작")
+
+        # 유형별 명확한 프롬프트 생성
+        if problem_type == "multiple_choice":
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 객관식(multiple_choice) 문제만 생성
+2. 각 문제마다 정답은 반드시 1개만 존재
+3. 선택지는 정확히 4개 (A, B, C, D)
+4. correct_answer는 A, B, C, D 중 하나만
+5. "정답을 2개 고르시오" 같은 문제 절대 금지
+6. problem_type은 반드시 "multiple_choice"
+"""
+        else:  # short_answer
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 단답형(short_answer) 문제만 생성
+2. 명확한 하나의 정답만 존재
+3. 선택지(choices) 없음 - choices 필드를 null이나 빈 배열로 설정
+4. 간단한 계산이나 단어로 답 가능
+5. problem_type은 반드시 "short_answer"
+"""
+
+        try:
+            # ProblemGenerator의 병렬 생성 메서드 사용
+            generated_problems = self.problem_generator.generate_problems_parallel(
+                curriculum_data=curriculum_data,
+                user_prompt=type_specific_prompt,
+                problem_count=count,
+                difficulty_ratio=request.difficulty_ratio.model_dump(),
+                problem_type=problem_type,
+                max_workers=min(count, 10)  # 최대 10개 동시 실행
+            )
+
+            # 생성된 문제의 타입을 강제로 설정하고 검증
+            validated_problems = []
+            for problem in generated_problems:
+                # 타입 강제 설정
+                problem["problem_type"] = problem_type
+
+                # 객관식 문제 검증 및 수정
+                if problem_type == "multiple_choice":
+                    # 선택지가 없거나 4개가 아니면 기본값 설정
+                    if not problem.get("choices") or len(problem["choices"]) != 4:
+                        problem["choices"] = ["선택지 A", "선택지 B", "선택지 C", "선택지 D"]
+
+                    # 정답이 A,B,C,D가 아니면 A로 설정
+                    if problem.get("correct_answer") not in ["A", "B", "C", "D"]:
+                        problem["correct_answer"] = "A"
+
+                # 단답형 문제 검증 및 수정
+                elif problem_type == "short_answer":
+                    # 선택지 제거
+                    problem["choices"] = None
+
+                validated_problems.append(problem)
+
+            print(f"✅ {problem_type} 유형 {len(validated_problems)}개 문제 병렬 생성 완료")
+            return validated_problems
+
+        except Exception as e:
+            print(f"❌ 병렬 생성 실패, 순차 생성으로 폴백: {str(e)}")
+            # 순차 생성으로 폴백
+            return self._generate_specific_type_problems(
+                count=count,
+                problem_type=problem_type,
+                curriculum_data=curriculum_data,
+                request=request
+            )
 
     def _generate_specific_type_problems(self, count: int, problem_type: str, curriculum_data: Dict, request) -> List[Dict]:
         """

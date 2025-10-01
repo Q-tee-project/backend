@@ -9,6 +9,8 @@ from openai import OpenAI
 from typing import Dict, List, Any, Optional
 from .prompt_templates import PromptTemplates
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 load_dotenv()
 
@@ -44,7 +46,188 @@ class ProblemGenerator:
         )
 
         self.prompt_templates = PromptTemplates()
-    
+
+    def generate_problems_parallel(
+        self,
+        curriculum_data: Dict,
+        user_prompt: str,
+        problem_count: int = 1,
+        difficulty_ratio: Dict = None,
+        problem_type: str = None,
+        max_workers: int = 5
+    ) -> List[Dict]:
+        """병렬 문제 생성 - 각 문제를 개별적으로 동시에 생성"""
+
+        print(f"\n{'='*60}")
+        print(f"🚀 병렬 문제 생성 시작 ({problem_count}개 문제)")
+        print(f"   최대 동시 실행: {max_workers}개")
+        print(f"{'='*60}\n")
+
+        start_time = time.time()
+
+        # 난이도 분배 계산
+        difficulty_distribution = self._calculate_difficulty_distribution(
+            problem_count, difficulty_ratio
+        )
+
+        # 각 문제별 난이도 할당
+        problem_difficulties = self._assign_difficulties_to_problems(
+            problem_count, difficulty_ratio
+        )
+
+        # 병렬 생성 작업 준비
+        valid_problems = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 각 문제를 개별 작업으로 제출
+            future_to_index = {}
+            for i in range(problem_count):
+                future = executor.submit(
+                    self._generate_single_problem,
+                    curriculum_data=curriculum_data,
+                    user_prompt=user_prompt,
+                    problem_number=i + 1,
+                    difficulty=problem_difficulties[i],
+                    problem_type=problem_type,
+                    max_retries=3
+                )
+                future_to_index[future] = i + 1
+
+            # 완료된 작업 수집
+            for future in as_completed(future_to_index):
+                problem_num = future_to_index[future]
+                try:
+                    problem = future.result()
+                    if problem:
+                        valid_problems.append(problem)
+                        print(f"✅ {problem_num}번 문제 생성 완료 ({len(valid_problems)}/{problem_count})")
+                    else:
+                        print(f"❌ {problem_num}번 문제 생성 실패")
+                except Exception as e:
+                    print(f"❌ {problem_num}번 문제 생성 중 오류: {str(e)}")
+
+        elapsed_time = time.time() - start_time
+        print(f"\n{'='*60}")
+        print(f"✅ 병렬 생성 완료: {len(valid_problems)}/{problem_count}개 성공")
+        print(f"   소요 시간: {elapsed_time:.2f}초")
+        print(f"{'='*60}\n")
+
+        if len(valid_problems) < problem_count:
+            shortage = problem_count - len(valid_problems)
+            raise Exception(f"문제 생성 부족: {shortage}개 부족 ({len(valid_problems)}/{problem_count})")
+
+        return valid_problems[:problem_count]
+
+    def _assign_difficulties_to_problems(self, problem_count: int, difficulty_ratio: Dict) -> List[str]:
+        """각 문제에 난이도 할당"""
+        if not difficulty_ratio:
+            return ['B'] * problem_count
+
+        # 비율에 따른 개수 계산
+        a_count = round(problem_count * difficulty_ratio['A'] / 100)
+        b_count = round(problem_count * difficulty_ratio['B'] / 100)
+        c_count = problem_count - a_count - b_count
+
+        # 난이도 리스트 생성
+        difficulties = ['A'] * a_count + ['B'] * b_count + ['C'] * c_count
+
+        # 부족하면 B로 채우기
+        while len(difficulties) < problem_count:
+            difficulties.append('B')
+
+        return difficulties[:problem_count]
+
+    def _generate_single_problem(
+        self,
+        curriculum_data: Dict,
+        user_prompt: str,
+        problem_number: int,
+        difficulty: str,
+        problem_type: str = None,
+        max_retries: int = 3
+    ) -> Optional[Dict]:
+        """개별 문제 생성 (병렬 실행용)"""
+
+        for attempt in range(max_retries):
+            try:
+                # 1개 문제만 생성하도록 프롬프트 구성
+                if problem_type:
+                    if problem_type == "multiple_choice":
+                        type_constraint = f"""
+
+**절대 준수 사항:**
+- 정확히 1개의 객관식 문제만 생성
+- problem_type은 "multiple_choice"
+- choices는 정확히 4개
+"""
+                    elif problem_type == "short_answer":
+                        type_constraint = f"""
+
+**절대 준수 사항:**
+- 정확히 1개의 단답형 문제만 생성
+- problem_type은 "short_answer"
+- choices 필드는 null 또는 빈 배열
+"""
+                    else:
+                        type_constraint = ""
+
+                    enhanced_user_prompt = f"{user_prompt}{type_constraint}"
+                else:
+                    enhanced_user_prompt = user_prompt
+
+                # 프롬프트 빌드
+                prompt = self.prompt_templates.build_problem_generation_prompt(
+                    curriculum_data=curriculum_data,
+                    user_prompt=enhanced_user_prompt,
+                    problem_count=1,  # 1개만 생성
+                    difficulty_distribution=f"{difficulty}단계 1개"
+                )
+
+                # AI 호출
+                response = self.model.generate_content(prompt)
+                content = response.text
+
+                # JSON 파싱
+                problems = self._extract_and_parse_json(content)
+
+                if not problems or len(problems) == 0:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ {problem_number}번 문제: 파싱 실패, 재시도 {attempt + 1}/{max_retries}")
+                        continue
+                    else:
+                        return None
+
+                # 첫 번째 문제 선택
+                problem = problems[0]
+
+                # 기본 구조 검증
+                validated_problem = self._validate_basic_structure(problem)
+
+                # AI Judge 검증
+                is_valid, scores, feedback = self._validate_with_ai_judge(validated_problem)
+
+                if is_valid:
+                    print(f"  ✅ {problem_number}번: VALID - {scores['overall_score']:.1f}점")
+                    return validated_problem
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"  ⚠️ {problem_number}번: INVALID - {scores['overall_score']:.1f}점, 재시도 {attempt + 1}/{max_retries}")
+                        print(f"     피드백: {feedback}")
+                        continue
+                    else:
+                        print(f"  ❌ {problem_number}번: 최종 실패 - {scores['overall_score']:.1f}점")
+                        return None
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ {problem_number}번 문제 생성 중 오류, 재시도 {attempt + 1}/{max_retries}: {str(e)}")
+                    continue
+                else:
+                    print(f"❌ {problem_number}번 문제 최종 실패: {str(e)}")
+                    return None
+
+        return None
+
     def generate_problems(
         self,
         curriculum_data: Dict,
@@ -513,7 +696,7 @@ class ProblemGenerator:
                 problem['difficulty'] = difficulty
 
         # problem_type 기본 검증
-        valid_types = ['multiple_choice', 'short_answer', 'essay']
+        valid_types = ['multiple_choice', 'short_answer']
         if 'problem_type' in problem:
             if problem['problem_type'] not in valid_types:
                 # 객관식 여부로 자동 판단

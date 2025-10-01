@@ -82,6 +82,14 @@ Since this unit focuses on coordinate planes and graphs, you MUST include graph 
 - **CRITICAL**: Use ONLY English or Math symbols in TikZ code, NO Korean text (e.g., use "x" not "시간", "y" not "거리")
 - For axis labels, use variables like $x$, $y$ instead of Korean words
 
+**ANSWER POINT HIDING RULE (매우 중요)**:
+- If the question asks to find a specific point's coordinate (e.g., "점 D의 좌표를 구하시오"), that point is the ANSWER
+- **DO NOT draw or label the answer point on the graph**
+- Only show the GIVEN points (주어진 점) on the graph
+- Example: If question asks "Find point D" and gives "A(1,2), B(5,2), C(6,5)", only draw points A, B, C
+- **NEVER use \\coordinate (D) at (x,y) or \\filldraw for the answer point**
+- This ensures students must calculate the answer, not read it from the graph
+
 When generating problems for this unit, actively create graph-based questions with TikZ visualizations.
 """
 
