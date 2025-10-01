@@ -29,6 +29,7 @@ class Problem(Base):
     has_diagram = Column(String)  # true/false를 문자열로 저장
     diagram_type = Column(String)  # concentration, train, geometry, graph 등
     diagram_elements = Column(JSON)  # 다이어그램 요소들
+    tikz_code = Column(Text)  # TikZ LaTeX 코드 (그래프 렌더링용)
     
     # 메타데이터
     created_at = Column(DateTime(timezone=True), server_default=func.now())

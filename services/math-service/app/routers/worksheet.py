@@ -190,7 +190,8 @@ async def get_worksheet_detail(
                 "latex_content": problem.latex_content,
                 "has_diagram": problem.has_diagram == "true",
                 "diagram_type": problem.diagram_type,
-                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
+                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None,
+                "tikz_code": problem.tikz_code
             }
             problem_list.append(problem_dict)
 

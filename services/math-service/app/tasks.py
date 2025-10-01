@@ -76,7 +76,8 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
                     latex_content=problem_data.get("latex_content"),
                     has_diagram=str(problem_data.get("has_diagram", False)).lower(),
                     diagram_type=problem_data.get("diagram_type"),
-                    diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
+                    diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None,
+                    tikz_code=problem_data.get("tikz_code")
                 )
                 problems_to_save.append(problem)
 

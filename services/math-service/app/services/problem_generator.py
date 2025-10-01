@@ -94,7 +94,13 @@ class ProblemGenerator:
             problem_count=problem_count,
             difficulty_distribution=difficulty_distribution
         )
-        
+
+        # 그래프 단원 확인 로그
+        unit_name = curriculum_data.get('unit_name', '')
+        if unit_name == "그래프와 비례":
+            print(f"📊 그래프와 비례 단원 감지 - TikZ 생성 프롬프트 활성화")
+            print(f"   챕터: {curriculum_data.get('chapter_name', '')}")
+
         # AI 호출 및 응답 처리 (target_count 전달)
         return self._call_ai_and_parse_response(prompt, target_count=problem_count)
     
@@ -541,6 +547,10 @@ class ProblemGenerator:
             choices = problem.get('choices', [])
             choices_text = ', '.join(map(str, choices)) if choices else 'None'
 
+            # tikz_code와 diagram 관련 필드는 검증에서 제외 (선택적 필드)
+            has_diagram = problem.get('has_diagram', False)
+            diagram_note = " (Note: This problem may include graph/diagram fields which are optional and should not affect validation.)" if has_diagram else ""
+
             validation_prompt = f"""You are a math education expert. Please validate the following math problem.
 
 The problem data is as follows:
@@ -548,12 +558,12 @@ The problem data is as follows:
 - Correct Answer: {correct_answer}
 - Explanation: {explanation}
 - Problem Type: {problem_type}
-- Choices: {choices_text}
+- Choices: {choices_text}{diagram_note}
 
 Evaluation criteria:
 1. mathematical_accuracy (1-5): No mathematical or logical errors.
 2. consistency (1-5): The final answer in the explanation matches the correct_answer.
-3. completeness (1-5): All required fields are present (e.g., multiple_choice must have 4 choices).
+3. completeness (1-5): All required fields are present (e.g., multiple_choice must have 4 choices). IGNORE optional fields like tikz_code, diagram_type, has_diagram.
 4. logic_flow (1-5): The explanation is logical and easy to follow.
 
 Return ONLY valid JSON (no markdown, no code blocks):
@@ -607,17 +617,20 @@ Decision rule: `consistency` must be 4 or higher, AND the average of the other s
         import re
 
         # 문제 개수 패턴 찾기 및 교체
-        # 예: "10개의 문제", "10개 문제", "10 problems"
         patterns = [
             (r'(\d+)개의?\s*문제', f'{needed_count}개 문제'),
             (r'(\d+)\s*problems?', f'{needed_count} problems'),
-            (r'정확히\s*(\d+)개', f'정확히 {needed_count}개')
+            (r'정확히\s*(\d+)개', f'정확히 {needed_count}개'),
+            (r'Total Problems to Generate\*\*:\s*(\d+)', f'Total Problems to Generate**: {needed_count}'),
+            (r'create\s+(\d+)\s+perfectly', f'create {needed_count} perfectly'),
+            (r'Ensure the total count is\s+(\d+)', f'Ensure the total count is {needed_count}')
         ]
 
         adjusted = original_prompt
         for pattern, replacement in patterns:
             adjusted = re.sub(pattern, replacement, adjusted, flags=re.IGNORECASE)
 
+        print(f"📝 프롬프트 조정: {needed_count}개 생성하도록 수정")
         return adjusted
 
     def _rebuild_prompt_with_feedback(self, original_prompt: str, invalid_problems: List[Dict]) -> str:

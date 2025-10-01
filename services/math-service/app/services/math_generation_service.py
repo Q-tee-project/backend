@@ -218,7 +218,8 @@ class MathGenerationService:
                 latex_content=problem_data.get("latex_content"),
                 has_diagram=str(problem_data.get("has_diagram", False)).lower(),
                 diagram_type=problem_data.get("diagram_type"),
-                diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
+                diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None,
+                tikz_code=problem_data.get("tikz_code")
             )
             
             db.add(problem)
@@ -239,7 +240,8 @@ class MathGenerationService:
                 "latex_content": problem.latex_content,
                 "has_diagram": problem.has_diagram == "true",
                 "diagram_type": problem.diagram_type,
-                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
+                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None,
+                "tikz_code": problem.tikz_code
             })
         
         db.commit()
@@ -588,7 +590,8 @@ JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인�
                     "correct_answer": problem.correct_answer,
                     "choices": choices_data,  # 배열로 보장
                     "solution": problem.explanation,  # Problem 모델의 실제 필드명
-                    "created_at": problem.created_at.isoformat() if problem.created_at else None
+                    "created_at": problem.created_at.isoformat() if problem.created_at else None,
+                    "tikz_code": problem.tikz_code  # TikZ 그래프 코드
                 }
                 problem_list.append(problem_data)
             
@@ -654,7 +657,8 @@ JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인�
                     latex_content=source_problem.latex_content,
                     has_diagram=source_problem.has_diagram,
                     diagram_type=source_problem.diagram_type,
-                    diagram_elements=source_problem.diagram_elements
+                    diagram_elements=source_problem.diagram_elements,
+                    tikz_code=source_problem.tikz_code
                 )
                 db.add(new_problem)
             
