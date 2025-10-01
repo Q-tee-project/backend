@@ -10,8 +10,12 @@ from .database import SessionLocal
 from .core.config import get_settings
 from .schemas.generation import WorksheetGenerationRequest
 from .schemas.regeneration import RegenerateEnglishQuestionRequest
+from .schemas.validation import QuestionValidationResult
 from .services.generation.question_generator import PromptGenerator
 from .services.regeneration.question_regenerator import QuestionRegenerator
+from .services.validation.validator import QuestionValidator
+from .services.validation.judge import QuestionJudge
+from .core.validation_config import VALIDATION_SETTINGS
 
 try:
     import google.generativeai as genai
@@ -66,25 +70,126 @@ def call_gemini_for_question(prompt_info: Dict[str, Any]) -> Dict[str, Any]:
         raise Exception(f"문제 {prompt_info['question_id']} 생성 실패: {str(e)}")
 
 
-def generate_questions_parallel(question_prompts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """문제들을 병렬로 생성 (독해는 지문 포함)"""
+def call_gemini_for_validation(prompt: str) -> QuestionValidationResult:
+    """문제 검증을 위한 Gemini API 호출 (AI Judge)"""
+    try:
+        print(f"🔍 AI Judge 검증 시작...")
+
+        # Gemini API 키 설정
+        genai.configure(api_key=settings.gemini_api_key)
+
+        # Gemini 모델 생성 (Pro 모델 사용 - 검증은 더 정확한 모델 사용)
+        model = genai.GenerativeModel(settings.gemini_model)
+
+        # API 호출 (response_schema 없이 프롬프트만 사용)
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "response_mime_type": "application/json"
+            }
+        )
+
+        # JSON 파싱 및 Pydantic 변환
+        result_dict = json.loads(response.text)
+        validation_result = QuestionValidationResult.model_validate(result_dict)
+
+        print(f"✅ AI Judge 검증 완료: {validation_result.final_judgment} ({validation_result.total_score}/100)")
+
+        return validation_result
+
+    except Exception as e:
+        print(f"❌ AI Judge 검증 실패: {str(e)}")
+        raise Exception(f"AI Judge 검증 실패: {str(e)}")
+
+
+def generate_questions_parallel(question_prompts: List[Dict[str, Any]], enable_validation: bool = False) -> Dict[str, Any]:
+    """
+    문제들을 병렬로 생성 (독해는 지문 포함)
+
+    Args:
+        question_prompts: 문제 프롬프트 리스트
+        enable_validation: AI Judge 검증 활성화 여부
+    """
 
     print(f"🚀 문제 병렬 생성 시작 ({len(question_prompts)}개)...")
+    if enable_validation:
+        print(f"✅ AI Judge 검증 활성화됨 (최대 {VALIDATION_SETTINGS['max_retries']}회 재시도)")
 
     results = []
+    validation_results = []
+
+    def generate_with_validation(prompt_info: Dict[str, Any]) -> tuple:
+        """단일 문제 생성 + 검증"""
+        question_id = prompt_info['question_id']
+        metadata = prompt_info.get('metadata', {})
+
+        if not enable_validation:
+            # 검증 없이 바로 생성
+            question_data = call_gemini_for_question(prompt_info)
+            return question_data, None
+
+        # 검증 포함 생성
+        validator = QuestionValidator(
+            max_retries=VALIDATION_SETTINGS['max_retries']
+        )
+        judge = QuestionJudge()
+
+        best_question = None
+        best_validation = None
+        best_score = -1
+
+        for attempt in range(1, VALIDATION_SETTINGS['max_retries'] + 1):
+            try:
+                # 문제 생성
+                question_data = call_gemini_for_question(prompt_info)
+
+                # 검증 프롬프트 생성
+                judge_prompt = judge.create_judge_prompt(question_data, metadata)
+
+                # AI Judge 검증
+                validation_result = call_gemini_for_validation(judge_prompt)
+
+                # 최고 점수 추적
+                if validation_result.total_score > best_score:
+                    best_score = validation_result.total_score
+                    best_question = question_data
+                    best_validation = validation_result
+
+                # Pass 판정이면 바로 사용
+                if validation_result.final_judgment == "Pass":
+                    print(f"✅ 문제 {question_id}: Pass 판정 (attempt {attempt}, score {validation_result.total_score}/100)")
+                    return question_data, validation_result
+
+                # 재시도 필요
+                print(f"⚠️ 문제 {question_id}: {validation_result.final_judgment} (attempt {attempt}, score {validation_result.total_score}/100)")
+
+            except Exception as e:
+                print(f"❌ 문제 {question_id} 검증 중 오류 (attempt {attempt}): {str(e)}")
+                if attempt >= VALIDATION_SETTINGS['max_retries']:
+                    # 최대 시도 도달 - 최고 점수 문제 사용
+                    if best_question:
+                        print(f"⚠️ 문제 {question_id}: 최고 점수 버전 사용 (score {best_score}/100)")
+                        return best_question, best_validation
+                    raise
+
+        # 최대 시도 후 최고 점수 문제 사용
+        print(f"⚠️ 문제 {question_id}: 최대 재시도 도달. 최고 점수 버전 사용 (score {best_score}/100)")
+        return best_question, best_validation
 
     # ThreadPoolExecutor로 병렬 처리
     with ThreadPoolExecutor(max_workers=len(question_prompts)) as executor:
         future_to_prompt = {
-            executor.submit(call_gemini_for_question, prompt): prompt
+            executor.submit(generate_with_validation, prompt): prompt
             for prompt in question_prompts
         }
 
         # 완료되는 순서대로 결과 수집
         for future in as_completed(future_to_prompt):
             try:
-                result = future.result()
-                results.append(result)
+                question_data, validation_result = future.result()
+                results.append(question_data)
+                if validation_result:
+                    validation_results.append(validation_result)
             except Exception as e:
                 prompt_info = future_to_prompt[future]
                 print(f"❌ 문제 {prompt_info['question_id']} 처리 실패: {str(e)}")
@@ -106,8 +211,18 @@ def generate_questions_parallel(question_prompts: List[Dict[str, Any]]) -> Dict[
             # 문법/어휘 문제: question만
             questions.append(result)
 
+    # 검증 결과 요약
+    if enable_validation and validation_results:
+        pass_count = sum(1 for v in validation_results if v.final_judgment == "Pass")
+        avg_score = sum(v.total_score for v in validation_results) / len(validation_results)
+        print(f"📊 검증 결과 요약: Pass {pass_count}/{len(validation_results)}, 평균 점수 {avg_score:.1f}/100")
+
     print(f"✅ 모든 문제 생성 완료! (지문 {len(passages)}개, 문제 {len(questions)}개)")
-    return {'passages': passages, 'questions': questions}
+    return {
+        'passages': passages,
+        'questions': questions,
+        'validation_results': validation_results if enable_validation else None
+    }
 
 
 def assemble_worksheet(passages: List[Dict[str, Any]], questions: List[Dict[str, Any]], request_data: Dict[str, Any]) -> str:
@@ -232,8 +347,11 @@ def generate_english_worksheet_task(self, request_data: dict):
                 if not settings.gemini_api_key:
                     raise Exception("GEMINI_API_KEY가 설정되지 않았습니다.")
 
-                # 문제 병렬 생성 (독해는 지문 포함)
-                result = generate_questions_parallel(question_prompts)
+                # AI Judge 검증 활성화 여부 (기본값: 설정 파일 참조)
+                enable_validation = request_data.get('enable_validation', VALIDATION_SETTINGS['enable_by_default'])
+
+                # 문제 병렬 생성 (독해는 지문 포함, 검증 옵션)
+                result = generate_questions_parallel(question_prompts, enable_validation=enable_validation)
                 passages = result['passages']
                 questions = result['questions']
 
