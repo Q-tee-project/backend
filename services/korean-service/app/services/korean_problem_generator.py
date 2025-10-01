@@ -3,14 +3,17 @@ import json
 import random
 import time
 import google.generativeai as genai
-from typing import Dict, List, Optional
+from openai import OpenAI
+from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..prompt_templates.single_problem_template import SingleProblemTemplate
-from ..prompt_templates.multiple_problems_template import MultipleProblemTemplate
-from ..prompt_templates.extract_passage_template import ExtractPassageTemplate
+from ..prompt_templates.single_problem_en import SingleProblemEnglishTemplate
+from ..prompt_templates.multiple_problems_en import MultipleProblemEnglishTemplate
 
-load_dotenv()
+# .env 파일 로드 (여러 경로 시도)
+load_dotenv()  # 현재 디렉토리
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".env"))  # backend/.env
 
 class KoreanProblemGenerator:
     def __init__(self):
@@ -21,13 +24,22 @@ class KoreanProblemGenerator:
         genai.configure(api_key=gemini_api_key)
         self.model = genai.GenerativeModel('gemini-2.5-pro')
 
+        # OpenAI 클라이언트 초기화 (AI Judge용)
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            print("⚠️ Warning: OPENAI_API_KEY not found. AI Judge validation will be disabled.")
+            print(f"   Available env vars: {[k for k in os.environ.keys() if 'API' in k or 'KEY' in k]}")
+            self.openai_client = None
+        else:
+            self.openai_client = OpenAI(api_key=openai_api_key)
+            print(f"✅ OpenAI API Key loaded: {openai_api_key[:10]}***")
+
         # 데이터 파일 경로
         self.data_path = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
-        # 프롬프트 템플릿 인스턴스
-        self.single_template = SingleProblemTemplate()
-        self.multiple_template = MultipleProblemTemplate()
-        self.extract_template = ExtractPassageTemplate()
+        # 영어 프롬프트 템플릿 인스턴스
+        self.single_template_en = SingleProblemEnglishTemplate()
+        self.multiple_template_en = MultipleProblemEnglishTemplate()
 
     def _extract_user_specified_works(self, user_prompt: str, available_files: List[str]) -> List[str]:
         """사용자가 언급한 작품들을 추출하여 해당하는 파일들을 반환"""
@@ -59,23 +71,77 @@ class KoreanProblemGenerator:
 
         return user_specified_files
 
+    def _preprocess_source_by_type(self, source_text: str, korean_type: str, source_info: Dict) -> str:
+        """유형별 지문 전처리 - 4가지 유형에 맞게 최적화"""
+
+        if korean_type == "시":
+            # 시: 전체 텍스트 사용 (보통 짧음)
+            # 단, 너무 긴 경우(연작시 등) 적절히 제한
+            if len(source_text) > 2000:
+                print(f"⚠️ 시 텍스트가 너무 김 ({len(source_text)}자), 앞부분 사용")
+                return source_text[:2000]
+            return source_text
+
+        elif korean_type == "소설":
+            # 소설: 핵심 부분 발췌 (갈등, 클라이맥스, 인물 관계 등)
+            if len(source_text) > 1500:
+                print(f"📖 소설 핵심 부분 발췌 중... (원본: {len(source_text)}자)")
+                return self._extract_key_passage(source_text, korean_type)
+            return source_text
+
+        elif korean_type == "수필/비문학":
+            # 수필/비문학: 핵심 논지가 있는 부분 발췌
+            if len(source_text) > 1500:
+                print(f"📝 수필/비문학 핵심 부분 발췌 중... (원본: {len(source_text)}자)")
+                return self._extract_key_passage(source_text, korean_type)
+            return source_text
+
+        else:
+            # 기본값
+            return source_text
+
     def _extract_key_passage(self, source_text: str, korean_type: str) -> str:
-        """긴 지문에서 핵심 부분 발췌"""
+        """긴 지문에서 핵심 부분 발췌 (유형별 맞춤 영어 프롬프트 사용)"""
         try:
-            # 템플릿을 사용하여 프롬프트 생성
-            prompt = self.extract_template.generate_prompt(source_text, korean_type)
+            # 유형별 발췌 기준 설정
+            type_specific_criteria = {
+                "소설": "Choose a passage with rich narrative content: character conflict, dialogue revealing personality, crucial plot development, or thematic significance. The passage should show character interactions or internal conflict.",
+                "수필/비문학": "Choose a passage containing the main argument, key evidence, or central thesis. The passage should be logically complete and contain the author's main point or important supporting details.",
+            }
+
+            criteria = type_specific_criteria.get(korean_type, "Choose the most important and representative passage.")
+
+            # 영어 프롬프트로 핵심 부분 추출 요청
+            prompt = f"""You are an expert Korean literature teacher. Extract a key passage from the following {korean_type} text that is most suitable for creating comprehension questions.
+
+**Requirements:**
+- Extract 800-1200 characters (Korean characters)
+- {criteria}
+- The passage should be self-contained and understandable without additional context
+- Preserve the exact original text (do not modify, paraphrase, or summarize)
+- Include complete sentences only (start and end with complete thoughts)
+
+**Original Text:**
+```
+{source_text[:3000]}
+```
+
+Return ONLY the extracted passage in Korean (no explanations, no markdown, no JSON, just the extracted text):
+"""
 
             response = self.model.generate_content(prompt)
             extracted_text = response.text.strip()
 
             # 발췌가 실패한 경우 원본의 앞부분 사용
             if len(extracted_text) < 200:
+                print(f"⚠️ 발췌 실패 (길이: {len(extracted_text)}), 원본 앞부분 사용")
                 return source_text[:1200] + "..." if len(source_text) > 1200 else source_text
 
+            print(f"✅ 핵심 부분 발췌 완료: {len(extracted_text)}자")
             return extracted_text
 
         except Exception as e:
-            print(f"지문 발췌 오류: {e}")
+            print(f"❌ 지문 발췌 오류: {e}")
             # 폴백: 원본의 앞부분 사용
             return source_text[:1200] + "..." if len(source_text) > 1200 else source_text
 
@@ -97,22 +163,54 @@ class KoreanProblemGenerator:
     def _generate_multiple_problems_from_single_text(self, source_text: str, source_info: Dict,
                                                    korean_type: str, count: int,
                                                    question_type_ratio: Dict, difficulty_ratio: Dict,
-                                                   user_prompt: str, korean_data: Dict) -> List[Dict]:
-        """하나의 지문으로 여러 문제를 한 번에 생성"""
+                                                   user_prompt: str, korean_data: Dict,
+                                                   max_retries: int = 2) -> List[Dict]:
+        """하나의 지문으로 여러 문제를 한 번에 생성 (재시도 로직 포함)"""
 
         # 문제 유형과 난이도 분포 결정
         question_types = self._distribute_question_types(count, question_type_ratio, korean_data)
         difficulties = self._distribute_difficulties(count, difficulty_ratio, korean_data)
 
-        # 템플릿을 사용하여 프롬프트 생성
-        prompt = self.multiple_template.generate_prompt(
+        # 영어 템플릿을 사용하여 프롬프트 생성 (더 나은 LLM 성능)
+        prompt = self.multiple_template_en.generate_prompt(
             source_text, source_info, korean_type, count,
             question_types, difficulties, user_prompt, korean_data
         )
 
-        # AI 호출
-        response = self.model.generate_content(prompt)
-        result_text = response.text
+        # 재시도 로직
+        for attempt in range(max_retries):
+            try:
+                # AI 호출
+                response = self.model.generate_content(prompt)
+                result_text = response.text
+
+                # 문제 파싱 및 검증
+                problems = self._parse_and_validate_problems(
+                    result_text, source_text, source_info, korean_type, count, difficulties
+                )
+
+                if problems and len(problems) >= count:
+                    return problems[:count]
+                else:
+                    print(f"⚠️ 생성된 문제 수 부족 ({len(problems)}/{count}), 재시도 {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1)  # 재시도 전 대기
+                        continue
+
+            except Exception as e:
+                print(f"❌ 문제 생성 시도 {attempt + 1} 실패: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                else:
+                    raise
+
+        # 모든 재시도 실패 시 빈 리스트 반환
+        return []
+
+    def _parse_and_validate_problems(self, result_text: str, source_text: str,
+                                     source_info: Dict, korean_type: str, count: int,
+                                     difficulties: List[str]) -> List[Dict]:
 
         # JSON 파싱
         try:
@@ -233,17 +331,46 @@ class KoreanProblemGenerator:
             return korean_data.get('difficulty', '중')
 
     def _generate_single_problem(self, source_text: str, korean_type: str, question_type: str,
-                                difficulty: str, user_prompt: str, korean_data: Dict) -> Dict:
-        """단일 문제 생성"""
-        try:
-            # 템플릿을 사용하여 프롬프트 생성
-            prompt = self.single_template.generate_prompt(
-                source_text, korean_type, question_type, difficulty, user_prompt, korean_data
-            )
+                                difficulty: str, user_prompt: str, korean_data: Dict,
+                                max_retries: int = 2) -> Dict:
+        """단일 문제 생성 (재시도 로직 포함)"""
 
-            # AI 호출
-            response = self.model.generate_content(prompt)
-            result_text = response.text
+        # 영어 템플릿을 사용하여 프롬프트 생성
+        prompt = self.single_template_en.generate_prompt(
+            source_text, korean_type, question_type, difficulty, user_prompt, korean_data
+        )
+
+        # 재시도 로직
+        for attempt in range(max_retries):
+            try:
+                # AI 호출
+                response = self.model.generate_content(prompt)
+                result_text = response.text
+
+                # 문제 파싱 시도
+                problem = self._parse_single_problem(result_text, source_text, korean_type)
+
+                if problem:
+                    return problem
+                else:
+                    print(f"⚠️ 단일 문제 파싱 실패, 재시도 {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                        continue
+
+            except Exception as e:
+                print(f"❌ 단일 문제 생성 시도 {attempt + 1} 실패: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                else:
+                    raise
+
+        raise Exception("단일 문제 생성 실패 - 모든 재시도 소진")
+
+    def _parse_single_problem(self, result_text: str, source_text: str, korean_type: str) -> Optional[Dict]:
+        """단일 문제 JSON 파싱"""
+        try:
 
             # JSON 파싱
             try:
@@ -285,7 +412,7 @@ class KoreanProblemGenerator:
                 problem = {
                     'korean_type': korean_type,
                     'question_type': '객관식',  # 국어는 모두 객관식
-                    'difficulty': difficulty,
+                    'difficulty': problem_data.get('difficulty', '중'),
                     'question': problem_data.get('question', ''),
                     'correct_answer': problem_data.get('correct_answer', ''),
                     'explanation': problem_data.get('explanation', ''),
@@ -576,3 +703,423 @@ class KoreanProblemGenerator:
         except Exception as e:
             print(f"문법 섹션 분할 오류: {e}")
             return []
+
+    # ========== 병렬 처리 메서드 ==========
+
+    def generate_problems_parallel(self, korean_data: Dict, user_prompt: str, problem_count: int,
+                                   difficulty_ratio: Dict = None, max_workers: int = 5) -> List[Dict]:
+        """병렬로 문제 생성 - 수학 서비스와 유사한 방식"""
+        print(f"🚀 병렬 문제 생성 시작: {problem_count}개 문제")
+
+        korean_type = korean_data.get('korean_type', '시')
+        problems = []
+
+        if korean_type == "문법":
+            # 문법은 기존 방식 사용
+            return self._generate_grammar_problems(
+                korean_data, user_prompt, problem_count, None, difficulty_ratio
+            )
+
+        # 시, 소설, 수필/비문학 - 병렬 처리
+        source_texts_info = self._load_multiple_sources_for_single_domain(
+            korean_type, user_prompt, problem_count
+        )
+
+        if not source_texts_info:
+            return []
+
+        # 각 작품별로 문제 수 분배
+        problems_per_work = problem_count // len(source_texts_info)
+        remaining_problems = problem_count % len(source_texts_info)
+
+        # 병렬 작업 리스트 생성
+        tasks = []
+        for i, (source_text, source_info) in enumerate(source_texts_info):
+            work_problem_count = problems_per_work + (1 if i < remaining_problems else 0)
+
+            if work_problem_count > 0:
+                # 유형별 지문 전처리
+                processed_text = self._preprocess_source_by_type(source_text, korean_type, source_info)
+
+                tasks.append({
+                    'source_text': processed_text,
+                    'source_info': source_info,
+                    'count': work_problem_count,
+                    'work_index': i
+                })
+
+        # 병렬로 각 작품의 문제 생성
+        with ThreadPoolExecutor(max_workers=min(len(tasks), max_workers)) as executor:
+            future_to_task = {}
+            for task in tasks:
+                print(f"📝 작품 {task['work_index']+1}: {task['source_info'].get('title', '')} - {task['count']}문제 생성 시작...")
+                future = executor.submit(
+                    self._generate_problems_for_work_parallel,
+                    task['source_text'],
+                    task['source_info'],
+                    korean_type,
+                    task['count'],
+                    difficulty_ratio,
+                    user_prompt,
+                    korean_data
+                )
+                future_to_task[future] = task
+
+            # 완료된 작업 수집
+            for future in as_completed(future_to_task):
+                task = future_to_task[future]
+                try:
+                    work_problems = future.result()
+                    problems.extend(work_problems)
+                    print(f"✅ 작품 {task['work_index']+1} 문제 {len(work_problems)}개 생성 완료")
+                except Exception as e:
+                    print(f"❌ 작품 {task['work_index']+1} 문제 생성 실패: {str(e)}")
+
+        print(f"🎉 총 {len(problems)}개 문제 병렬 생성 완료")
+        return problems[:problem_count]  # 정확한 개수로 제한
+
+    def _generate_problems_for_work_parallel(self, source_text: str, source_info: Dict,
+                                            korean_type: str, count: int,
+                                            difficulty_ratio: Dict, user_prompt: str,
+                                            korean_data: Dict) -> List[Dict]:
+        """하나의 작품에 대해 문제를 생성 (병렬 처리용)"""
+        try:
+            return self._generate_multiple_problems_from_single_text(
+                source_text, source_info, korean_type, count,
+                None, difficulty_ratio, user_prompt, korean_data
+            )
+        except Exception as e:
+            print(f"작품 문제 생성 오류, 폴백 시도: {e}")
+            # 폴백: 개별 생성
+            return self._generate_problems_individually(
+                source_text, source_info, korean_type, count,
+                None, difficulty_ratio, user_prompt, korean_data
+            )
+
+    # ========== 검증 로직 ==========
+
+    def validate_problem(self, problem: Dict, korean_type: str, use_ai_judge: bool = True) -> Dict:
+        """
+        2단계 문제 검증 (수학과 동일한 방식)
+        1단계: 구조 검증 (Gemini가 생성 시 이미 수행)
+        2단계: AI Judge 내용 검증 (GPT-4o-mini)
+        """
+        validation_result = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': [],
+            'quality_score': 100,
+            'ai_judge_scores': {},
+            'ai_judge_feedback': ''
+        }
+
+        # 1. 필수 필드 검증 (구조 검증)
+        required_fields = ['question', 'correct_answer', 'explanation', 'difficulty', 'choices']
+        for field in required_fields:
+            if field not in problem or not problem[field]:
+                validation_result['is_valid'] = False
+                validation_result['errors'].append(f"필수 필드 누락: {field}")
+                validation_result['quality_score'] -= 20
+
+        # 2. 객관식 선택지 검증 (국어는 모두 객관식)
+        if 'choices' in problem:
+            choices = problem['choices']
+            if not isinstance(choices, list):
+                validation_result['errors'].append("선택지가 리스트가 아님")
+                validation_result['quality_score'] -= 15
+            elif len(choices) != 4:
+                validation_result['errors'].append(f"선택지 개수 오류: {len(choices)}개 (4개 필요)")
+                validation_result['quality_score'] -= 15
+            else:
+                # 선택지 중복 검사
+                if len(set(choices)) != 4:
+                    validation_result['warnings'].append("선택지에 중복이 있음")
+                    validation_result['quality_score'] -= 5
+
+        # 3. 정답 검증
+        if 'correct_answer' in problem and 'choices' in problem:
+            correct = problem['correct_answer']
+            if correct not in ['A', 'B', 'C', 'D', '1', '2', '3', '4']:
+                validation_result['warnings'].append(f"정답 형식 비정상: {correct}")
+                validation_result['quality_score'] -= 10
+
+        # 4. 난이도 검증
+        if 'difficulty' in problem:
+            if problem['difficulty'] not in ['상', '중', '하', 'HIGH', 'MEDIUM', 'LOW']:
+                validation_result['errors'].append(f"잘못된 난이도: {problem['difficulty']}")
+                validation_result['quality_score'] -= 10
+
+        # 5. 유형별 특화 검증
+        if korean_type == "시":
+            type_result = self._validate_poem_problem(problem)
+        elif korean_type == "소설":
+            type_result = self._validate_novel_problem(problem)
+        elif korean_type == "수필/비문학":
+            type_result = self._validate_nonfiction_problem(problem)
+        elif korean_type == "문법":
+            type_result = self._validate_grammar_problem(problem)
+        else:
+            type_result = {'warnings': [], 'quality_score': 0}
+
+        # 유형별 검증 결과 병합
+        validation_result['warnings'].extend(type_result.get('warnings', []))
+        validation_result['quality_score'] += type_result.get('quality_score', 0)
+
+        # 6. AI Judge 내용 검증 (2단계)
+        if use_ai_judge and validation_result['is_valid'] and self.openai_client:
+            try:
+                is_valid_ai, ai_scores, ai_feedback = self._validate_with_ai_judge(problem, korean_type)
+                validation_result['ai_judge_scores'] = ai_scores
+                validation_result['ai_judge_feedback'] = ai_feedback
+
+                if not is_valid_ai:
+                    validation_result['is_valid'] = False
+                    validation_result['errors'].append(f"AI Judge 검증 실패: {ai_feedback}")
+                    validation_result['quality_score'] -= 30
+
+            except Exception as e:
+                # AI Judge 실패 시 경고만 추가 (검증 통과는 유지)
+                validation_result['warnings'].append(f"AI Judge 검증 오류: {str(e)}")
+
+        return validation_result
+
+    def _validate_poem_problem(self, problem: Dict) -> Dict:
+        """시 문제 특화 검증"""
+        result = {'warnings': [], 'quality_score': 0}
+
+        # 지문 길이 확인
+        if 'source_text' in problem:
+            source_text = problem['source_text']
+            if len(source_text) < 20:
+                result['warnings'].append("시 지문이 너무 짧음 (20자 미만)")
+                result['quality_score'] -= 5
+            elif len(source_text) > 1000:
+                result['warnings'].append("시 지문이 너무 긴 것 같음")
+                result['quality_score'] -= 3
+
+        # 작품명, 작가명 확인
+        if not problem.get('source_title'):
+            result['warnings'].append("시 제목 누락")
+            result['quality_score'] -= 5
+        if not problem.get('source_author'):
+            result['warnings'].append("시인 이름 누락")
+            result['quality_score'] -= 5
+
+        return result
+
+    def _validate_novel_problem(self, problem: Dict) -> Dict:
+        """소설 문제 특화 검증"""
+        result = {'warnings': [], 'quality_score': 0}
+
+        # 지문 길이 확인 (소설은 충분한 서사 필요)
+        if 'source_text' in problem:
+            source_text = problem['source_text']
+            if len(source_text) < 300:
+                result['warnings'].append("소설 지문이 너무 짧음 (300자 미만)")
+                result['quality_score'] -= 10
+
+        # 작품명, 작가명 확인
+        if not problem.get('source_title'):
+            result['warnings'].append("소설 제목 누락")
+            result['quality_score'] -= 5
+        if not problem.get('source_author'):
+            result['warnings'].append("작가 이름 누락")
+            result['quality_score'] -= 5
+
+        return result
+
+    def _validate_nonfiction_problem(self, problem: Dict) -> Dict:
+        """수필/비문학 문제 특화 검증"""
+        result = {'warnings': [], 'quality_score': 0}
+
+        # 지문 길이 확인
+        if 'source_text' in problem:
+            source_text = problem['source_text']
+            if len(source_text) < 100:
+                result['warnings'].append("지문이 너무 짧음 (100자 미만)")
+                result['quality_score'] -= 8
+
+        # 작가명 확인 (제목은 선택)
+        if not problem.get('source_author'):
+            result['warnings'].append("작가 이름 누락")
+            result['quality_score'] -= 3
+
+        return result
+
+    def _validate_grammar_problem(self, problem: Dict) -> Dict:
+        """문법 문제 특화 검증"""
+        result = {'warnings': [], 'quality_score': 0}
+
+        # 문법 문제는 정답이 명확해야 함
+        if 'explanation' in problem:
+            explanation = problem['explanation']
+            if len(explanation) < 20:
+                result['warnings'].append("해설이 너무 짧음 (문법은 상세한 설명 필요)")
+                result['quality_score'] -= 10
+
+        return result
+
+    def _validate_with_ai_judge(self, problem: Dict, korean_type: str) -> Tuple[bool, Dict, str]:
+        """
+        AI Judge로 국어 문제 내용 검증 (OpenAI GPT-4o-mini)
+
+        Args:
+            problem: 검증할 문제
+            korean_type: 국어 문제 유형 (시/소설/수필/비문학/문법)
+
+        Returns:
+            (is_valid: bool, scores: dict, feedback: str)
+        """
+        if not self.openai_client:
+            print("⚠️ AI Judge disabled (no OpenAI API key)")
+            return True, {}, "AI Judge not available"
+
+        try:
+            question = problem.get('question', '')
+            correct_answer = problem.get('correct_answer', '')
+            explanation = problem.get('explanation', '')
+            choices = problem.get('choices', [])
+            choices_text = '\n'.join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(choices)]) if choices else 'None'
+
+            # 국어 유형별 검증 기준 설정
+            type_specific_criteria = self._get_korean_validation_criteria(korean_type)
+
+            validation_prompt = f"""You are an expert Korean language teacher. Please validate the following Korean language problem.
+
+The problem data is as follows:
+- Question: {question}
+- Choices:
+{choices_text}
+- Correct Answer: {correct_answer}
+- Explanation: {explanation}
+- Korean Type: {korean_type}
+
+Evaluation criteria (score 1-5 for each):
+{type_specific_criteria}
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{{
+  "scores": {{"criterion1": <score>, "criterion2": <score>, "criterion3": <score>, "criterion4": <score>}},
+  "overall_score": <average>,
+  "decision": "VALID" or "INVALID",
+  "feedback": "<brief feedback in Korean>"
+}}
+
+Decision rule: All scores must be 3.5 or higher to be "VALID".
+"""
+
+            # OpenAI API 호출
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a Korean language education expert who validates Korean language problems and returns structured JSON responses."},
+                    {"role": "user", "content": validation_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=800,
+                response_format={"type": "json_object"}
+            )
+
+            result_text = response.choices[0].message.content.strip()
+            result = json.loads(result_text)
+
+            is_valid = result.get('decision') == 'VALID'
+            scores = result.get('scores', {})
+            scores['overall_score'] = result.get('overall_score', 0)
+            feedback = result.get('feedback', 'No feedback')
+
+            return is_valid, scores, feedback
+
+        except json.JSONDecodeError as e:
+            print(f"❌ AI Judge 응답 JSON 파싱 실패: {str(e)}")
+            raise Exception(f"AI Judge validation failed - invalid JSON response: {str(e)}")
+
+        except Exception as e:
+            print(f"❌ AI Judge 검증 오류: {str(e)}")
+            raise Exception(f"AI Judge validation error: {str(e)}")
+
+    def _get_korean_validation_criteria(self, korean_type: str) -> str:
+        """국어 유형별 AI Judge 검증 기준 반환"""
+
+        criteria_map = {
+            '시': """1. literary_accuracy (1-5): The question and explanation accurately interpret the poem's literary devices, imagery, and meaning
+2. relevance (1-5): The question directly relates to the provided poem and tests genuine comprehension
+3. figurative_language_analysis (1-5): Proper analysis of metaphors, symbolism, tone, and poetic techniques
+4. answer_clarity (1-5): The correct answer is clearly justified in the explanation with textual evidence""",
+
+            '소설': """1. narrative_comprehension (1-5): The question accurately tests understanding of plot, characters, conflict, or theme
+2. relevance (1-5): The question directly relates to the provided text and doesn't require external knowledge
+3. textual_analysis (1-5): Proper analysis of narrative techniques, character development, or literary context
+4. answer_clarity (1-5): The correct answer is clearly justified in the explanation with specific references""",
+
+            '수필/비문학': """1. content_accuracy (1-5): The question accurately reflects the information and arguments in the text
+2. logical_consistency (1-5): The reasoning in the question and explanation is logically sound
+3. relevance (1-5): The question tests genuine comprehension of the non-fiction content
+4. answer_clarity (1-5): The correct answer is clearly justified with textual evidence""",
+
+            '문법': """1. grammatical_accuracy (1-5): The grammatical concepts and rules are correctly explained
+2. concept_clarity (1-5): The grammatical concept being tested is clearly defined and applied
+3. example_appropriateness (1-5): Example sentences (if any) correctly demonstrate the grammar point
+4. answer_clarity (1-5): The correct answer is unambiguous and well-justified"""
+        }
+
+        return criteria_map.get(korean_type, criteria_map['수필/비문학'])
+
+    def validate_problems_batch(self, problems: List[Dict], korean_type: str, use_ai_judge: bool = True) -> Dict:
+        """전체 문제 세트 검증 (2단계: 구조 + AI Judge)"""
+        validation_summary = {
+            'total_problems': len(problems),
+            'valid_problems': 0,
+            'invalid_problems': 0,
+            'average_quality_score': 0,
+            'average_ai_judge_score': 0,
+            'difficulty_distribution': {'상': 0, '중': 0, '하': 0},
+            'ai_judge_enabled': use_ai_judge and self.openai_client is not None,
+            'issues': []
+        }
+
+        total_quality = 0
+        total_ai_score = 0
+        ai_score_count = 0
+
+        for i, problem in enumerate(problems):
+            result = self.validate_problem(problem, korean_type, use_ai_judge=use_ai_judge)
+
+            if result['is_valid']:
+                validation_summary['valid_problems'] += 1
+            else:
+                validation_summary['invalid_problems'] += 1
+                issue = {
+                    'problem_index': i + 1,
+                    'errors': result['errors'],
+                    'warnings': result['warnings']
+                }
+
+                # AI Judge 피드백 추가
+                if result.get('ai_judge_feedback'):
+                    issue['ai_judge_feedback'] = result['ai_judge_feedback']
+                    issue['ai_judge_scores'] = result.get('ai_judge_scores', {})
+
+                validation_summary['issues'].append(issue)
+
+            total_quality += result['quality_score']
+
+            # AI Judge 점수 집계
+            if result.get('ai_judge_scores') and 'overall_score' in result['ai_judge_scores']:
+                total_ai_score += result['ai_judge_scores']['overall_score']
+                ai_score_count += 1
+
+            # 난이도 분포 계산
+            difficulty = problem.get('difficulty', '중')
+            if difficulty in validation_summary['difficulty_distribution']:
+                validation_summary['difficulty_distribution'][difficulty] += 1
+
+        validation_summary['average_quality_score'] = (
+            total_quality / len(problems) if problems else 0
+        )
+
+        validation_summary['average_ai_judge_score'] = (
+            total_ai_score / ai_score_count if ai_score_count > 0 else 0
+        )
+
+        return validation_summary
