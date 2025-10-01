@@ -6,13 +6,12 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from ..models.problem import Problem
 from ..models.worksheet import Worksheet
-from .grading_service import GradingService
 
 class AsyncTaskService:
     """비동기 태스크 처리를 위한 서비스"""
-    
+
     def __init__(self):
-        self.grading_service = GradingService()
+        pass
     
     async def process_grading_batch(
         self, 
@@ -75,53 +74,11 @@ class AsyncTaskService:
             progress = 20 + (problem_index + 1) / total_count * 70
             await progress_callback(progress, f'채점 중... ({problem_index+1}/{total_count})')
         
-        # 문제 유형별 채점 처리
-        if problem.problem_type == "essay":
-            # 서술형: AI 채점 (비동기로 실행)
-            result = await self._grade_essay_async(problem, user_answer, points_per_problem)
-        else:
-            # 객관식/단답형: 직접 비교 (동기 처리)
-            result = self._grade_objective_sync(problem, user_answer, points_per_problem)
-        
+        # 객관식/단답형: 직접 비교 (동기 처리)
+        result = self._grade_objective_sync(problem, user_answer, points_per_problem)
+
         return result
-    
-    async def _grade_essay_async(self, problem: Problem, user_answer: str, points_per_problem: int) -> Dict:
-        """서술형 문제 비동기 채점"""
-        loop = asyncio.get_event_loop()
-        
-        # 1차 채점: 핵심 키워드 포함 여부 확인 (동기)
-        keyword_result = self._calculate_keyword_score(problem.correct_answer, user_answer)
-        
-        # 2차 채점: AI 심층 분석 (비동기)
-        ai_result = await loop.run_in_executor(
-            None,
-            self.grading_service.grade_essay_problem,
-            problem.question,
-            problem.correct_answer,
-            user_answer,
-            problem.explanation
-        )
-        
-        # 최종 점수 계산
-        ai_score_ratio = ai_result.get("score", 0) / 100
-        final_score = points_per_problem * ai_score_ratio
-        
-        return {
-            "problem_id": problem.id,
-            "problem_type": "essay",
-            "user_answer": user_answer,
-            "correct_answer": problem.correct_answer,
-            "is_correct": final_score >= (points_per_problem * 0.6),
-            "score": final_score,
-            "points_per_problem": points_per_problem,
-            "keyword_score_ratio": keyword_result["ratio"],
-            "ai_score": ai_result.get("score", 0),
-            "ai_feedback": ai_result.get("feedback", ""),
-            "strengths": ai_result.get("strengths", ""),
-            "improvements": ai_result.get("improvements", ""),
-            "explanation": problem.explanation
-        }
-    
+
     def _grade_objective_sync(self, problem: Problem, user_answer: str, points_per_problem: int) -> Dict:
         """객관식/단답형 문제 동기 채점"""
         

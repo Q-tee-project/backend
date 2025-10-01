@@ -5,6 +5,7 @@ import os
 import json
 import re
 import google.generativeai as genai
+from openai import OpenAI
 from typing import Dict, List, Any, Optional
 from .prompt_templates import PromptTemplates
 from dotenv import load_dotenv
@@ -22,6 +23,13 @@ class ProblemGenerator:
 
         genai.configure(api_key=gemini_api_key)
 
+        # OpenAI 클라이언트 초기화 (AI Judge용)
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+
+        self.openai_client = OpenAI(api_key=openai_api_key)
+
         # 기본 설정으로 복원 (타임아웃 해결을 위해 토큰 수 조정)
         generation_config = genai.types.GenerationConfig(
             temperature=0.7,
@@ -34,6 +42,7 @@ class ProblemGenerator:
             'gemini-2.5-pro',
             generation_config=generation_config
         )
+
         self.prompt_templates = PromptTemplates()
     
     def generate_problems(
@@ -49,12 +58,6 @@ class ProblemGenerator:
         # 난이도 분배 계산
         difficulty_distribution = self._calculate_difficulty_distribution(
             problem_count, difficulty_ratio
-        )
-        
-        # 참고 문제 가져오기
-        reference_problems = self._get_reference_problems(
-            curriculum_data.get('chapter_name', ''),
-            difficulty_ratio
         )
 
         # problem_type이 지정된 경우 강제 제약 추가
@@ -89,12 +92,17 @@ class ProblemGenerator:
             curriculum_data=curriculum_data,
             user_prompt=enhanced_user_prompt,
             problem_count=problem_count,
-            difficulty_distribution=difficulty_distribution,
-            reference_problems=reference_problems
+            difficulty_distribution=difficulty_distribution
         )
-        
-        # AI 호출 및 응답 처리
-        return self._call_ai_and_parse_response(prompt)
+
+        # 그래프 단원 확인 로그
+        unit_name = curriculum_data.get('unit_name', '')
+        if unit_name == "그래프와 비례":
+            print(f"📊 그래프와 비례 단원 감지 - TikZ 생성 프롬프트 활성화")
+            print(f"   챕터: {curriculum_data.get('chapter_name', '')}")
+
+        # AI 호출 및 응답 처리 (target_count 전달)
+        return self._call_ai_and_parse_response(prompt, target_count=problem_count)
     
     def _calculate_difficulty_distribution(self, problem_count: int, difficulty_ratio: Dict) -> str:
         """난이도 분배 계산"""
@@ -109,76 +117,112 @@ class ProblemGenerator:
         else:
             return f"모든 문제 B단계"
     
-    def _get_reference_problems(self, chapter_name: str, difficulty_ratio: Dict) -> str:
-        """참고 문제 가져오기"""
-        try:
-            problem_types_file_path = os.path.join(
-                os.path.dirname(__file__), 
-                "../../data/math_problem_types.json"
-            )
-            
-            with open(problem_types_file_path, 'r', encoding='utf-8') as f:
-                problem_types_data = json.load(f)
-            
-            # 챕터명으로 문제 유형 찾기
-            chapter_problem_types = []
-            for chapter_data in problem_types_data["math_problem_types"]:
-                if chapter_data["chapter_name"] == chapter_name:
-                    chapter_problem_types = chapter_data["problem_types"]
-                    break
-            
-            if not chapter_problem_types:
-                return f"'{chapter_name}' 챕터의 참고 문제를 찾을 수 없습니다."
-            
-            # 난이도별 문제 유형 분배
-            total_types = len(chapter_problem_types)
-            a_types = chapter_problem_types[:total_types//3] if total_types >= 3 else [chapter_problem_types[0]]
-            b_types = chapter_problem_types[total_types//3:2*total_types//3] if total_types >= 6 else chapter_problem_types[1:2] if total_types >= 2 else []
-            c_types = chapter_problem_types[2*total_types//3:] if total_types >= 3 else chapter_problem_types[-1:] if total_types >= 3 else []
-            
-            # 참고 문제 텍스트 구성 - 난이도별 차별화
-            reference_text = f"**{chapter_name} 참고 문제 유형:**\n\n"
+    def _call_ai_and_parse_response(self, prompt: str, max_retries: int = 3, target_count: int = None) -> List[Dict]:
+        """AI 호출 및 응답 파싱 - 부분 재생성 로직 포함"""
 
-            if difficulty_ratio and difficulty_ratio.get('A', 0) > 0 and a_types:
-                reference_text += f"**A단계 유형**: {', '.join(a_types[:4])}\n"
-                reference_text += "   → 쎈 A단계: 공식 대입 수준의 기본 문제 (1~2줄, 정답률 80~90%)\n\n"
+        if target_count is None:
+            # 프롬프트에서 문제 개수 추출 시도 (기본값 1)
+            target_count = 1
 
-            if difficulty_ratio and difficulty_ratio.get('B', 0) > 0 and b_types:
-                reference_text += f"**B단계 유형**: {', '.join(b_types[:4])}\n"
-                reference_text += "   → 쎈 B단계: 실생활 응용/유형 문제 (3~4줄, 정답률 50~60%)\n\n"
+        valid_problems = []  # 합격한 문제 누적
+        original_prompt = prompt  # 원본 프롬프트 백업
 
-            if difficulty_ratio and difficulty_ratio.get('C', 0) > 0 and c_types:
-                reference_text += f"**C단계 유형**: {', '.join(c_types[:4])}\n"
-                reference_text += "   → 쎈 C단계: 창의적 사고 필요한 심화 문제 (5~7줄, 정답률 20~30%)\n\n"
-            
-            return reference_text
-            
-        except Exception as e:
-            print(f"참고 문제 로드 오류: {str(e)}")
-            return f"'{chapter_name}' 참고 문제 로드 중 오류 발생"
-    
-    def _call_ai_and_parse_response(self, prompt: str) -> List[Dict]:
-        """AI 호출 및 응답 파싱 - 단순화된 버전"""
-        try:
-            response = self.model.generate_content(prompt)
-            content = response.text
+        for retry_attempt in range(max_retries):
+            try:
+                needed_count = target_count - len(valid_problems)
 
-            # JSON 추출 및 파싱
-            problems = self._extract_and_parse_json(content)
+                if needed_count <= 0:
+                    print(f"✅ 목표 달성: {len(valid_problems)}개 문제 생성 완료")
+                    return valid_problems[:target_count]
 
-            # 기본 구조 검증만 수행 (LaTeX 후처리 제거)
-            validated_problems = []
-            for problem in problems:
-                validated_problem = self._validate_basic_structure(problem)
-                validated_problems.append(validated_problem)
+                print(f"\n{'='*60}")
+                print(f"문제 생성 시도 {retry_attempt + 1}/{max_retries}")
+                print(f"현재 합격: {len(valid_problems)}개 / 목표: {target_count}개")
+                print(f"추가 필요: {needed_count}개")
+                print(f"{'='*60}\n")
 
-            return validated_problems
+                # 부족한 개수만큼만 생성하도록 프롬프트 조정
+                if len(valid_problems) > 0:
+                    # 이미 일부 합격한 경우 - 부족한 개수만 요청
+                    adjusted_prompt = self._adjust_prompt_for_needed_count(original_prompt, needed_count)
+                else:
+                    adjusted_prompt = prompt
 
-        except Exception as e:
-            import traceback
-            error_msg = f"문제 생성 오류: {str(e)}\n{traceback.format_exc()}"
-            print(error_msg)
-            raise Exception(error_msg)
+                response = self.model.generate_content(adjusted_prompt)
+                content = response.text
+
+                # JSON 추출 및 파싱
+                problems = self._extract_and_parse_json(content)
+
+                # 기본 구조 검증
+                validated_problems = []
+                for problem in problems:
+                    validated_problem = self._validate_basic_structure(problem)
+                    validated_problems.append(validated_problem)
+
+                # AI Judge 검증
+                print(f"🔍 AI Judge 검증 시작 - {len(validated_problems)}개 문제")
+
+                invalid_problems = []
+
+                current_batch_valid_count = 0
+                for idx, problem in enumerate(validated_problems):
+                    is_valid, scores, feedback = self._validate_with_ai_judge(problem)
+
+                    # 상세 점수 출력
+                    score_detail = f"[수학정확성:{scores.get('mathematical_accuracy', 0):.1f} " \
+                                   f"정답일치:{scores.get('consistency', 0):.1f} " \
+                                   f"완결성:{scores.get('completeness', 0):.1f} " \
+                                   f"논리성:{scores.get('logic_flow', 0):.1f}]"
+
+                    if is_valid:
+                        current_batch_valid_count += 1
+                        print(f"  ✅ 문제 {len(valid_problems) + current_batch_valid_count}번: VALID - 평균 {scores['overall_score']:.1f}점 {score_detail}")
+                        valid_problems.append(problem)
+                    else:
+                        print(f"  ❌ 문제 {idx+1}번: INVALID - 평균 {scores['overall_score']:.1f}점 {score_detail}")
+                        print(f"     💬 피드백: {feedback}")
+                        invalid_problems.append({
+                            "problem": problem,
+                            "feedback": feedback,
+                            "scores": scores
+                        })
+
+                # 목표 달성 확인
+                if len(valid_problems) >= target_count:
+                    print(f"\n✅ 목표 달성: {len(valid_problems)}개 문제 생성 완료!")
+                    return valid_problems[:target_count]
+
+                # 아직 부족한 경우
+                if retry_attempt < max_retries - 1:
+                    shortage = target_count - len(valid_problems)
+                    print(f"\n⚠️ 부족: {shortage}개 추가 생성 필요 (현재 {len(valid_problems)}/{target_count})")
+
+                    # 피드백을 포함한 프롬프트 재구성
+                    if invalid_problems:
+                        prompt = self._rebuild_prompt_with_feedback(original_prompt, invalid_problems)
+                else:
+                    # 마지막 시도에서도 부족한 경우
+                    shortage = target_count - len(valid_problems)
+                    raise Exception(f"검증 실패: {max_retries}회 시도 후 {shortage}개 부족 (현재 {len(valid_problems)}/{target_count})")
+
+            except json.JSONDecodeError as e:
+                if retry_attempt < max_retries - 1:
+                    print(f"❌ JSON 파싱 실패, 재시도 중... ({str(e)})")
+                    continue
+                else:
+                    raise
+            except Exception as e:
+                if retry_attempt < max_retries - 1 and "검증 실패" not in str(e):
+                    print(f"❌ 오류 발생, 재시도 중... ({str(e)})")
+                    continue
+                else:
+                    import traceback
+                    error_msg = f"문제 생성 오류: {str(e)}\n{traceback.format_exc()}"
+                    print(error_msg)
+                    raise Exception(error_msg)
+
+        raise Exception(f"문제 생성 실패: {max_retries}회 시도 모두 실패 (현재 {len(valid_problems)}/{target_count})")
     
     def _extract_and_parse_json(self, content: str) -> List[Dict]:
         """JSON 추출 및 파싱 - 완전 개선 버전"""
@@ -486,3 +530,121 @@ class ProblemGenerator:
                 problem['has_diagram'] = False
 
         return problem
+
+    def _validate_with_ai_judge(self, problem: Dict) -> tuple:
+        """
+        AI Judge로 문제 검증 (OpenAI GPT-4o-mini) - 안전 필터 문제 해결
+
+        Returns:
+            (is_valid: bool, scores: dict, feedback: str)
+        """
+        try:
+            # 원본 데이터 그대로 사용 (OpenAI는 LaTeX 처리 가능)
+            question = problem.get('question', '')
+            correct_answer = problem.get('correct_answer', '')
+            explanation = problem.get('explanation', '')
+            problem_type = problem.get('problem_type', '')
+            choices = problem.get('choices', [])
+            choices_text = ', '.join(map(str, choices)) if choices else 'None'
+
+            # tikz_code와 diagram 관련 필드는 검증에서 제외 (선택적 필드)
+            has_diagram = problem.get('has_diagram', False)
+            diagram_note = " (Note: This problem may include graph/diagram fields which are optional and should not affect validation.)" if has_diagram else ""
+
+            validation_prompt = f"""You are a math education expert. Please validate the following math problem.
+
+The problem data is as follows:
+- Question: {question}
+- Correct Answer: {correct_answer}
+- Explanation: {explanation}
+- Problem Type: {problem_type}
+- Choices: {choices_text}{diagram_note}
+
+Evaluation criteria:
+1. mathematical_accuracy (1-5): No mathematical or logical errors.
+2. consistency (1-5): The final answer in the explanation matches the correct_answer.
+3. completeness (1-5): All required fields are present (e.g., multiple_choice must have 4 choices). IGNORE optional fields like tikz_code, diagram_type, has_diagram.
+4. logic_flow (1-5): The explanation is logical and easy to follow.
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{{
+  "scores": {{"mathematical_accuracy": <score>, "consistency": <score>, "completeness": <score>, "logic_flow": <score>}},
+  "overall_score": <average>,
+  "decision": "VALID" or "INVALID",
+  "feedback": "<brief feedback>"
+}}
+
+Decision rule: `consistency` must be 4 or higher, AND the average of the other scores must be 3.5 or higher to be "VALID".
+"""
+
+            # OpenAI API 호출
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a math education expert who validates math problems and returns structured JSON responses."},
+                    {"role": "user", "content": validation_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=500,
+                response_format={"type": "json_object"}  # JSON 모드 강제
+            )
+
+            result_text = response.choices[0].message.content.strip()
+
+            # JSON 파싱
+            result = json.loads(result_text)
+
+            is_valid = result.get('decision') == 'VALID'
+            scores = result.get('scores', {})
+            scores['overall_score'] = result.get('overall_score', 0)
+            feedback = result.get('feedback', 'No feedback')
+
+            return is_valid, scores, feedback
+
+        except json.JSONDecodeError as e:
+            # JSON 파싱 오류는 재발생시켜 재시도 유도
+            print(f"❌ AI Judge 응답 JSON 파싱 실패: {str(e)}")
+            print(f"   응답 내용: {result_text[:200]}...")
+            raise Exception(f"AI Judge validation failed - invalid JSON response: {str(e)}")
+
+        except Exception as e:
+            # 그 외 오류는 재발생시켜 재시도
+            print(f"❌ AI Judge 검증 오류: {str(e)}")
+            raise Exception(f"AI Judge validation error: {str(e)}")
+
+    def _adjust_prompt_for_needed_count(self, original_prompt: str, needed_count: int) -> str:
+        """부족한 개수만큼만 생성하도록 프롬프트 조정"""
+        import re
+
+        # 문제 개수 패턴 찾기 및 교체
+        patterns = [
+            (r'(\d+)개의?\s*문제', f'{needed_count}개 문제'),
+            (r'(\d+)\s*problems?', f'{needed_count} problems'),
+            (r'정확히\s*(\d+)개', f'정확히 {needed_count}개'),
+            (r'Total Problems to Generate\*\*:\s*(\d+)', f'Total Problems to Generate**: {needed_count}'),
+            (r'create\s+(\d+)\s+perfectly', f'create {needed_count} perfectly'),
+            (r'Ensure the total count is\s+(\d+)', f'Ensure the total count is {needed_count}')
+        ]
+
+        adjusted = original_prompt
+        for pattern, replacement in patterns:
+            adjusted = re.sub(pattern, replacement, adjusted, flags=re.IGNORECASE)
+
+        print(f"📝 프롬프트 조정: {needed_count}개 생성하도록 수정")
+        return adjusted
+
+    def _rebuild_prompt_with_feedback(self, original_prompt: str, invalid_problems: List[Dict]) -> str:
+        """피드백을 포함한 프롬프트 재구성"""
+
+        feedback_text = "\n\n**IMPORTANT: Previous attempt had issues. Fix these:**\n"
+        for idx, item in enumerate(invalid_problems):
+            feedback_text += f"\nProblem {idx+1} feedback:\n"
+            feedback_text += f"- Scores: mathematical_accuracy={item['scores'].get('mathematical_accuracy')}, "
+            feedback_text += f"consistency={item['scores'].get('consistency')}, "
+            feedback_text += f"completeness={item['scores'].get('completeness')}, "
+            feedback_text += f"logic_flow={item['scores'].get('logic_flow')}\n"
+            feedback_text += f"- Issue: {item['feedback']}\n"
+
+        feedback_text += "\n**MUST ensure**: consistency >= 4 (explanation's answer = correct_answer), all scores >= 3.5\n"
+
+        return original_prompt + feedback_text

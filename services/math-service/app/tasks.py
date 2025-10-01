@@ -5,6 +5,9 @@ from .services.math_generation_service import MathGenerationService
 from .schemas.math_generation import MathProblemGenerationRequest
 from .models.worksheet import Worksheet, WorksheetStatus
 from .models.problem import Problem
+
+# Celery 워커가 로드될 때 MathGenerationService 인스턴스를 한 번만 생성합니다.
+math_generation_service_instance = MathGenerationService()
 from .services.math_grading_service import MathGradingService
 from .models.grading_result import GradingSession, ProblemGradingResult
 from .models.math_generation import Assignment, TestSession, TestAnswer
@@ -45,11 +48,10 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
         db.refresh(worksheet)
 
         self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'AI 문제 생성 중...'})
-        math_service = MathGenerationService()
-        curriculum_data = math_service._get_curriculum_data(request)
         
-        # MathGenerationService의 비율 기반 로직 사용
-        generated_problems = math_service._generate_problems_with_ratio(curriculum_data, request)
+        # MathGenerationService의 비율 기반 로직 사용 (싱글톤 인스턴스 사용)
+        curriculum_data = math_generation_service_instance._get_curriculum_data(request)
+        generated_problems = math_generation_service_instance._generate_problems_with_ratio(curriculum_data, request)
 
         if not isinstance(generated_problems, list):
             raise AIResponseError(f"AI 응답이 잘못된 형식입니다. 리스트가 아닌 {type(generated_problems)} 타입을 받았습니다.")
@@ -74,7 +76,8 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
                     latex_content=problem_data.get("latex_content"),
                     has_diagram=str(problem_data.get("has_diagram", False)).lower(),
                     diagram_type=problem_data.get("diagram_type"),
-                    diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
+                    diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None,
+                    tikz_code=problem_data.get("tikz_code")
                 )
                 problems_to_save.append(problem)
 
@@ -85,8 +88,8 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
 
             worksheet.status = WorksheetStatus.COMPLETED
             worksheet.completed_at = datetime.now()
-            worksheet.actual_difficulty_distribution = math_service._calculate_difficulty_distribution(generated_problems)
-            worksheet.actual_type_distribution = math_service._calculate_type_distribution(generated_problems)
+            worksheet.actual_difficulty_distribution = math_generation_service_instance._calculate_difficulty_distribution(generated_problems)
+            worksheet.actual_type_distribution = math_generation_service_instance._calculate_type_distribution(generated_problems)
             
             db.commit()
             print(f"✅ 워크시트 {worksheet.id}와 문제 {len(problems_to_save)}개 저장 완료.")
@@ -209,12 +212,13 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
         if not new_problem_data: raise AIResponseError("문제 재생성에 실패했습니다.")
 
         self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': '문제 정보 업데이트 중...'})
-        
+
         problem.question = new_problem_data.get("question", problem.question)
         problem.correct_answer = new_problem_data.get("correct_answer", problem.correct_answer)
         problem.explanation = new_problem_data.get("explanation", problem.explanation)
         if new_problem_data.get("choices"): problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
-        
+        if new_problem_data.get("tikz_code"): problem.tikz_code = new_problem_data.get("tikz_code")
+
         db.commit()
         db.refresh(problem)
 
@@ -591,23 +595,7 @@ def _clean_ocr_answer(answer: str) -> str:
     return _normalize_math_answer(answer)
 
 
-# 테스트용 로그 함수
-def _test_normalization():
-    """정규화 함수 테스트"""
-    test_cases = [
-        ("X-Y/5", r"\frac{x-y}{5}"),  # 실제 케이스: OCR vs LaTeX
-        ("10", "10"),                 # 숫자 매칭
-        ("-7", "-7"),                 # 음수 매칭
-        ("3x+3", "3x+3"),            # 대수식 매칭
-        ("x-y/5", "x-y/5"),          # 일반 분수 표기
-    ]
 
-    print("🧪 수학 답안 정규화 테스트:")
-    for student, correct in test_cases:
-        norm_student = _normalize_math_answer(student)
-        norm_correct = _normalize_math_answer(correct)
-        match = norm_student == norm_correct
-        print(f"   학생: '{student}' → '{norm_student}' vs 정답: '{correct}' → '{norm_correct}' {'✅' if match else '❌'}")
 
 # 서버 시작 시 테스트 실행
-_test_normalization()
+# _test_normalization()

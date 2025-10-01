@@ -32,32 +32,6 @@ class MathGradingService:
         except Exception:
             return ""
 
-    def _grade_essay_problem(self, problem: Problem, user_answer: str, points_per_problem: int) -> dict:
-        """서술형 문제 채점"""
-        ai_result = self.ai_service.grade_math_answer(
-            question=problem.question,
-            correct_answer=problem.correct_answer,
-            student_answer=user_answer,
-            explanation=problem.explanation,
-            problem_type="essay"
-        )
-        ai_score_ratio = ai_result.get("score", 0) / 100
-        final_score = points_per_problem * ai_score_ratio
-        return {
-            "problem_id": problem.id,
-            "problem_type": "essay",
-            "user_answer": user_answer,
-            "correct_answer": problem.correct_answer,
-            "is_correct": final_score >= (points_per_problem * 0.6),
-            "score": final_score,
-            "points_per_problem": points_per_problem,
-            "ai_score": ai_result.get("score", 0),
-            "ai_feedback": ai_result.get("feedback", ""),
-            "strengths": ai_result.get("strengths", ""),
-            "improvements": ai_result.get("improvements", ""),
-            "explanation": problem.explanation
-        }
-
     def _grade_objective_problem(self, problem: Problem, user_answer: str, points_per_problem: int) -> dict:
         """객관식/단답형 문제 채점"""
         # Simple comparison logic
