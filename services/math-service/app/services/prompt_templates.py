@@ -65,13 +65,13 @@ Since this unit focuses on coordinate planes and graphs, you MUST include graph 
 - To achieve this, use HALF-INTEGER axis ranges: (-6.5 to 6.5) or (-4.5 to 4.5), NOT whole numbers like (-6 to 6)
 - Example CORRECT setup for y = 12/x:
   ```
-  \draw[->, thick] (-6.5,0) -- (6.5,0) node[right] {$x$};
-  \draw[->, thick] (0,-6.5) -- (0,6.5) node[above] {$y$};
-  \draw[gray!30, very thin] (-6.4,-6.4) grid (6.4,6.4);  % Grid stops before axis endpoints
-  \foreach \x in {-6,-4,-2,2,4,6}  % Only mark EVEN numbers so origin is between ticks
-    \draw (\x,0.1) -- (\x,-0.1) node[below] {$\x$};
+  \\draw[->, thick] (-6.5,0) -- (6.5,0) node[right] {$x$};
+  \\draw[->, thick] (0,-6.5) -- (0,6.5) node[above] {$y$};
+  \\draw[gray!30, very thin] (-6.4,-6.4) grid (6.4,6.4);  % Grid stops before axis endpoints
+  \\foreach \\x in {-6,-4,-2,2,4,6}  % Only mark EVEN numbers so origin is between ticks
+    \\draw (\\x,0.1) -- (\\x,-0.1) node[below] {$\\x$};
   ```
-- Example WRONG setup: `\draw[->] (-7,0) -- (7,0)` (origin at grid intersection)
+- Example WRONG setup: `\\draw[->] (-7,0) -- (7,0)` (origin at grid intersection)
 - This positioning is mathematically correct because y=a/x passes through quadrants I and III, with asymptotes at x=0 and y=0
 
 **Example with Graph:**

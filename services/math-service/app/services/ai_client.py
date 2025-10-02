@@ -6,5 +6,4 @@ from .problem_generator import ProblemGenerator
 # 이 인스턴스가 모든 Celery task와 서비스에서 공유됩니다.
 problem_generator_instance = ProblemGenerator()
 
-print("✅ AI Client (ProblemGenerator) initialized as a singleton.")
 

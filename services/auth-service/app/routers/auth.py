@@ -161,3 +161,38 @@ async def get_student_by_id(
             detail=f"Student with id {student_id} not found"
         )
     return student
+
+@router.post("/verify-token")
+async def verify_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """다른 마이크로서비스에서 JWT 토큰 검증용"""
+    try:
+        teacher = await get_current_user(credentials.credentials, db, "teacher")
+        return {
+            "valid": True,
+            "user_id": teacher.id,
+            "user_type": "teacher",
+            "username": teacher.username,
+            "name": teacher.name,
+            "email": teacher.email
+        }
+    except Exception:
+        try:
+            student = await get_current_user(credentials.credentials, db, "student")
+            return {
+                "valid": True,
+                "user_id": student.id,
+                "user_type": "student",
+                "username": student.username,
+                "name": student.name,
+                "email": student.email,
+                "school_level": student.school_level.value,
+                "grade": student.grade
+            }
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )

@@ -52,7 +52,7 @@ async def grade_worksheet(
         worksheet_id=worksheet_id,
         multiple_choice_answers={},
         canvas_answers={"sheet": image_data},
-        user_id=current_user["id"]
+        user_id=current_user["user_id"]
     )
     return {"task_id": task.id, "status": "PENDING"}
 
@@ -71,7 +71,7 @@ async def grade_worksheet_canvas(
         worksheet_id=worksheet_id,
         multiple_choice_answers=request.get("multiple_choice_answers", {}),
         canvas_answers=request.get("canvas_answers", {}),
-        user_id=current_user["id"]
+        user_id=current_user["user_id"]
     )
     return {"task_id": task.id, "status": "PENDING"}
 
@@ -210,7 +210,7 @@ async def start_ai_grading(
     # Celery 태스크로 비동기 처리 시작
     task = process_assignment_ai_grading_task.delay(
         assignment_id=assignment_id,
-        user_id=current_user["id"]
+        user_id=current_user["user_id"]
     )
 
     return {
@@ -326,7 +326,7 @@ async def update_grading_session(
         # status와 teacher_id는 현재 모델에 없으므로 주석 처리
         # if "status" in update_data:
         #     grading_session.status = update_data["status"]
-        # grading_session.teacher_id = current_user["id"]
+        # grading_session.teacher_id = current_user["user_id"]
 
         # 문제별 결과 업데이트 (점수와 정답 여부만)
         if "problem_results" in update_data:

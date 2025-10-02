@@ -5,12 +5,12 @@ from app.models import Base
 from app.routers import curriculum, worksheet, grading, assignment, problem, task, market_integration, test_session
 
 # Import all models to ensure they are registered with Base.metadata
-import app.models.worksheet
-import app.models.problem
-import app.models.math_generation
-import app.models.grading_result
-import app.models.curriculum
-import app.models.user
+import app.models.worksheet  # noqa: F401
+import app.models.problem  # noqa: F401
+import app.models.math_generation  # noqa: F401
+import app.models.grading_result  # noqa: F401
+import app.models.curriculum  # noqa: F401
+import app.models.user  # noqa: F401
 
 Base.metadata.create_all(bind=engine)
 
@@ -44,4 +44,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -60,8 +60,6 @@ async def create_assignment(
 
     return {"message": "Assignment created successfully", "assignment_id": assignment.id}
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -143,33 +141,26 @@ async def get_assignment_detail(
     from ..models.problem import Problem
 
     # 배포 정보 확인
-    try:
-        deployment = db.query(AssignmentDeployment).join(Assignment).filter(
-            Assignment.id == assignment_id,
-            AssignmentDeployment.student_id == student_id
-        ).first()
-        logger.info(f"[MATH_SERVICE] DB 쿼리 결과 (deployment): {deployment}")
+    deployment = db.query(AssignmentDeployment).join(Assignment).filter(
+        Assignment.id == assignment_id,
+        AssignmentDeployment.student_id == student_id
+    ).first()
+    logger.info(f"[MATH_SERVICE] DB 쿼리 결과 (deployment): {deployment}")
 
-        if not deployment:
-            logger.warning(f"[MATH_SERVICE] 배포 정보를 찾을 수 없음. assignment_id: {assignment_id}, student_id: {student_id}")
-            raise HTTPException(status_code=404, detail="Assignment not found or not assigned to student")
+    if not deployment:
+        logger.warning(f"[MATH_SERVICE] 배포 정보를 찾을 수 없음. assignment_id: {assignment_id}, student_id: {student_id}")
+        raise HTTPException(status_code=404, detail="Assignment not found or not assigned to student")
 
-        assignment = deployment.assignment
-        worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
+    assignment = deployment.assignment
+    worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
 
-        if not worksheet:
-            logger.warning(f"[MATH_SERVICE] 워크시트를 찾을 수 없음. worksheet_id: {assignment.worksheet_id}")
-            raise HTTPException(status_code=404, detail="Worksheet not found")
+    if not worksheet:
+        logger.warning(f"[MATH_SERVICE] 워크시트를 찾을 수 없음. worksheet_id: {assignment.worksheet_id}")
+        raise HTTPException(status_code=404, detail="Worksheet not found")
 
-        # 문제들 조회
-        problems = db.query(Problem).filter(Problem.worksheet_id == worksheet.id).all()
-        logger.info(f"[MATH_SERVICE] {len(problems)}개의 문제를 찾음.")
-
-    except HTTPException:
-        raise  # HTTPException은 그대로 전달
-    except Exception as e:
-        logger.error(f"[MATH_SERVICE] 데이터베이스 조회 중 오류 발생: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Database error")
+    # 문제들 조회
+    problems = db.query(Problem).filter(Problem.worksheet_id == worksheet.id).all()
+    logger.info(f"[MATH_SERVICE] {len(problems)}개의 문제를 찾음.")
 
     # 응답 구성
     return {

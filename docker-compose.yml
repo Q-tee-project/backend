@@ -36,13 +36,14 @@ services:
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
+      - AUTH_SERVICE_URL=http://auth-service:8000
       - PORT=8000
     ports:
       - "8001:8000"
     depends_on:
       - postgres
       - redis
+      - auth-service
     volumes:
       - ./services/math-service:/app
     networks:
@@ -225,47 +226,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./services/english-service:/app
-    networks:
-      - qt_project_network
-    restart: unless-stopped
-
-  # Flower for Celery Monitoring
-  flower:
-    build:
-      context: ./services/math-service
-      dockerfile: Dockerfile.celery
-    container_name: math_flower
-    command: celery -A app.celery_app flower
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
-      - REDIS_URL=redis://redis:6379/0
-    ports:
-      - "5555:5555"
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - qt_project_network
-    restart: unless-stopped
-
-  # Flower for English Service Celery Monitoring
-  english-flower:
-    build:
-      context: ./services/english-service
-      dockerfile: Dockerfile.celery
-    container_name: english_flower
-    command: celery -A app.celery_app flower --broker=redis://redis:6379/0
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
-      - REDIS_URL=redis://redis:6379/0
-      - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
-    ports:
-      - "5556:5555"
     depends_on:
       - postgres
       - redis

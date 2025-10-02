@@ -21,7 +21,7 @@ async def generate_math_problems(
     try:
         task = generate_math_problems_task.delay(
             request.model_dump(),
-            current_user["id"]
+            current_user["user_id"]
         )
         return {
             "task_id": task.id,
@@ -40,23 +40,25 @@ async def get_generation_history(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_teacher)
 ):
-    try:
-        history = math_service.get_generation_history(db, user_id=current_user["id"], skip=skip, limit=limit)
-        result = []
-        for session in history:
-            result.append({
-                "generation_id": session.generation_id,
-                "school_level": session.school_level,
-                "grade": session.grade,
-                "semester": session.semester,
-                "chapter_name": session.chapter_name,
-                "problem_count": session.problem_count,
-                "total_generated": session.total_generated,
-                "created_at": session.created_at.isoformat()
-            })
-        return {"history": result, "total": len(result)}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"생성 이력 조회 중 오류: {str(e)}")
+    from ..models.worksheet import Worksheet
+
+    worksheets = db.query(Worksheet).filter(
+        Worksheet.teacher_id == current_user["user_id"]
+    ).order_by(Worksheet.created_at.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for worksheet in worksheets:
+        result.append({
+            "generation_id": worksheet.generation_id,
+            "school_level": worksheet.school_level,
+            "grade": worksheet.grade,
+            "semester": worksheet.semester,
+            "chapter_name": worksheet.chapter_name,
+            "problem_count": worksheet.problem_count,
+            "total_generated": worksheet.problem_count,
+            "created_at": worksheet.created_at.isoformat()
+        })
+    return {"history": result, "total": len(result)}
 
 @router.get("/generation/{generation_id}")
 async def get_generation_detail(
@@ -64,36 +66,54 @@ async def get_generation_detail(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_teacher)
 ):
-    try:
-        session = math_service.get_generation_detail(db, generation_id, user_id=current_user["id"])
-        if not session:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 생성 세션을 찾을 수 없습니다")
-        
-        from ..models.problem import Problem
-        from ..models.worksheet import Worksheet
-        worksheet = db.query(Worksheet).filter(Worksheet.generation_id == generation_id).first()
-        if not worksheet:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 생성 세션의 워크시트를 찾을 수 없습니다")
-        
-        problems = db.query(Problem).filter(Problem.worksheet_id == worksheet.id).order_by(Problem.sequence_order).all()
-        
-        import json
-        problem_list = [
-            {
-                "id": p.id, "problem_type": p.problem_type.value, "difficulty": p.difficulty.value,
-                "question": p.question, "choices": json.loads(p.choices) if p.choices else None,
-                "correct_answer": p.correct_answer, "explanation": p.explanation, "latex_content": p.latex_content
-            } for p in problems
-        ]
-        
-        return {
-            "generation_info": session,
-            "problems": problem_list
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"세션 상세 조회 중 오류: {str(e)}")
+    from ..models.problem import Problem
+    from ..models.worksheet import Worksheet
+    import json
+
+    worksheet = db.query(Worksheet).filter(
+        Worksheet.generation_id == generation_id,
+        Worksheet.teacher_id == current_user["user_id"]
+    ).first()
+
+    if not worksheet:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 생성 세션을 찾을 수 없습니다")
+
+    problems = db.query(Problem).filter(
+        Problem.worksheet_id == worksheet.id
+    ).order_by(Problem.sequence_order).all()
+
+    problem_list = [
+        {
+            "id": p.id,
+            "problem_type": p.problem_type,
+            "difficulty": p.difficulty,
+            "question": p.question,
+            "choices": json.loads(p.choices) if p.choices else None,
+            "correct_answer": p.correct_answer,
+            "explanation": p.explanation,
+            "latex_content": p.latex_content
+        } for p in problems
+    ]
+
+    return {
+        "generation_info": {
+            "generation_id": worksheet.generation_id,
+            "school_level": worksheet.school_level,
+            "grade": worksheet.grade,
+            "semester": worksheet.semester,
+            "unit_name": worksheet.unit_name,
+            "chapter_name": worksheet.chapter_name,
+            "problem_count": worksheet.problem_count,
+            "difficulty_ratio": worksheet.difficulty_ratio,
+            "problem_type_ratio": worksheet.problem_type_ratio,
+            "user_text": worksheet.user_prompt,
+            "actual_difficulty_distribution": worksheet.actual_difficulty_distribution,
+            "actual_type_distribution": worksheet.actual_type_distribution,
+            "total_generated": worksheet.problem_count,
+            "created_at": worksheet.created_at.isoformat()
+        },
+        "problems": problem_list
+    }
 
 
 @router.get("/")
@@ -107,7 +127,7 @@ async def get_worksheets(
         from ..models.worksheet import Worksheet
 
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.teacher_id == current_user["user_id"])\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -164,9 +184,9 @@ async def get_worksheet_detail(
             )
 
         # 워크시트 소유자가 아닌 경우 추가 검증 (구매 여부 확인 등)
-        if worksheet.teacher_id != current_user["id"]:
+        if worksheet.teacher_id != current_user["user_id"]:
             # TODO: 구매 여부 확인 로직 추가
-            print(f"[DEBUG] 다른 사용자의 워크시트 접근 시도: worksheet_id={worksheet_id}, owner={worksheet.teacher_id}, accessor={current_user['id']}")
+            print(f"[DEBUG] 다른 사용자의 워크시트 접근 시도: worksheet_id={worksheet_id}, owner={worksheet.teacher_id}, accessor={current_user['user_id']}")
             # 임시로 접근 허용
             pass
 
@@ -238,7 +258,7 @@ async def update_worksheet(
         from ..models.problem import Problem
 
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["user_id"])\
             .first()
 
         if not worksheet:
@@ -313,7 +333,7 @@ async def delete_worksheet(
         from ..models.math_generation import Assignment, AssignmentDeployment
 
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["user_id"])\
             .first()
 
         if not worksheet:

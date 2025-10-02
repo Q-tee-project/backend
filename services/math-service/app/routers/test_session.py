@@ -24,7 +24,7 @@ async def submit_test(
 ):
     """학생이 과제를 제출하고 채점을 시작하는 엔드포인트"""
     session = db.query(TestSession).filter(TestSession.session_id == session_id).first()
-    if not session or session.student_id != current_user["id"]:
+    if not session or session.student_id != current_user["user_id"]:
         raise HTTPException(status_code=404, detail="Test session not found")
 
     if session.status == 'submitted':
@@ -83,7 +83,7 @@ async def submit_test(
     # AssignmentDeployment 상태를 'completed'로 업데이트
     deployment = db.query(AssignmentDeployment).filter(
         AssignmentDeployment.assignment_id == assignment.id,
-        AssignmentDeployment.student_id == current_user["id"]
+        AssignmentDeployment.student_id == current_user["user_id"]
     ).first()
     if deployment:
         deployment.status = 'completed'
@@ -103,7 +103,7 @@ async def submit_test(
         points_per_problem=points_per_problem,
         input_method="mixed",  # 수학 과제는 객관식+손글씨 혼합
         graded_at=datetime.utcnow(),
-        graded_by=current_user["id"]
+        graded_by=current_user["user_id"]
     )
     db.add(grading_session)
     db.flush()  # ID를 얻기 위해 flush
@@ -157,7 +157,7 @@ async def save_answer(
 ):
     """학생의 답안을 실시간으로 저장"""
     session = db.query(TestSession).filter(TestSession.session_id == session_id).first()
-    if not session or session.student_id != current_user["id"]:
+    if not session or session.student_id != current_user["user_id"]:
         raise HTTPException(status_code=404, detail="Test session not found")
 
     problem_id = answer_data.get("problem_id")
@@ -192,7 +192,7 @@ async def save_answer_with_ocr(
 ):
     """OCR을 지원하는 답안 저장"""
     session = db.query(TestSession).filter(TestSession.session_id == session_id).first()
-    if not session or session.student_id != current_user["id"]:
+    if not session or session.student_id != current_user["user_id"]:
         raise HTTPException(status_code=404, detail="Test session not found")
 
     # 손글씨 이미지가 있으면 OCR 처리
