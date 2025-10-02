@@ -8,7 +8,6 @@ from datetime import datetime
 import math
 import httpx
 import os
-import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
@@ -169,41 +168,6 @@ class MessageService:
         self.db.commit()
         return sent_messages
 
-    def send_message(self, sender_id: int, sender_type: str,
-                    message_request: MessageSendRequest) -> List[Message]:
-        """메시지 전송 (동기 - 기존 호환성 유지)"""
-        try:
-            return asyncio.run(self.send_message_async(sender_id, sender_type, message_request))
-        except Exception as e:
-            logger.error(f"Error in async message sending, falling back to sync: {e}")
-            # 알림 없이 메시지만 전송하는 폴백
-            sent_messages = []
-
-            for receiver_id in message_request.recipient_ids:
-                receiver_type = "student" if sender_type == "teacher" else "teacher"
-
-                if not self.validate_message_permission(sender_id, sender_type, receiver_id, receiver_type):
-                    continue
-
-                sender_classrooms = set(self.get_user_classrooms(sender_id, sender_type))
-                receiver_classrooms = set(self.get_user_classrooms(receiver_id, receiver_type))
-                common_classroom = list(sender_classrooms & receiver_classrooms)[0]
-
-                message = Message(
-                    subject=message_request.subject,
-                    content=message_request.content,
-                    sender_id=sender_id,
-                    sender_type=sender_type,
-                    receiver_id=receiver_id,
-                    receiver_type=receiver_type,
-                    classroom_id=common_classroom
-                )
-
-                self.db.add(message)
-                sent_messages.append(message)
-
-            self.db.commit()
-            return sent_messages
 
     def get_messages(self, user_id: int, user_type: str,
                     page: int = 1, page_size: int = 15,

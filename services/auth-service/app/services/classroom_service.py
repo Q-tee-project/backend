@@ -65,16 +65,18 @@ def get_pending_join_requests_for_teacher(db: Session, teacher_id: int):
     ).all()
 
 def approve_or_reject_join_request(db: Session, request_id: int, status: str):
+    from datetime import datetime
+
     join_request = db.query(StudentJoinRequest).filter(StudentJoinRequest.id == request_id).first()
     if not join_request:
         return None
-    
+
     join_request.status = status
-    join_request.processed_at = db.query(StudentJoinRequest).first().requested_at.__class__.utcnow()
-    
+    join_request.processed_at = datetime.utcnow()
+
     db.commit()
     db.refresh(join_request)
-    
+
     return join_request
 
 def get_student_classrooms(db: Session, student_id: int):
