@@ -180,7 +180,7 @@ async def start_ai_grading(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """과제의 손글씨 답안에 대해 OCR + AI 채점을 비동기로 시작"""
+    """과제의 손글씨 답안에 대해 OCR 추출 + 자동 채점을 비동기로 시작"""
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -214,7 +214,7 @@ async def start_ai_grading(
     )
 
     return {
-        "message": "OCR + AI 채점이 시작되었습니다.",
+        "message": "OCR 추출 + 자동 채점이 시작되었습니다.",
         "task_id": task.id,
         "status": "PENDING",
         "assignment_id": assignment_id

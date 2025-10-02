@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from ..schemas.math_generation import MathProblemGenerationRequest, MathProblemGenerationResponse
-from .problem_generator import ProblemGenerator
+from .ai_client import problem_generator_instance
 from ..models.math_generation import MathProblemGeneration
 from ..models.problem import Problem
 from ..models.worksheet import Worksheet, WorksheetStatus
@@ -15,7 +15,7 @@ class MathGenerationService:
     """수학 문제 생성 서비스"""
     
     def __init__(self):
-        self.problem_generator = ProblemGenerator()
+        self.problem_generator = problem_generator_instance
     
     def get_curriculum_structure(self, db: Session, school_level: Optional[str] = None) -> Dict:
         """교육과정 구조 조회 - 중1 1학기에 초점"""
@@ -134,14 +134,10 @@ class MathGenerationService:
         
         # 2. 교육과정 데이터 가져오기
         curriculum_data = self._get_curriculum_data(request)
-        
-        # 3. 문제 유형 데이터 가져오기
-        problem_types = self._get_problem_types(request.chapter.chapter_name)
-        
-        # 4. AI 서비스를 통한 문제 생성
+
+        # 3. AI 서비스를 통한 문제 생성
         generated_problems = self._generate_problems_with_ai(
             curriculum_data=curriculum_data,
-            problem_types=problem_types,
             request=request
         )
         
@@ -222,7 +218,8 @@ class MathGenerationService:
                 latex_content=problem_data.get("latex_content"),
                 has_diagram=str(problem_data.get("has_diagram", False)).lower(),
                 diagram_type=problem_data.get("diagram_type"),
-                diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None
+                diagram_elements=json.dumps(problem_data.get("diagram_elements")) if problem_data.get("diagram_elements") else None,
+                tikz_code=problem_data.get("tikz_code")
             )
             
             db.add(problem)
@@ -243,7 +240,8 @@ class MathGenerationService:
                 "latex_content": problem.latex_content,
                 "has_diagram": problem.has_diagram == "true",
                 "diagram_type": problem.diagram_type,
-                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None
+                "diagram_elements": json.loads(problem.diagram_elements) if problem.diagram_elements else None,
+                "tikz_code": problem.tikz_code
             })
         
         db.commit()
@@ -297,25 +295,7 @@ class MathGenerationService:
             'keywords': getattr(request.chapter, 'keywords', request.chapter.chapter_name)
         }
     
-    def _get_problem_types(self, chapter_name: str) -> List[str]:
-        """챕터명에 해당하는 문제 유형들 조회"""
-        try:
-            problem_types_file_path = os.path.join(os.path.dirname(__file__), "../../data/math_problem_types.json")
-            
-            with open(problem_types_file_path, 'r', encoding='utf-8') as f:
-                problem_types_data = json.load(f)
-            
-            # 챕터명으로 문제 유형 찾기
-            for chapter_data in problem_types_data["math_problem_types"]:
-                if chapter_data["chapter_name"] == chapter_name:
-                    return chapter_data["problem_types"]
-            
-            return []
-        except Exception as e:
-            print(f"문제 유형 로드 오류: {str(e)}")
-            return []
-    
-    def _generate_problems_with_ai(self, curriculum_data: Dict, problem_types: List[str], request: MathProblemGenerationRequest) -> List[Dict]:
+    def _generate_problems_with_ai(self, curriculum_data: Dict, request: MathProblemGenerationRequest) -> List[Dict]:
         """비율 기반 AI 문제 생성"""
 
         print(f"📊 비율 기반 문제 생성 시작")
@@ -436,7 +416,7 @@ class MathGenerationService:
 
     def _generate_problems_with_ratio(self, curriculum_data: Dict, request) -> List[Dict]:
         """
-        비율에 따른 문제 생성
+        비율에 따른 문제 생성 - 병렬 처리
         """
         total_count = request.problem_count.value_int
         ratio_counts = self._calculate_problem_counts_by_ratio(
@@ -446,31 +426,51 @@ class MathGenerationService:
 
         print(f"🎯 문제 유형별 생성 목표: {ratio_counts}")
 
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         problems = []
 
-        # 객관식 문제 생성
-        if ratio_counts["multiple_choice"] > 0:
-            print(f"📝 객관식 문제 {ratio_counts['multiple_choice']}개 생성 중...")
-            mc_problems = self._generate_specific_type_problems(
-                count=ratio_counts["multiple_choice"],
-                problem_type="multiple_choice",
-                curriculum_data=curriculum_data,
-                request=request
-            )
-            problems.extend(mc_problems)
-            print(f"✅ 객관식 문제 {len(mc_problems)}개 생성 완료")
+        # 병렬 생성을 위한 작업 리스트
+        tasks = []
 
-        # 단답형 문제 생성
+        # 객관식 문제 생성 작업
+        if ratio_counts["multiple_choice"] > 0:
+            tasks.append({
+                "type": "multiple_choice",
+                "count": ratio_counts["multiple_choice"]
+            })
+
+        # 단답형 문제 생성 작업
         if ratio_counts["short_answer"] > 0:
-            print(f"📝 단답형 문제 {ratio_counts['short_answer']}개 생성 중...")
-            sa_problems = self._generate_specific_type_problems(
-                count=ratio_counts["short_answer"],
-                problem_type="short_answer",
-                curriculum_data=curriculum_data,
-                request=request
-            )
-            problems.extend(sa_problems)
-            print(f"✅ 단답형 문제 {len(sa_problems)}개 생성 완료")
+            tasks.append({
+                "type": "short_answer",
+                "count": ratio_counts["short_answer"]
+            })
+
+        # 병렬로 각 유형 생성
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            future_to_type = {}
+            for task in tasks:
+                print(f"📝 {task['type']} 문제 {task['count']}개 생성 시작...")
+                future = executor.submit(
+                    self._generate_specific_type_problems_parallel,
+                    count=task['count'],
+                    problem_type=task['type'],
+                    curriculum_data=curriculum_data,
+                    request=request
+                )
+                future_to_type[future] = task['type']
+
+            # 완료된 작업 수집
+            for future in as_completed(future_to_type):
+                problem_type = future_to_type[future]
+                try:
+                    type_problems = future.result()
+                    problems.extend(type_problems)
+                    print(f"✅ {problem_type} 문제 {len(type_problems)}개 생성 완료")
+                except Exception as e:
+                    print(f"❌ {problem_type} 문제 생성 실패: {str(e)}")
+                    raise
 
         # 문제 순서 랜덤 섞기 (선택사항)
         import random
@@ -479,6 +479,84 @@ class MathGenerationService:
 
         print(f"🎉 총 {len(problems)}개 문제 생성 완료")
         return problems
+
+    def _generate_specific_type_problems_parallel(self, count: int, problem_type: str, curriculum_data: Dict, request) -> List[Dict]:
+        """
+        특정 유형의 문제를 병렬로 생성 (개선된 버전)
+        """
+        print(f"🎯 {problem_type} 유형 {count}개 문제 병렬 생성 시작")
+
+        # 유형별 명확한 프롬프트 생성
+        if problem_type == "multiple_choice":
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 객관식(multiple_choice) 문제만 생성
+2. 각 문제마다 정답은 반드시 1개만 존재
+3. 선택지는 정확히 4개 (A, B, C, D)
+4. correct_answer는 A, B, C, D 중 하나만
+5. "정답을 2개 고르시오" 같은 문제 절대 금지
+6. problem_type은 반드시 "multiple_choice"
+"""
+        else:  # short_answer
+            type_specific_prompt = f"""
+{request.user_text}
+
+**반드시 지킬 조건 (절대 위반 금지):**
+1. 단답형(short_answer) 문제만 생성
+2. 명확한 하나의 정답만 존재
+3. 선택지(choices) 없음 - choices 필드를 null이나 빈 배열로 설정
+4. 간단한 계산이나 단어로 답 가능
+5. problem_type은 반드시 "short_answer"
+"""
+
+        try:
+            # ProblemGenerator의 병렬 생성 메서드 사용
+            generated_problems = self.problem_generator.generate_problems_parallel(
+                curriculum_data=curriculum_data,
+                user_prompt=type_specific_prompt,
+                problem_count=count,
+                difficulty_ratio=request.difficulty_ratio.model_dump(),
+                problem_type=problem_type,
+                max_workers=min(count, 10)  # 최대 10개 동시 실행
+            )
+
+            # 생성된 문제의 타입을 강제로 설정하고 검증
+            validated_problems = []
+            for problem in generated_problems:
+                # 타입 강제 설정
+                problem["problem_type"] = problem_type
+
+                # 객관식 문제 검증 및 수정
+                if problem_type == "multiple_choice":
+                    # 선택지가 없거나 4개가 아니면 기본값 설정
+                    if not problem.get("choices") or len(problem["choices"]) != 4:
+                        problem["choices"] = ["선택지 A", "선택지 B", "선택지 C", "선택지 D"]
+
+                    # 정답이 A,B,C,D가 아니면 A로 설정
+                    if problem.get("correct_answer") not in ["A", "B", "C", "D"]:
+                        problem["correct_answer"] = "A"
+
+                # 단답형 문제 검증 및 수정
+                elif problem_type == "short_answer":
+                    # 선택지 제거
+                    problem["choices"] = None
+
+                validated_problems.append(problem)
+
+            print(f"✅ {problem_type} 유형 {len(validated_problems)}개 문제 병렬 생성 완료")
+            return validated_problems
+
+        except Exception as e:
+            print(f"❌ 병렬 생성 실패, 순차 생성으로 폴백: {str(e)}")
+            # 순차 생성으로 폴백
+            return self._generate_specific_type_problems(
+                count=count,
+                problem_type=problem_type,
+                curriculum_data=curriculum_data,
+                request=request
+            )
 
     def _generate_specific_type_problems(self, count: int, problem_type: str, curriculum_data: Dict, request) -> List[Dict]:
         """
@@ -610,7 +688,8 @@ JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인�
                     "correct_answer": problem.correct_answer,
                     "choices": choices_data,  # 배열로 보장
                     "solution": problem.explanation,  # Problem 모델의 실제 필드명
-                    "created_at": problem.created_at.isoformat() if problem.created_at else None
+                    "created_at": problem.created_at.isoformat() if problem.created_at else None,
+                    "tikz_code": problem.tikz_code  # TikZ 그래프 코드
                 }
                 problem_list.append(problem_data)
             
@@ -676,7 +755,8 @@ JSON 형식에서 모든 문제의 problem_type이 "short_answer"인지 확인�
                     latex_content=source_problem.latex_content,
                     has_diagram=source_problem.has_diagram,
                     diagram_type=source_problem.diagram_type,
-                    diagram_elements=source_problem.diagram_elements
+                    diagram_elements=source_problem.diagram_elements,
+                    tikz_code=source_problem.tikz_code
                 )
                 db.add(new_problem)
             

@@ -38,26 +38,27 @@ class AIService:
         )
 
     def regenerate_single_problem(self, current_problem: Dict, requirements: str, korean_info: Dict = None) -> Dict:
-        """단일 문제 빠른 재생성 - 복잡한 파이프라인 없이 직접 AI 호출"""
+        """단일 문제 빠른 재생성 - 영어 프롬프트 사용"""
         try:
-            # 간단한 재생성 프롬프트 구성
-            prompt = f"""
-다음 국어 문제를 사용자 요구사항에 맞게 개선해주세요.
+            # 영어 기반 재생성 프롬프트 구성
+            prompt = f"""You are an expert Korean language teacher. Please improve the following Korean language problem according to the user's requirements.
 
-기존 문제:
-- 문제: {current_problem.get('question', '')}
-- 정답: {current_problem.get('correct_answer', '')}
-- 해설: {current_problem.get('explanation', '')}
-- 선택지: {current_problem.get('choices', [])}
+**Current Problem:**
+- Question: {current_problem.get('question', '')}
+- Choices: {current_problem.get('choices', [])}
+- Correct Answer: {current_problem.get('correct_answer', '')}
+- Explanation: {current_problem.get('explanation', '')}
 
-사용자 요구사항: {requirements}
+**User Requirements:** {requirements}
 
-아래 JSON 형식으로만 응답해주세요:
+**CRITICAL:** Output MUST be in KOREAN language (except JSON keys).
+
+Return ONLY valid JSON (no markdown, no code blocks):
 {{
-    "question": "개선된 문제 내용",
-    "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": "정답",
-    "explanation": "해설"
+    "question": "<개선된 문제 내용 (Korean)>",
+    "choices": ["<선택지 1 (Korean)>", "<선택지 2 (Korean)>", "<선택지 3 (Korean)>", "<선택지 4 (Korean)>"],
+    "correct_answer": "<A/B/C/D>",
+    "explanation": "<상세한 해설 (Korean)>"
 }}
 """
 

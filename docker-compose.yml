@@ -35,6 +35,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
@@ -105,6 +106,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
@@ -179,6 +181,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${MATH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
     depends_on:
       - postgres
@@ -200,6 +203,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
     depends_on:
       - postgres

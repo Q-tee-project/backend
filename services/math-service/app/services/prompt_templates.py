@@ -1,411 +1,209 @@
 """
-AI 프롬프트 템플릿 관리 모듈 - 쎈 교재 스타일
+AI 프롬프트 템플릿 관리 모듈 
 """
-from typing import Dict, List
+from typing import Dict
 
 class PromptTemplates:
     """AI 프롬프트 템플릿 관리 클래스"""
     
     @staticmethod
-    def get_difficulty_criteria() -> str:
-        """난이도 기준 정의 - 쎈 교재 스타일"""
-        return """
-**[쎈 교재 스타일 난이도 기준]**
-
-**A단계 (기본 개념)** - 정답률 80~90%:
-- **특징**: 공식에 바로 대입하는 1~2단계 계산
-- **문제 길이**: 1~2줄
-- **예시 유형**:
-  * 일차방정식: $2x + 3 = 7$ 풀기
-  * 다항식 계산: $(3x + 2) - (x - 1)$ 정리하기
-  * 분수 계산: $\\frac{2}{3} + \\frac{1}{4}$ 구하기
-  * 지수법칙: $2^3 \\times 2^2$ 계산하기
-- **해설**: 1~2문장 (핵심 계산만)
-
-**B단계 (유형 적용)** - 정답률 50~60%:
-- **특징**: 개념 2~3개 결합, 실생활 응용, 3~4단계 풀이
-- **문제 길이**: 3~4줄
-- **예시 유형**:
-  * 농도 문제: "10% 소금물 200g에 물을 더 넣어 5%로 만들려면?"
-  * 속력 문제: "시속 60km로 2시간, 시속 80km로 1시간 30분 달렸을 때..."
-  * 일의 양: "A가 혼자 하면 12일, B가 혼자 하면 18일..."
-  * 도형 응용: "정사각형의 한 변을 2cm 늘이고 다른 변을 3cm 줄였더니..."
-- **해설**: 2~3문장 (핵심 단계 설명)
-
-**C단계 (심화 사고)** - 정답률 20~30%:
-- **특징**: 창의적 접근 필요, 다단계 추론, 여러 개념 통합
-- **문제 길이**: 5~7줄
-- **예시 유형**:
-  * 규칙성 찾기: "1, 1, 2, 3, 5, 8, ... 의 100번째 항을 10으로 나눈 나머지는?"
-  * 최적화: "직사각형 둘레가 20일 때 넓이의 최댓값과 그때의 가로, 세로 길이는?"
-  * 증명: "$n^2 + n$이 항상 짝수임을 증명하고, 이를 이용한 응용 문제"
-  * 복합 도형: "정삼각형 내부의 점 P에서 각 꼭짓점까지 거리의 합의 최솟값"
-- **해설**: 3~4문장 (핵심 아이디어 + 주요 단계)
-"""
-
-    @staticmethod
-    def get_generation_rules() -> str:
-        """문제 생성 규칙 - KaTeX 최적화"""
-        return """
-**[쎈 스타일 문제 생성 규칙]**
-
-1. **난이도 분배 엄수**
-   - 요청된 A:B:C 비율 정확히 지키기
-   - difficulty 필드: "A", "B", "C"로 명확히 구분
-   - 난이도 간 확실한 차별화 필수
-
-2. **KaTeX 수식 작성법 (절대적으로 중요 - 반드시 지킬 것)**
-
-   ** 완전히 올바른 LaTeX 예시 (이대로만 작성):**
-   ```
-   분수 표기:
-   - $\\frac{3}{4}$ (올바름)
-   - $\\frac{x+1}{x-2}$ (올바름)
-   - $\\frac{2x-1}{3}$ (올바름)
-
-   제곱 표기:
-   - $x^2$ (올바름)
-   - $2^{10}$ (올바름)
-   - $(x+1)^2$ (올바름)
-   - $x^{12}$ (두 자리 이상은 반드시 중괄호)
-
-   제곱근 표기:
-   - $\\sqrt{16}$ (올바름)
-   - $\\sqrt{x^2+1}$ (올바름)
-
-   연산 기호:
-   - $3 \\times 4$ (곱셈)
-   - $6 \\div 2$ (나눗셈)
-   - $x \\leq 5$ (작거나 같다)
-   - $a \\geq b$ (크거나 같다)
-
-   특수 기호:
-   - $|x-3|$ (절댓값)
-   - $\\{1, 2, 3\\}$ (집합)
-   ```
-
-   ** 절대 금지되는 잘못된 표기 (이런 식으로 절대 쓰지 말 것):**
-   ```
-   - $\\frac{}{}${분자}{분모}$ ← 절대 금지! 빈 분수 + 중복
-   - $\\frac{}{}${a+2b}{ab}$ ← 절대 금지! 구문 오류
-   - frac{3}{4} ← 절대 금지! 달러 기호 없음
-   - $frac{3}{4}$ ← 절대 금지! 백슬래시 없음
-   - $x^12$ ← 주의! 두 자리 이상은 $x^{12}$로
-   - \\frac{1}{2} ← 절대 금지! 달러 기호 없음
-   - $\\le$ ← $\\leq$로 써야 함
-   - $\\ge$ ← $\\geq$로 써야 함
-   ```
-
-   ** LaTeX 작성 절대 규칙 (한 번이라도 위반하면 안 됨):**
-   1. 모든 수식은 반드시 $로 시작하고 $로 끝남
-   2. 분수는 반드시 $\\frac{분자}{분모}$ 형식만 사용
-   3. 제곱은 두 자리 이상일 때 반드시 중괄호: $x^{12}$
-   4. 백슬래시는 반드시 두 개: \\frac, \\sqrt, \\times, \\leq
-   5. 빈 분수 $\\frac{}{}$ 절대 사용 금지
-   6. 분수 뒤에 추가로 {} 붙이는 것 절대 금지
-
-3. **문제 작성 스타일**
-   - A단계: "다음을 계산하시오:", "~을 구하시오."
-   - B단계: 실생활 상황 제시 → 수학적 해결
-   - C단계: 조건 제시 → 추론 요구 → 증명/설명
-
-4. **해설 작성 규칙 (매우 중요 - 길이 제한 엄수)**
-   - A단계: 핵심 계산만 (예: "$3x = 6$이므로 $x = 2$") - 최대 1문장
-   - B단계: 식 세우기 + 계산 (예: "속력×시간=거리이므로 $60 \\times 2 = 120$km") - 최대 2문장
-   - C단계: 핵심 아이디어 + 과정 (예: "홀수는 $2n+1$로 표현하면...") - 최대 3문장
-   
-   **해설 길이 제한 (절대 위반 금지):**
-   - A단계: 50자 이하
-   - B단계: 100자 이하  
-   - C단계: 150자 이하
-   - 해설이 길어지면 핵심만 남기고 나머지 삭제
-   
-5. **금지 표현 (해설에서)**
-   - AI 사고과정: "확인해보겠습니다", "접근해보면", "문제 재설계"
-   - 불확실성: "~인 것 같다", "~로 보인다"
-   - 수정 과정: "다시 계산하면", "처음에는"
-   - 메타 설명: "이 문제는", "여기서 주의할 점은"
-
-6. **correct_answer 형식**
-   - 객관식: "A", "B", "C", "D" (①②③④ 금지)
-   - 단답형: "$x = 3$", "15", "$2x + 1$"
-   - 서술형: 완전한 풀이 과정 포함
-
-7. **선택지 작성 (객관식)**
-   - choices: ["내용1", "내용2", "내용3", "내용4"]
-   - 매력적인 오답 포함 (계산 실수 유도)
-   - 수식도 $로 감싸기: ["$x = 2$", "$x = 3$", "$x = 4$", "$x = 5$"]
-"""
-
-    @staticmethod
-    def get_difficulty_requirements() -> str:
-        """쎈 스타일 난이도별 예시"""
-        return """
-**[쎈 교재 스타일 난이도별 구체적 예시]**
-
-**A단계 (기본) - 바로 풀 수 있는 문제**
-```
-문제 1: 일차방정식 $3x - 7 = 8$을 풀어라.
-해설: 양변에 7을 더하면 $3x = 15$, 따라서 $x = 5$
-
-문제 2: $(2x + 3) + (x - 5)$를 간단히 하여라.
-해설: 동류항끼리 정리하면 $3x - 2$
-
-문제 3: $\\frac{3}{5} \\times \\frac{10}{9}$를 계산하여라.
-해설: 약분하면 $\\frac{2}{3}$
-```
-
-**B단계 (유형) - 개념 응용이 필요한 문제**
-```
-문제 1: 농도가 20%인 소금물 300g에 물 100g을 더 넣었다. 
-       새로운 소금물의 농도는 몇 %인가?
-해설: 소금의 양은 $300 \\times 0.2 = 60$g으로 일정하다.
-     새 소금물은 400g이므로 농도는 $\\frac{60}{400} \\times 100 = 15$%
-
-문제 2: 연속하는 세 홀수의 합이 57일 때, 가장 큰 수를 구하여라.
-해설: 세 홀수를 $2n-1, 2n+1, 2n+3$으로 놓으면 합이 $6n+3=57$
-     따라서 $n=9$이고 가장 큰 수는 21
-
-문제 3: 정가의 20%를 할인한 가격이 12,000원일 때, 정가를 구하여라.
-해설: 정가를 $x$원이라 하면 $0.8x = 12000$
-     따라서 $x = 15000$원
-```
-
-**C단계 (심화) - 사고력이 필요한 문제**
-```
-문제 1: 1부터 100까지의 자연수 중에서 3의 배수이거나 5의 배수인 
-       수의 개수를 구하고, 그 합을 구하여라.
-해설: 3의 배수 33개, 5의 배수 20개, 15의 배수 6개로 포함배제원리 적용.
-     개수는 $33+20-6=47$개, 합은 등차수열 공식으로 계산.
-
-문제 2: 좌표평면에서 점 $(2, 3)$을 $x$축에 대해 대칭이동한 후,
-       원점을 중심으로 90° 회전시킨 점의 좌표를 구하여라.
-해설: $x$축 대칭으로 $(2, -3)$이 되고, 90° 회전으로 $(3, 2)$가 된다.
-     회전변환 행렬 적용하면 확인 가능.
-
-문제 3: $n$이 자연수일 때, $\\frac{n^2 + 3n + 2}{n + 1}$이 
-       자연수가 되는 모든 $n$의 값의 합을 구하여라.
-해설: 식을 정리하면 $n + 2$가 되므로 모든 자연수 $n$에 대해 성립.
-     하지만 문제 조건 재확인 필요... (이런 식의 해설 금지!)
-     → 올바른 해설: 인수분해하면 $\\frac{(n+1)(n+2)}{n+1} = n+2$이므로 모든 자연수에서 성립.
-```
-
-**난이도 구분 핵심**
-- A: 1~2단계 계산, 공식 직접 적용
-- B: 3~4단계 풀이, 실생활 응용, 개념 2개 결합
-- C: 5단계 이상, 창의적 접근, 여러 개념 통합
-
-**절대 하지 말 것**
-- A단계를 B나 C처럼 복잡하게 만들기
-- C단계를 A나 B처럼 단순하게 만들기
-- 모든 문제를 비슷한 난이도로 만들기
-"""
-
-    @staticmethod
-    def get_json_format() -> str:
-        """JSON 응답 형식 - KaTeX 최적화"""
-        return """
-**[JSON 응답 형식]**
-```json
-[
-  {
-    "question": "문제 내용 (KaTeX 수식 포함)",
-    "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": "정답",
-    "explanation": "간결한 해설",
-    "problem_type": "multiple_choice/short_answer",
-    "difficulty": "A/B/C",
-    "has_diagram": false,
-    "diagram_type": null,
-    "diagram_elements": null
-  }
-]
-```
-
-**필드별 상세 규칙**
-
-1. **question**: 
-   - 모든 수식은 $ 기호로 감싸기
-   - 백슬래시는 반드시 이스케이프: \\frac, \\sqrt, \\times
-   - 예: "방정식 $2x + 3 = 7$을 풀어라."
-
-2. **choices** (객관식만):
-   - 배열 형식: ["선택지1", "선택지2", "선택지3", "선택지4"]
-   - 번호 표시 금지 (①②③④ X, 1) 2) 3) 4) X)
-   - 수식 포함 시: ["$x = 1$", "$x = 2$", "$x = 3$", "$x = 4$"]
-
-3. **correct_answer**:
-   - 객관식: "A", "B", "C", "D" 중 하나
-   - 단답형: "$x = 5$", "15", "$3x + 2$"
-   - 서술형: 완전한 모범답안
-
-4. **explanation**:
-   - A단계: 1~2문장 (예: "$2x = 4$이므로 $x = 2$")
-   - B단계: 2~3문장 (예: "거리는 속력×시간이다. 따라서 $60 \\times 2 = 120$km")
-   - C단계: 3~4문장 (핵심 아이디어 + 주요 과정)
-
-5. **difficulty**:
-   - 반드시 "A", "B", "C" 중 하나
-   - 요청된 분배 비율 정확히 준수
-
-**KaTeX 렌더링 체크리스트**
-✓ 모든 수식이 $로 감싸져 있는가?
-✓ 분수는 \\frac{분자}{분모} 형식인가?
-✓ 제곱은 ^{지수} 형식인가? (두 자리 이상)
-✓ 백슬래시가 제대로 이스케이프 되었는가?
-✓ 중괄호 { }가 빠지지 않았는가?
-"""
-
-    @staticmethod
     def build_problem_generation_prompt(
         curriculum_data: Dict,
         user_prompt: str,
         problem_count: int,
-        difficulty_distribution: str,
-        reference_problems: str
+        difficulty_distribution: str
     ) -> str:
-        """쎈 스타일 문제 생성 프롬프트 - Gemini LaTeX 능력 최대 활용"""
-        return f"""당신은 대한민국 베스트셀러 수학 문제집 "쎈"의 출제 전문가이며, LaTeX 수식 작성의 전문가입니다.
+        """
+        [REVISED] Advanced prompt for generating math problems with strict difficulty separation.
+        Instructions are in English for logical clarity, but the output content must be in Korean.
+        """
+        # Check if this is Unit IV (그래프와 비례)
+        unit_name = curriculum_data.get('unit_name', '')
+        is_graph_unit = unit_name == "그래프와 비례"
 
-**교육과정**: {curriculum_data.get('grade')} {curriculum_data.get('semester')} - {curriculum_data.get('unit_name')} > {curriculum_data.get('chapter_name')}
-**사용자 요청**: "{user_prompt}"
-**생성할 문제 수**: {problem_count}개
-**난이도 분배**: {difficulty_distribution}
+        graph_instruction = ""
+        if is_graph_unit:
+            graph_instruction = """
 
-## 쎈 교재 스타일 문제 생성 가이드
+**SPECIAL INSTRUCTION FOR 그래프와 비례 (Graph and Proportion Unit)**:
+Since this unit focuses on coordinate planes and graphs, you MUST include graph visualizations using TikZ LaTeX for at least 60% of the problems.
 
-### 난이도별 특징:
-- **A단계**: 공식 직접 적용, 1-2단계 계산 (정답률 80-90%)
-- **B단계**: 실생활 응용, 3-4단계 풀이 (정답률 50-60%)
-- **C단계**: 창의적 사고, 5단계 이상 풀이 (정답률 20-30%)
+**Graph Generation Rules:**
+1. Use TikZ to create coordinate plane graphs within your LaTeX
+2. Include these fields in your JSON when a graph is needed:
+   - "has_diagram": true
+   - "diagram_type": "coordinate_plane" or "function_graph"
+   - "tikz_code": "[Full TikZ LaTeX code for the graph]"
 
-{reference_problems}
+**TikZ Graph Template Example:**
+```
+\\begin{tikzpicture}[scale=0.8]
+  \\draw[->] (-1,0) -- (5,0) node[right] {$x$};
+  \\draw[->] (0,-1) -- (0,5) node[above] {$y$};
+  \\draw[thick,blue] (0,0) -- (4,4);
+  \\foreach \\x in {1,2,3,4}
+    \\draw (\\x,0.1) -- (\\x,-0.1) node[below] {$\\x$};
+  \\foreach \\y in {1,2,3,4}
+    \\draw (0.1,\\y) -- (-0.1,\\y) node[left] {$\\y$};
+\\end{tikzpicture}
+```
 
-### LaTeX 수식 작성 가이드:
-당신의 LaTeX 지식을 활용하여 모든 수학적 표현을 올바르게 작성하세요:
+**AXIS SCALING RULES (CRITICAL):**
+- Choose axis ranges that fit the data points with minimal empty space
+- Keep x-axis and y-axis ranges proportional and visually balanced
+- Typical good ranges: -5 to 5, -1 to 10, 0 to 20 (avoid extremes like -2 to 45)
+- If data spans 0 to 40 on x-axis, consider using a smaller scale value (e.g., scale=0.3) instead of default scale=0.8
+- The goal is to create readable, well-proportioned graphs that display clearly
 
-**분수**: $\\frac{{분자}}{{분모}}$ 형식으로 작성
-- 예: $\\frac{{3}}{{4}}$, $\\frac{{2x-1}}{{x+2}}$, $\\frac{{a+b}}{{c}}$
+**Graph Types to Use:**
+- For 좌표평면과 그래프: Show points on coordinate plane, geometric shapes
+- For 정비례: Show linear proportions (y = ax) passing through origin
+- For 반비례: Show inverse proportions (y = a/x) hyperbola curves
 
-**절댓값**: $|표현식|$ 형식으로 작성
-- 예: $|x|$, $|2x-3|$, $|a-b|$
+**Example with Graph:**
+```json
+{{
+  "question": "다음 그래프는 $y = 2x$의 그래프이다. 점 $A$의 좌표를 구하여라.",
+  "choices": ["$(1, 2)$", "$(2, 4)$", "$(3, 6)$", "$(4, 8)$"],
+  "correct_answer": "B",
+  "explanation": "정비례 관계 $y = 2x$에서 $x = 2$일 때 $y = 4$이므로 점 $A$의 좌표는 $(2, 4)$이다.",
+  "problem_type": "multiple_choice",
+  "difficulty": "A",
+  "has_diagram": true,
+  "diagram_type": "function_graph",
+  "tikz_code": "\\\\begin{{tikzpicture}}[scale=0.8]\\n  \\\\draw[->] (-1,0) -- (5,0) node[right] {{$x$}};\\n  \\\\draw[->] (0,-1) -- (0,5) node[above] {{$y$}};\\n  \\\\draw[thick,blue] (0,0) -- (4,4) node[midway,above left] {{$y=2x$}};\\n  \\\\filldraw[red] (2,4) circle (2pt) node[above right] {{$A$}};\\n  \\\\foreach \\\\x in {{1,2,3,4}}\\n    \\\\draw (\\\\x,0.1) -- (\\\\x,-0.1) node[below] {{$\\\\x$}};\\n  \\\\foreach \\\\y in {{1,2,3,4}}\\n    \\\\draw (0.1,\\\\y) -- (-0.1,\\\\y) node[left] {{$\\\\y$}};\\n\\\\end{{tikzpicture}}"
+}}
+```
 
-**지수**: 두 자리 이상은 중괄호 사용
-- 예: $x^2$, $x^{{10}}$, $2^{{n+1}}$
+**IMPORTANT**:
+- Do NOT include placeholders like "$tikz_placeholder$" in the question text
+- Put the actual TikZ code in the "tikz_code" field
+- The graph will be rendered separately by the frontend
+- **CRITICAL**: Use ONLY English or Math symbols in TikZ code, NO Korean text (e.g., use "x" not "시간", "y" not "거리")
+- For axis labels, use variables like $x$, $y$ instead of Korean words
 
-**함수**: 전체를 하나의 수식으로 작성
-- 예: $f(x) = 2x + 1$, $P(a, b)$, $Q(x+y, x-y)$
+**ANSWER POINT HIDING RULE (매우 중요)**:
+- If the question asks to find a specific point's coordinate (e.g., "점 D의 좌표를 구하시오"), that point is the ANSWER
+- **DO NOT draw or label the answer point on the graph**
+- Only show the GIVEN points (주어진 점) on the graph
+- Example: If question asks "Find point D" and gives "A(1,2), B(5,2), C(6,5)", only draw points A, B, C
+- **NEVER use \\coordinate (D) at (x,y) or \\filldraw for the answer point**
+- This ensures students must calculate the answer, not read it from the graph
 
-**복합 수식**: 변수와 연산자를 포함한 전체 표현
-- 예: $3x - 5$, $a + b$, $2x^2 - 3x + 1$
+When generating problems for this unit, actively create graph-based questions with TikZ visualizations.
+"""
 
-**부등호**: $\\leq$, $\\geq$, $\\neq$ 사용
-- 예: $x \\leq 5$, $a \\geq 0$, $x \\neq 0$
+        return f"""You are a Master Test Creator for the top-selling South Korean math textbook series, "SSEN". You are an expert in educational design and a master of LaTeX and TikZ. Your task is to generate a set of math problems with perfectly distinct difficulty levels.{graph_instruction}
 
+**#1. CORE MISSION**
+- **Topic**: {curriculum_data.get('grade')} {curriculum_data.get('semester')} - {curriculum_data.get('unit_name')} > {curriculum_data.get('chapter_name')}
+- **User Request**: "{user_prompt}"
+- **Total Problems to Generate**: {problem_count}
+- **Required Distribution**: {difficulty_distribution}
+- **CRITICAL INSTRUCTION**: The final JSON output's content (values for "question", "choices", "correct_answer", "explanation") MUST BE IN KOREAN.
 
+**#2. MENTAL SANDBOX FOR EACH DIFFICULTY LEVEL**
+To ensure perfect separation, you must operate in three different "mental sandboxes". When you are in one sandbox, you must forget the rules of the others.
 
-**중요**: 모든 수학적 표현은 순수 LaTeX만 사용하고, HTML 태그는 절대 섞지 마세요.
+---
+### **A-LEVEL SANDBOX: Direct Computation**
+- **Core Principle**: Test if a student has memorized a formula or definition. The solution requires only direct application.
+- **Mental Litmus Test**: "Can this be solved in under 30 seconds by a student who just learned the formula?"
+- **Characteristics**:
+  - **Process**: 1-2 computational steps.
+  - **Style**: Direct commands like "Calculate...", "Solve...", "Simplify...".
+- **STRICTLY FORBIDDEN**:
+  - Word problems or real-life scenarios.
+  - Any step that requires interpretation or setting up an equation.
+  - Abstract conditions (e.g., "for the solution to be a natural number").
+---
+### **B-LEVEL SANDBOX: Application & Translation**
+- **Core Principle**: Test if a student can translate a described situation into a mathematical equation and then solve it. This is the home of classic "type" problems.
+- **Mental Litmus Test**: "Does the student first need to figure out *what* formula to use and *how* to set it up based on the story?"
+- **Characteristics**:
+  - **Process**: 3-4 steps (1. Understand situation, 2. Set up equation, 3. Solve).
+  - **Style**: Word problems, real-life scenarios (saltwater concentration, speed, etc.).
+  - **Includes**: Problems with a simple condition that constrains the answer (e.g., "the solution must be a natural number", "find the smallest integer"). This is a TRANSLATION task, not a creative leap.
+- **STRICTLY FORBIDDEN**:
+  - Problems solvable by direct computation (that's A-Level).
+  - Problems requiring the discovery of a hidden pattern or combining more than two distinct concepts (that's C-Level).
+---
+### **C-LEVEL SANDBOX: Synthesis & Discovery (HARDEST PROBLEMS)**
+- **Core Principle**: Test if a student can synthesize multiple concepts in a novel way or discover a hidden pattern/strategy to find the solution. **C-Level problems MUST be significantly harder than B-Level.**
+- **Mental Litmus Test**: "Would this problem challenge even a top student? Is there an 'aha!' moment required? Does it require creative thinking or non-obvious strategy?"
+- **Characteristics**:
+  - **Process**: 5+ steps, often involving strategic choices or insight.
+  - **Style**: Asks for "the maximum value", "all possible cases", "proof", finding a rule in a sequence, or combining multiple constraints.
+  - **Key Feature**: The complexity comes from **conceptual synthesis** or **discovering a non-obvious approach**, not just harder calculations.
+  - **Examples of C-Level complexity**:
+    * Combining 3+ different mathematical concepts from different sub-chapters
+    * Finding patterns in sequences that require insight (not just applying a formula)
+    * Optimization problems requiring case analysis or constraint handling
+    * Problems where the solution method is not immediately obvious
+    * Multi-step logic puzzles requiring strategic planning
+- **STRICTLY FORBIDDEN**:
+  - Problems that are just a harder version of a B-Level problem (e.g., using bigger numbers or more variables).
+  - Problems that can be solved by straightforward application of a single concept.
+  - **WARNING**: If a problem feels similar to B-Level difficulty but with slightly harder numbers, it is NOT C-Level. Redesign it to require genuine insight or synthesis.
+---
 
-### 응답 형식:
+**#3. STEP-BY-STEP GENERATION PROCESS (MANDATORY)**
+You must follow this exact thought process:
+1.  **Generate A-Level First**: Based on the `{difficulty_distribution}`, generate ALL A-Level problems. Adhere strictly to the A-Level Sandbox rules.
+2.  **Generate B-Level Next**: Generate ALL B-Level problems. Adhere strictly to the B-Level Sandbox rules.
+3.  **Generate C-Level Last**: Generate ALL C-Level problems. **CRITICAL**: Before finalizing each C-Level problem, ask yourself:
+    - "Is this problem genuinely harder than my B-Level problems?"
+    - "Does this require insight, synthesis of multiple concepts, or a non-obvious strategy?"
+    - "Would this challenge even a top-performing student?"
+    - If the answer to any of these is NO, redesign the problem to be more challenging.
+    - **Remember**: C-Level is for the HARDEST problems that test deep understanding and creative problem-solving.
+4.  **Combine and Finalize**: Assemble all generated problems into a single JSON array. Ensure the total count is {problem_count}.
+
+**#4. FINAL OUTPUT FORMAT (JSON)**
+- Provide the final output as a single JSON array.
+- All mathematical expressions must be in perfect LaTeX (e.g., `$\\frac{{a}}{{b}}`, `$x^{{10}}$`).
+- **REMINDER**: All string values for question, choices, answer, explanation MUST BE IN KOREAN.
+- **CRITICAL**: `choices` must be an array of exactly 4 strings (not objects, not numbers).
+- **CRITICAL**: `correct_answer` must be "A", "B", "C", or "D" (for multiple choice) or a string value (for short answer).
+- **GRAPH FIELDS**: When including a graph, add "has_diagram": true, "diagram_type": "coordinate_plane" or "function_graph", and "tikz_code": "[TikZ code]"
+
 ```json
 [
   {{
-    "question": "문제 내용 (모든 수식이 완벽한 LaTeX로 작성)",
-    "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": "정답 (객관식: A/B/C/D, 단답형: 수식)",
-    "explanation": "간결한 해설 (A: 50자, B: 100자, C: 150자 이하)",
-    "problem_type": "multiple_choice/short_answer",
-    "difficulty": "A/B/C",
-    "has_diagram": false
+    "question": "다음 방정식을 풀어라. $3x + 5 = 14$",
+    "choices": ["$x = 1$", "$x = 2$", "$x = 3$", "$x = 4$"],
+    "correct_answer": "C",
+    "explanation": "$3x = 9$이므로 $x = 3$",
+    "problem_type": "multiple_choice",
+    "difficulty": "A",
+    "has_diagram": false,
+    "diagram_type": null,
+    "tikz_code": null
+  }},
+  {{
+    "question": "농도가 10%인 소금물 200g에 물 50g을 넣었다. 새로운 농도는?",
+    "choices": ["6%", "8%", "10%", "12%"],
+    "correct_answer": "B",
+    "explanation": "소금의 양은 $200 \\times 0.1 = 20$g. 새 소금물은 250g이므로 농도는 $\\frac{{20}}{{250}} \\times 100 = 8$%",
+    "problem_type": "multiple_choice",
+    "difficulty": "B",
+    "has_diagram": false,
+    "diagram_type": null,
+    "tikz_code": null
+  }},
+  {{
+    "question": "1부터 50까지 자연수 중 3의 배수이면서 5의 배수인 수의 개수는?",
+    "choices": ["2개", "3개", "4개", "5개"],
+    "correct_answer": "B",
+    "explanation": "3과 5의 최소공배수는 15. 15, 30, 45로 총 3개",
+    "problem_type": "multiple_choice",
+    "difficulty": "C",
+    "has_diagram": false,
+    "diagram_type": null,
+    "tikz_code": null
   }}
 ]
 ```
 
-### 품질 기준:
-1. **LaTeX 완벽성**: 모든 수학적 표현이 올바른 LaTeX 문법으로 작성
-2. **난이도 정확성**: 요청된 분배 비율 정확히 준수
-3. **교육적 가치**: 각 난이도에 맞는 학습 목표 달성
-4. **실용성**: 실제 교실에서 사용 가능한 문제
-
-당신의 LaTeX 전문 지식을 활용하여 완벽한 수학 문제 {problem_count}개를 JSON 배열로 생성해주세요."""
-
-    @staticmethod
-    def build_grading_prompt_essay(question: str, correct_answer: str, explanation: str, student_answer: str) -> str:
-        """서술형 채점 프롬프트 - 쎈 스타일"""
-        return f"""당신은 쎈 교재 스타일의 중학교 수학 채점 전문가입니다.
-학생의 답안을 정확하고 교육적으로 평가해주세요.
-
-**문제**: {question}
-**모범답안**: {correct_answer}
-**해설**: {explanation}
-
-**학생 답안**: {student_answer}
-
-**쎈 스타일 서술형 채점 기준**:
-1. 최종 정답의 정확성 (40점)
-   - 완전 정답: 40점
-   - 부분 정답: 20점
-   - 오답: 0점
-
-2. 풀이 과정의 논리성 (40점)
-   - 완벽한 논리 전개: 40점
-   - 대체로 올바른 과정: 25~35점
-   - 부분적으로 맞는 과정: 10~20점
-   - 잘못된 접근: 0~5점
-
-3. 수학적 표현의 정확성 (20점)
-   - 수식, 기호 사용 정확: 20점
-   - 사소한 표기 오류: 15점
-   - 표현 미흡: 10점
-
-**특별 규칙**:
-- 과정 없이 답만 맞으면 최대 70점
-- 계산 실수는 과정이 맞으면 -10점
-- 창의적인 올바른 풀이는 가점 가능
-
-응답 형식 (JSON):
-{{
-    "score": 점수(0-100),
-    "is_correct": true/false,
-    "feedback": "구체적이고 교육적인 피드백",
-    "strengths": "잘한 부분 (구체적으로)",
-    "improvements": "개선이 필요한 부분 (건설적으로)",
-    "process_score": 과정점수(0-60),
-    "answer_score": 정답점수(0-40)
-}}"""
-
-    @staticmethod
-    def build_grading_prompt_objective(question: str, correct_answer: str, explanation: str, student_answer: str) -> str:
-        """객관식/단답형 채점 프롬프트 - 쎈 스타일"""
-        return f"""당신은 쎈 교재 스타일의 중학교 수학 채점 전문가입니다.
-학생의 답안을 명확하게 평가해주세요.
-
-**문제**: {question}
-**정답**: {correct_answer}
-**해설**: {explanation}
-
-**학생 답안**: {student_answer}
-
-**쎈 스타일 채점 기준**:
-1. 정답 여부 (50점)
-   - 정답: 50점
-   - 오답: 0점
-
-2. 풀이 과정 (30점) - 제시된 경우
-   - 올바른 과정: 30점
-   - 부분적 과정: 15점
-   - 없거나 틀림: 0점
-
-3. 계산 정확성 (20점)
-   - 완벽한 계산: 20점
-   - 사소한 실수: 10점
-   - 중대한 오류: 0점
-
-응답 형식 (JSON):
-{{
-    "score": 점수(0-100),
-    "is_correct": true/false,
-    "feedback": "명확하고 도움이 되는 피드백",
-    "strengths": "잘한 점",
-    "improvements": "보완할 점"
-}}"""
+Now, execute the **Step-by-Step Generation Process** to create {problem_count} perfectly differentiated math problems in Korean.
+"""
