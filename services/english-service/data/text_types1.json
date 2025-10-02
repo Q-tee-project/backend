@@ -1,0 +1,175 @@
+[
+    {
+        "passage_id": 1,
+        "passage_type": "article",
+        "passage_content": {
+            "content": [
+                {"type": "title", "value": "\uae00\uc758 \uc81c\ubaa9"}, 
+                {"type": "paragraph", "value": "\uccab \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}, 
+                {"type": "paragraph", "value": "\ub450 \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}
+            ]
+        },
+        "original_content": {
+            "content": [
+                {"type": "title", "value": "\uae00\uc758 \uc81c\ubaa9"}, 
+                {"type": "paragraph", "value": "\uccab \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}, 
+                {"type": "paragraph", "value": "\ub450 \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}
+            ]
+        },
+        "korean_translation": {
+            "content": [
+                {"type": "title", "value": "\uae00\uc758 \uc81c\ubaa9"}, 
+                {"type": "paragraph", "value": "\uccab \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}, 
+                {"type": "paragraph", "value": "\ub450 \ubc88\uc9f8 \ubb38\ub2e8 \ub0b4\uc6a9"}
+            ]
+        },
+        "related_questions": [1],
+        "created_at": null
+    },
+    {
+        "passage_id": 2,
+        "passage_type": "correspondence",
+        "passage_content": {
+            "metadata": {
+                "sender": "발신자",
+                "recipient": "수신자",
+                "subject": "제목",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "서신 내용"}
+            ]
+        },
+        "original_content": {
+            "metadata": {
+                "sender": "발신자",
+                "recipient": "수신자",
+                "subject": "제목",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "서신 내용"}
+            ]
+        },
+        "korean_translation": {
+            "metadata": {
+                "sender": "발신자",
+                "recipient": "수신자",
+                "subject": "제목",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "서신 내용"}
+            ]
+        },
+        "related_questions": [1]
+    },
+    {
+        "passage_id": 3,
+        "passage_type": "dialogue",
+        "passage_content": {
+            "metadata": {
+                "participants": ["참여자1", "참여자2"]
+            },
+            "content": [
+                {"speaker": "참여자1", "line": "첫 번째 대사"},
+                {"speaker": "참여자2", "line": "두 번째 대사"}
+            ]
+        },
+        "original_content": {
+            "metadata": {
+                "participants": ["참여자1", "참여자2"]
+            },
+            "content": [
+                {"speaker": "참여자1", "line": "첫 번째 대사"},
+                {"speaker": "참여자2", "line": "두 번째 대사"}
+            ]
+        },
+        "korean_translation": {
+            "metadata": {
+                "participants": ["참여자1", "참여자2"]
+            },
+            "content": [
+                {"speaker": "참여자1", "line": "첫 번째 대사"},
+                {"speaker": "참여자2", "line": "두 번째 대사"}
+            ]
+        },
+        "related_questions": [1]
+    },
+    {
+        "passage_id": 4,
+        "passage_type": "informational",
+        "passage_content": {
+            "content": [
+                {"type": "title", "value": "안내문 제목"},
+                {"type": "paragraph", "value": "설명 내용"},
+                {"type": "list", "items": ["항목1", "항목2", "항목3"]},
+                {"type": "key_value", "pairs": [
+                    {"key": "장소", "value": "시청 앞"},
+                    {"key": "시간", "value": "오후 2시"}
+                ]}
+            ]
+        },
+        "original_content": {
+            "content": [
+                {"type": "title", "value": "안내문 제목"},
+                {"type": "paragraph", "value": "설명 내용"},
+                {"type": "list", "items": ["항목1", "항목2", "항목3"]},
+                {"type": "key_value", "pairs": [
+                    {"key": "장소", "value": "시청 앞"},
+                    {"key": "시간", "value": "오후 2시"}
+                ]}
+            ]
+        },
+        "korean_translation": {
+            "content": [
+                {"type": "title", "value": "안내문 제목"},
+                {"type": "paragraph", "value": "설명 내용"},
+                {"type": "list", "items": ["항목1", "항목2", "항목3"]},
+                {"type": "key_value", "pairs": [
+                    {"key": "장소", "value": "시청 앞"},
+                    {"key": "시간", "value": "오후 2시"}
+                ]}
+            ]
+        },
+        "related_questions": [1]
+    },
+    {
+        "passage_id": 5,
+        "passage_type": "review",
+        "passage_content": {
+            "metadata": {
+                "rating": 4.5,
+                "product_name": "상품명",
+                "reviewer": "리뷰어명",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "리뷰 내용"}
+            ]
+        },
+        "original_content": {
+            "metadata": {
+                "rating": 4.5,
+                "product_name": "상품명",
+                "reviewer": "리뷰어명",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "리뷰 내용"}
+            ]
+        },
+        "korean_translation": {
+            "metadata": {
+                "rating": 4.5,
+                "product_name": "상품명",
+                "reviewer": "리뷰어명",
+                "date": "2025-01-01"
+            },
+            "content": [
+                {"type": "paragraph", "value": "리뷰 내용"}
+            ]
+        },
+        "related_questions": [1]
+    }
+]

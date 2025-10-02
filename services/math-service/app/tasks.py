@@ -216,8 +216,16 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
         problem.question = new_problem_data.get("question", problem.question)
         problem.correct_answer = new_problem_data.get("correct_answer", problem.correct_answer)
         problem.explanation = new_problem_data.get("explanation", problem.explanation)
-        if new_problem_data.get("choices"): problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
-        if new_problem_data.get("tikz_code"): problem.tikz_code = new_problem_data.get("tikz_code")
+        if new_problem_data.get("choices"):
+            problem.choices = json.dumps(new_problem_data["choices"], ensure_ascii=False)
+
+        # tikz_code 업데이트 (있으면 업데이트, 없으면 None으로 유지)
+        if "tikz_code" in new_problem_data:
+            tikz_code = new_problem_data.get("tikz_code")
+            problem.tikz_code = tikz_code if tikz_code else None
+            # tikz_code가 있으면 has_diagram도 true로 설정
+            if tikz_code:
+                problem.has_diagram = 'true'
 
         db.commit()
         db.refresh(problem)
@@ -234,7 +242,7 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
 
 @celery_app.task(bind=True, name="app.tasks.process_assignment_ai_grading_task")
 def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
-    """과제의 손글씨 답안에 대해 OCR + AI 채점을 비동기로 처리하는 태스크"""
+    """과제의 손글씨 답안에 대해 OCR 추출 + 자동 채점을 비동기로 처리하는 태스크"""
     task_id = self.request.id
     db = SessionLocal()
 
@@ -484,7 +492,7 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
         db.commit()
 
         return {
-            "message": f"OCR + AI 채점 완료",
+            "message": f"OCR 추출 + 자동 채점 완료",
             "processed_count": processed_count,
             "updated_sessions": len(updated_sessions),
             "newly_graded_sessions": len(newly_graded_sessions),
@@ -504,14 +512,14 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                 state='FAILURE',
                 meta={
                     'error': error_msg,
-                    'status': 'OCR + AI 채점 실패',
+                    'status': 'OCR 추출 + 자동 채점 실패',
                     'assignment_id': assignment_id
                 }
             )
         except Exception as update_error:
             print(f"❌ 상태 업데이트 실패: {str(update_error)}")
 
-        raise GradingError(f"AI 채점 태스크 실패: {error_msg}")
+        raise GradingError(f"자동 채점 태스크 실패: {error_msg}")
     finally:
         db.close()
 

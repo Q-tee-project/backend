@@ -1,28 +1,17 @@
-from ..services.ai_service import AIService
 from ..models.problem import Problem
 
 class MathGradingService:
+    """수학 문제 채점 서비스 - OCR 텍스트 추출 및 자동 채점"""
+
     def __init__(self):
-        self.ai_service = AIService()
-
-    def grade_mixed_problems(self, problems: list[Problem], multiple_choice_answers: dict, canvas_answers: dict) -> list[dict]:
-        """혼합형 문제(객관식+주관식 OCR) 채점"""
-        # Implementation will be moved from tasks.py
-        pass
-
-    def grade_ocr_problems(self, problems: list[Problem], image_data: bytes) -> list[dict]:
-        """이미지 OCR 기반 문제 채점"""
-        # Implementation will be moved from tasks.py
         pass
 
     def _normalize_fraction_text(self, text: str) -> str:
         """OCR 텍스트 정규화 (분수 등)"""
-        # This is a simplified placeholder. Actual logic might be more complex.
         return text.replace(' / ', '/')
 
     def _extract_answer_from_ocr(self, ocr_text: str, problem_id: int, problem_number: int) -> str:
         """OCR 텍스트에서 문제 번호에 해당하는 답안 추출"""
-        # This is a simplified placeholder. Actual logic would be more robust.
         try:
             lines = ocr_text.split('\n')
             for line in lines:
@@ -33,8 +22,7 @@ class MathGradingService:
             return ""
 
     def _grade_objective_problem(self, problem: Problem, user_answer: str, points_per_problem: int) -> dict:
-        """객관식/단답형 문제 채점"""
-        # Simple comparison logic
+        """객관식/단답형 문제 자동 채점 (DB 정답과 비교)"""
         is_correct = str(user_answer).strip() == str(problem.correct_answer).strip()
         score = points_per_problem if is_correct else 0
         return {

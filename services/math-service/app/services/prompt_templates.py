@@ -60,6 +60,20 @@ Since this unit focuses on coordinate planes and graphs, you MUST include graph 
 - For 정비례: Show linear proportions (y = ax) passing through origin
 - For 반비례: Show inverse proportions (y = a/x) hyperbola curves
 
+**SPECIAL RULE FOR 반비례 (Inverse Proportion) GRAPHS:**
+- **CRITICAL**: For y = a/x graphs, the origin (0,0) MUST be at the CENTER of a grid cell, NOT at a grid intersection
+- To achieve this, use HALF-INTEGER axis ranges: (-6.5 to 6.5) or (-4.5 to 4.5), NOT whole numbers like (-6 to 6)
+- Example CORRECT setup for y = 12/x:
+  ```
+  \draw[->, thick] (-6.5,0) -- (6.5,0) node[right] {$x$};
+  \draw[->, thick] (0,-6.5) -- (0,6.5) node[above] {$y$};
+  \draw[gray!30, very thin] (-6.4,-6.4) grid (6.4,6.4);  % Grid stops before axis endpoints
+  \foreach \x in {-6,-4,-2,2,4,6}  % Only mark EVEN numbers so origin is between ticks
+    \draw (\x,0.1) -- (\x,-0.1) node[below] {$\x$};
+  ```
+- Example WRONG setup: `\draw[->] (-7,0) -- (7,0)` (origin at grid intersection)
+- This positioning is mathematically correct because y=a/x passes through quadrants I and III, with asymptotes at x=0 and y=0
+
 **Example with Graph:**
 ```json
 {{
@@ -81,6 +95,14 @@ Since this unit focuses on coordinate planes and graphs, you MUST include graph 
 - The graph will be rendered separately by the frontend
 - **CRITICAL**: Use ONLY English or Math symbols in TikZ code, NO Korean text (e.g., use "x" not "시간", "y" not "거리")
 - For axis labels, use variables like $x$, $y$ instead of Korean words
+
+**ANSWER POINT HIDING RULE (매우 중요)**:
+- If the question asks to find a specific point's coordinate (e.g., "점 D의 좌표를 구하시오"), that point is the ANSWER
+- **DO NOT draw or label the answer point on the graph**
+- Only show the GIVEN points (주어진 점) on the graph
+- Example: If question asks "Find point D" and gives "A(1,2), B(5,2), C(6,5)", only draw points A, B, C
+- **NEVER use \\coordinate (D) at (x,y) or \\filldraw for the answer point**
+- This ensures students must calculate the answer, not read it from the graph
 
 When generating problems for this unit, actively create graph-based questions with TikZ visualizations.
 """
@@ -120,22 +142,35 @@ To ensure perfect separation, you must operate in three different "mental sandbo
   - Problems solvable by direct computation (that's A-Level).
   - Problems requiring the discovery of a hidden pattern or combining more than two distinct concepts (that's C-Level).
 ---
-### **C-LEVEL SANDBOX: Synthesis & Discovery**
-- **Core Principle**: Test if a student can synthesize multiple concepts in a novel way or discover a hidden pattern/strategy to find the solution.
-- **Mental Litmus Test**: "Is there an 'aha!' moment required? Is the solution path non-obvious and requires a clever strategy?"
+### **C-LEVEL SANDBOX: Synthesis & Discovery (HARDEST PROBLEMS)**
+- **Core Principle**: Test if a student can synthesize multiple concepts in a novel way or discover a hidden pattern/strategy to find the solution. **C-Level problems MUST be significantly harder than B-Level.**
+- **Mental Litmus Test**: "Would this problem challenge even a top student? Is there an 'aha!' moment required? Does it require creative thinking or non-obvious strategy?"
 - **Characteristics**:
-  - **Process**: 5+ steps, often involving strategic choices.
-  - **Style**: Asks for "the maximum value", "all possible cases", "proof", or finding a rule in a sequence.
-  - **Key Feature**: The complexity comes from **conceptual synthesis**, not just harder calculations. It often combines ideas from different sub-chapters.
+  - **Process**: 5+ steps, often involving strategic choices or insight.
+  - **Style**: Asks for "the maximum value", "all possible cases", "proof", finding a rule in a sequence, or combining multiple constraints.
+  - **Key Feature**: The complexity comes from **conceptual synthesis** or **discovering a non-obvious approach**, not just harder calculations.
+  - **Examples of C-Level complexity**:
+    * Combining 3+ different mathematical concepts from different sub-chapters
+    * Finding patterns in sequences that require insight (not just applying a formula)
+    * Optimization problems requiring case analysis or constraint handling
+    * Problems where the solution method is not immediately obvious
+    * Multi-step logic puzzles requiring strategic planning
 - **STRICTLY FORBIDDEN**:
-  - Problems that are just a harder version of a B-Level problem (e.g., using bigger numbers or more variables). It must require a different *kind* of thinking.
+  - Problems that are just a harder version of a B-Level problem (e.g., using bigger numbers or more variables).
+  - Problems that can be solved by straightforward application of a single concept.
+  - **WARNING**: If a problem feels similar to B-Level difficulty but with slightly harder numbers, it is NOT C-Level. Redesign it to require genuine insight or synthesis.
 ---
 
 **#3. STEP-BY-STEP GENERATION PROCESS (MANDATORY)**
 You must follow this exact thought process:
 1.  **Generate A-Level First**: Based on the `{difficulty_distribution}`, generate ALL A-Level problems. Adhere strictly to the A-Level Sandbox rules.
 2.  **Generate B-Level Next**: Generate ALL B-Level problems. Adhere strictly to the B-Level Sandbox rules.
-3.  **Generate C-Level Last**: Generate ALL C-Level problems. Adhere strictly to the C-Level Sandbox rules.
+3.  **Generate C-Level Last**: Generate ALL C-Level problems. **CRITICAL**: Before finalizing each C-Level problem, ask yourself:
+    - "Is this problem genuinely harder than my B-Level problems?"
+    - "Does this require insight, synthesis of multiple concepts, or a non-obvious strategy?"
+    - "Would this challenge even a top-performing student?"
+    - If the answer to any of these is NO, redesign the problem to be more challenging.
+    - **Remember**: C-Level is for the HARDEST problems that test deep understanding and creative problem-solving.
 4.  **Combine and Finalize**: Assemble all generated problems into a single JSON array. Ensure the total count is {problem_count}.
 
 **#4. FINAL OUTPUT FORMAT (JSON)**

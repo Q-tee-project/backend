@@ -3,14 +3,18 @@ import json
 import random
 import time
 import google.generativeai as genai
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..prompt_templates.single_problem_template import SingleProblemTemplate
-from ..prompt_templates.multiple_problems_template import MultipleProblemTemplate
-from ..prompt_templates.extract_passage_template import ExtractPassageTemplate
+from ..prompt_templates.single_problem_en import SingleProblemEnglishTemplate
+from ..prompt_templates.multiple_problems_en import MultipleProblemEnglishTemplate
+from .validators.ai_judge_validator import AIJudgeValidator
+from .utils.retry_handler import retry_with_backoff
 
-load_dotenv()
+# .env 파일 로드 (여러 경로 시도)
+load_dotenv()  # 현재 디렉토리
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".env"))  # backend/.env
 
 class KoreanProblemGenerator:
     def __init__(self):
@@ -21,13 +25,15 @@ class KoreanProblemGenerator:
         genai.configure(api_key=gemini_api_key)
         self.model = genai.GenerativeModel('gemini-2.5-pro')
 
+        # AI Judge Validator 초기화
+        self.ai_judge_validator = AIJudgeValidator()
+
         # 데이터 파일 경로
         self.data_path = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
-        # 프롬프트 템플릿 인스턴스
-        self.single_template = SingleProblemTemplate()
-        self.multiple_template = MultipleProblemTemplate()
-        self.extract_template = ExtractPassageTemplate()
+        # 영어 프롬프트 템플릿 인스턴스
+        self.single_template_en = SingleProblemEnglishTemplate()
+        self.multiple_template_en = MultipleProblemEnglishTemplate()
 
     def _extract_user_specified_works(self, user_prompt: str, available_files: List[str]) -> List[str]:
         """사용자가 언급한 작품들을 추출하여 해당하는 파일들을 반환"""
@@ -55,28 +61,53 @@ class KoreanProblemGenerator:
 
             if title_mentioned or author_mentioned or full_name_mentioned:
                 user_specified_files.append(file_name)
-                print(f"사용자 지정 작품 발견: {file_name} (제목: {title}, 작가: {author})")
 
         return user_specified_files
 
+    def _preprocess_source_by_type(self, source_text: str, korean_type: str, source_info: Dict) -> str:
+        """유형별 지문 전처리 - 4가지 유형에 맞게 최적화"""
+
+        if korean_type == "시":
+            return source_text[:2000] if len(source_text) > 2000 else source_text
+        elif korean_type in ["소설", "수필/비문학"]:
+            return self._extract_key_passage(source_text, korean_type) if len(source_text) > 1500 else source_text
+        return source_text
+
     def _extract_key_passage(self, source_text: str, korean_type: str) -> str:
-        """긴 지문에서 핵심 부분 발췌"""
+        """긴 지문에서 핵심 부분 발췌 (유형별 맞춤 영어 프롬프트 사용)"""
         try:
-            # 템플릿을 사용하여 프롬프트 생성
-            prompt = self.extract_template.generate_prompt(source_text, korean_type)
+            # 유형별 발췌 기준 설정
+            type_specific_criteria = {
+                "소설": "Choose a passage with rich narrative content: character conflict, dialogue revealing personality, crucial plot development, or thematic significance. The passage should show character interactions or internal conflict.",
+                "수필/비문학": "Choose a passage containing the main argument, key evidence, or central thesis. The passage should be logically complete and contain the author's main point or important supporting details.",
+            }
+
+            criteria = type_specific_criteria.get(korean_type, "Choose the most important and representative passage.")
+
+            # 영어 프롬프트로 핵심 부분 추출 요청
+            prompt = f"""You are an expert Korean literature teacher. Extract a key passage from the following {korean_type} text that is most suitable for creating comprehension questions.
+
+**Requirements:**
+- Extract 800-1200 characters (Korean characters)
+- {criteria}
+- The passage should be self-contained and understandable without additional context
+- Preserve the exact original text (do not modify, paraphrase, or summarize)
+- Include complete sentences only (start and end with complete thoughts)
+
+**Original Text:**
+```
+{source_text[:3000]}
+```
+
+Return ONLY the extracted passage in Korean (no explanations, no markdown, no JSON, just the extracted text):
+"""
 
             response = self.model.generate_content(prompt)
             extracted_text = response.text.strip()
-
-            # 발췌가 실패한 경우 원본의 앞부분 사용
             if len(extracted_text) < 200:
                 return source_text[:1200] + "..." if len(source_text) > 1200 else source_text
-
             return extracted_text
-
-        except Exception as e:
-            print(f"지문 발췌 오류: {e}")
-            # 폴백: 원본의 앞부분 사용
+        except Exception:
             return source_text[:1200] + "..." if len(source_text) > 1200 else source_text
 
     def _distribute_question_types(self, count: int, question_type_ratio: Dict, korean_data: Dict) -> List[str]:
@@ -94,25 +125,93 @@ class KoreanProblemGenerator:
             default_difficulty = korean_data.get('difficulty', '중')
             return [default_difficulty] * count
 
+    def _get_rendered_source_text(self, korean_type: str, source_text: str, problem_data: Dict = None) -> str:
+        """유형별 렌더링할 지문 텍스트 결정"""
+        if korean_type == "문법":
+            if problem_data:
+                llm_generated_text = problem_data.get('source_text', '')
+                if llm_generated_text and llm_generated_text != source_text:
+                    return llm_generated_text
+            return ""
+        return source_text
+
     def _generate_multiple_problems_from_single_text(self, source_text: str, source_info: Dict,
                                                    korean_type: str, count: int,
                                                    question_type_ratio: Dict, difficulty_ratio: Dict,
-                                                   user_prompt: str, korean_data: Dict) -> List[Dict]:
-        """하나의 지문으로 여러 문제를 한 번에 생성"""
+                                                   user_prompt: str, korean_data: Dict,
+                                                   max_retries: int = 3) -> List[Dict]:
+        """하나의 지문으로 여러 문제를 한 번에 생성 (AI Judge 재검증 로직 포함)"""
 
         # 문제 유형과 난이도 분포 결정
         question_types = self._distribute_question_types(count, question_type_ratio, korean_data)
         difficulties = self._distribute_difficulties(count, difficulty_ratio, korean_data)
 
-        # 템플릿을 사용하여 프롬프트 생성
-        prompt = self.multiple_template.generate_prompt(
+        # 영어 템플릿을 사용하여 프롬프트 생성 (더 나은 LLM 성능)
+        original_prompt = self.multiple_template_en.generate_prompt(
             source_text, source_info, korean_type, count,
             question_types, difficulties, user_prompt, korean_data
         )
 
-        # AI 호출
-        response = self.model.generate_content(prompt)
-        result_text = response.text
+        valid_problems = []  # 합격한 문제 누적
+        prompt = original_prompt
+
+        # 재시도 로직
+        for attempt in range(max_retries):
+            try:
+                needed_count = count - len(valid_problems)
+                if needed_count <= 0:
+                    return valid_problems[:count]
+
+                print(f"🔄 문제 생성 시도 {attempt + 1}/{max_retries} (현재 {len(valid_problems)}/{count}개 완료)")
+
+                # AI 호출 및 파싱
+                response = self.model.generate_content(prompt)
+                problems = self._parse_and_validate_problems(
+                    response.text, source_text, source_info, korean_type, needed_count, difficulties
+                )
+
+                if not problems:
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                        continue
+                    break
+
+                # AI Judge 검증
+                print(f"  📋 생성된 문제 {len(problems)}개 AI Judge 검증 시작...")
+                invalid_problems = []
+                for idx, problem in enumerate(problems):
+                    try:
+                        is_valid, scores, feedback = self.ai_judge_validator.validate_problem(problem, korean_type)
+                        if is_valid:
+                            valid_problems.append(problem)
+                            print(f"  ✅ 문제 검증 통과 (누적: {len(valid_problems)}/{count}개)")
+                        else:
+                            print(f"  ❌ 문제 {idx+1} 검증 실패: {feedback}")
+                            invalid_problems.append({"problem": problem, "feedback": feedback, "scores": scores})
+                    except Exception as e:
+                        invalid_problems.append({"problem": problem, "feedback": f"검증 오류: {str(e)}", "scores": {"overall_score": 0}})
+
+                # 목표 달성 확인
+                if len(valid_problems) >= count:
+                    return valid_problems[:count]
+
+                # 재시도
+                if attempt < max_retries - 1 and invalid_problems:
+                    prompt = self._rebuild_korean_prompt_with_feedback(original_prompt, invalid_problems, korean_type)
+                    time.sleep(1)
+
+            except Exception as e:
+                print(f"❌ 시도 {attempt + 1} 실패: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                break
+
+        return valid_problems if valid_problems else []
+
+    def _parse_and_validate_problems(self, result_text: str, source_text: str,
+                                     source_info: Dict, korean_type: str, count: int,
+                                     difficulties: List[str]) -> List[Dict]:
 
         # JSON 파싱
         try:
@@ -128,30 +227,7 @@ class KoreanProblemGenerator:
             # 문제 데이터 변환
             problems = []
             for idx, problem_data in enumerate(problems_data.get('problems', [])):
-                # 문서 타입별 source_text 처리
-                if korean_type == "문법":
-                    # 문법: LLM이 생성한 지문은 표시, grammar.txt 원본은 숨김
-                    # problem_data에서 LLM이 생성한 source_text가 있으면 사용
-                    llm_generated_text = problem_data.get('source_text', '')
-                    if llm_generated_text and llm_generated_text != source_text:
-                        # LLM이 새로 생성한 지문이면 사용
-                        rendered_source_text = llm_generated_text
-                    else:
-                        # grammar.txt 원본이면 숨김
-                        rendered_source_text = ""
-                elif korean_type == "시":
-                    # 시: 전체 지문 렌더링
-                    rendered_source_text = source_text
-                elif korean_type == "소설":
-                    # 소설: LLM이 추출한 중요부분 전체 렌더링
-                    rendered_source_text = source_text
-                elif korean_type == "수필/비문학":
-                    # 수필/비문학: 전체 지문 렌더링
-                    rendered_source_text = source_text
-                else:
-                    # 기본값: 전체 지문
-                    rendered_source_text = source_text
-
+                rendered_source_text = self._get_rendered_source_text(korean_type, source_text, problem_data)
                 problem = {
                     'korean_type': korean_type,
                     'question_type': '객관식',  # 국어는 모두 객관식
@@ -174,17 +250,9 @@ class KoreanProblemGenerator:
             return problems
 
         except json.JSONDecodeError as e:
-            print(f"다중 문제 JSON 파싱 오류: {e}")
-            print(f"응답 텍스트 길이: {len(result_text)}")
-            print(f"응답 텍스트 (처음 500자): {result_text[:500]}")
-            print(f"응답 텍스트 (마지막 500자): {result_text[-500:]}")
-            raise Exception(f"다중 문제 생성 실패 - JSON 파싱 오류: {e}")
+            raise Exception(f"JSON 파싱 실패: {e}")
         except Exception as e:
-            print(f"다중 문제 생성 중 예상치 못한 오류: {e}")
-            print(f"오류 타입: {type(e).__name__}")
-            import traceback
-            print(f"상세 오류: {traceback.format_exc()}")
-            raise Exception(f"다중 문제 생성 실패 - 예상치 못한 오류: {e}")
+            raise Exception(f"문제 생성 실패: {e}")
 
     def _generate_problems_individually(self, source_text: str, source_info: Dict, korean_type: str,
                                       count: int, question_type_ratio: Dict, difficulty_ratio: Dict,
@@ -211,8 +279,7 @@ class KoreanProblemGenerator:
                     problem['source_author'] = source_info.get('author', '')
                     problems.append(problem)
 
-            except Exception as e:
-                print(f"개별 문제 생성 오류: {e}")
+            except Exception:
                 continue
 
         return problems
@@ -233,17 +300,39 @@ class KoreanProblemGenerator:
             return korean_data.get('difficulty', '중')
 
     def _generate_single_problem(self, source_text: str, korean_type: str, question_type: str,
-                                difficulty: str, user_prompt: str, korean_data: Dict) -> Dict:
-        """단일 문제 생성"""
-        try:
-            # 템플릿을 사용하여 프롬프트 생성
-            prompt = self.single_template.generate_prompt(
-                source_text, korean_type, question_type, difficulty, user_prompt, korean_data
-            )
+                                difficulty: str, user_prompt: str, korean_data: Dict,
+                                max_retries: int = 2) -> Dict:
+        """단일 문제 생성 (재시도 로직 포함)"""
 
-            # AI 호출
-            response = self.model.generate_content(prompt)
-            result_text = response.text
+        # 영어 템플릿을 사용하여 프롬프트 생성
+        prompt = self.single_template_en.generate_prompt(
+            source_text, korean_type, question_type, difficulty, user_prompt, korean_data
+        )
+
+        # 재시도 로직
+        for attempt in range(max_retries):
+            try:
+                # AI 호출
+                response = self.model.generate_content(prompt)
+                result_text = response.text
+
+                # 문제 파싱 시도
+                problem = self._parse_single_problem(result_text, source_text, korean_type)
+
+                if problem:
+                    return problem
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                else:
+                    raise
+        raise Exception("단일 문제 생성 실패")
+
+    def _parse_single_problem(self, result_text: str, source_text: str, korean_type: str) -> Optional[Dict]:
+        """단일 문제 JSON 파싱"""
+        try:
 
             # JSON 파싱
             try:
@@ -256,36 +345,11 @@ class KoreanProblemGenerator:
                     json_text = result_text.strip()
 
                 problem_data = json.loads(json_text)
-
-                # 문서 타입별 source_text 처리
-                if korean_type == "문법":
-                    # 문법: LLM이 생성한 지문은 표시, grammar.txt 원본은 숨김
-                    # problem_data에서 LLM이 생성한 source_text가 있으면 사용
-                    llm_generated_text = problem_data.get('source_text', '')
-                    if llm_generated_text and llm_generated_text != source_text:
-                        # LLM이 새로 생성한 지문이면 사용
-                        rendered_source_text = llm_generated_text
-                    else:
-                        # grammar.txt 원본이면 숨김
-                        rendered_source_text = ""
-                elif korean_type == "시":
-                    # 시: 전체 지문 렌더링
-                    rendered_source_text = source_text
-                elif korean_type == "소설":
-                    # 소설: LLM이 추출한 중요부분 전체 렌더링
-                    rendered_source_text = source_text
-                elif korean_type == "수필/비문학":
-                    # 수필/비문학: 전체 지문 렌더링
-                    rendered_source_text = source_text
-                else:
-                    # 기본값: 전체 지문
-                    rendered_source_text = source_text
-
-                # 필수 필드 검증 및 설정
+                rendered_source_text = self._get_rendered_source_text(korean_type, source_text, problem_data)
                 problem = {
                     'korean_type': korean_type,
                     'question_type': '객관식',  # 국어는 모두 객관식
-                    'difficulty': difficulty,
+                    'difficulty': problem_data.get('difficulty', '중'),
                     'question': problem_data.get('question', ''),
                     'correct_answer': problem_data.get('correct_answer', ''),
                     'explanation': problem_data.get('explanation', ''),
@@ -300,13 +364,9 @@ class KoreanProblemGenerator:
 
                 return problem
 
-            except json.JSONDecodeError as e:
-                print(f"JSON 파싱 오류: {e}")
-                print(f"응답 텍스트: {result_text}")
+            except json.JSONDecodeError:
                 return None
-
-        except Exception as e:
-            print(f"AI 문제 생성 오류: {e}")
+        except Exception:
             return None
 
     def generate_problems(self, korean_data: Dict, user_prompt: str, problem_count: int = 1,
@@ -323,8 +383,7 @@ class KoreanProblemGenerator:
 
             return problems[:problem_count]  # 정확한 개수로 제한
 
-        except Exception as e:
-            print(f"문제 생성 오류: {e}")
+        except Exception:
             return []
 
     def _generate_problems_by_single_domain(self, korean_data: Dict, user_prompt: str, count: int,
@@ -347,41 +406,28 @@ class KoreanProblemGenerator:
             if not source_texts_info:
                 return []
 
-            print(f"로드된 작품 수: {len(source_texts_info)}")
-
-            # 각 작품별로 문제 수 분배
             problems_per_work = count // len(source_texts_info)
             remaining_problems = count % len(source_texts_info)
 
             for i, (source_text, source_info) in enumerate(source_texts_info):
-                # 각 작품별 문제 수 계산
                 work_problem_count = problems_per_work + (1 if i < remaining_problems else 0)
-
                 if work_problem_count > 0:
-                    print(f"작품 {i+1}: {source_info.get('title', '')} - {work_problem_count}문제 생성")
-
-                    # 소설의 경우 핵심 부분 발췌
                     if korean_type == "소설" and len(source_text) > 1000:
                         source_text = self._extract_key_passage(source_text, korean_type)
-
-                    # 각 작품으로 문제 생성
                     try:
                         work_problems = self._generate_multiple_problems_from_single_text(
                             source_text, source_info, korean_type, work_problem_count,
                             question_type_ratio, difficulty_ratio, user_prompt, korean_data
                         )
                         problems.extend(work_problems)
-                    except Exception as e:
-                        print(f"작품 {i+1} 문제 생성 오류: {e}")
-                        # 폴백: 개별 생성
+                    except Exception:
                         try:
                             work_problems = self._generate_problems_individually(
                                 source_text, source_info, korean_type, work_problem_count,
                                 question_type_ratio, difficulty_ratio, user_prompt, korean_data
                             )
                             problems.extend(work_problems)
-                        except Exception as fallback_error:
-                            print(f"작품 {i+1} 개별 문제 생성도 실패: {fallback_error}")
+                        except Exception:
                             continue
 
         return problems
@@ -426,11 +472,8 @@ class KoreanProblemGenerator:
             user_specified_files = self._extract_user_specified_works(user_prompt, all_files)
 
             if user_specified_files:
-                # 사용자가 지정한 작품들 우선 선택
                 selected_files = user_specified_files[:work_count]
-                print(f"사용자 지정 작품 {len(selected_files)}개 선택")
             else:
-                # 랜덤 선택
                 import secrets
                 if len(all_files) <= work_count:
                     selected_files = all_files
@@ -442,7 +485,6 @@ class KoreanProblemGenerator:
                             break
                         random_index = secrets.randbelow(len(available_files))
                         selected_files.append(available_files.pop(random_index))
-                print(f"랜덤 선택 작품 {len(selected_files)}개 선택")
 
             # 선택된 파일들의 내용과 정보 로드
             source_texts_info = []
@@ -463,12 +505,8 @@ class KoreanProblemGenerator:
                     "author": author,
                     "file": file_name
                 }))
-                print(f"로드된 작품: {title} - {author}")
-
             return source_texts_info
-
-        except Exception as e:
-            print(f"다중 소스 로드 오류: {e}")
+        except Exception:
             return []
 
     def _generate_grammar_problems(self, korean_data: Dict, user_prompt: str, count: int,
@@ -483,30 +521,19 @@ class KoreanProblemGenerator:
             with open(grammar_file_path, 'r', encoding='utf-8') as f:
                 full_grammar_content = f.read()
 
-            # I~V 영역별로 내용 분할
             grammar_sections = self._split_grammar_content(full_grammar_content)
-
             if not grammar_sections:
-                print("문법 영역 분할 실패")
                 return []
 
-            # 각 영역별 문제 수 계산 (균등 분배)
             problems_per_section = count // len(grammar_sections)
             remaining_problems = count % len(grammar_sections)
-
             section_names = ["I. 음운", "II. 품사와 어휘", "III. 문장", "IV. 기타", "V. 부록"]
 
             for i, (section_name, section_content) in enumerate(zip(section_names, grammar_sections)):
                 if not section_content.strip():
                     continue
-
-                # 각 영역별 문제 수 계산
                 section_problem_count = problems_per_section + (1 if i < remaining_problems else 0)
-
                 if section_problem_count > 0:
-                    print(f"문법 영역 {section_name}: {section_problem_count}문제 생성")
-
-                    # 영역별 문제 생성
                     try:
                         section_problems = self._generate_multiple_problems_from_single_text(
                             section_content,
@@ -515,9 +542,7 @@ class KoreanProblemGenerator:
                             question_type_ratio, difficulty_ratio, user_prompt, korean_data
                         )
                         problems.extend(section_problems)
-                    except Exception as e:
-                        print(f"문법 영역 {section_name} 문제 생성 오류: {e}")
-                        # 폴백: 개별 생성
+                    except Exception:
                         try:
                             section_problems = self._generate_problems_individually(
                                 section_content,
@@ -526,14 +551,10 @@ class KoreanProblemGenerator:
                                 question_type_ratio, difficulty_ratio, user_prompt, korean_data
                             )
                             problems.extend(section_problems)
-                        except Exception as fallback_error:
-                            print(f"문법 영역 {section_name} 개별 문제 생성도 실패: {fallback_error}")
+                        except Exception:
                             continue
-
             return problems
-
-        except Exception as e:
-            print(f"문법 문제 생성 오류: {e}")
+        except Exception:
             return []
 
     def _split_grammar_content(self, content: str) -> List[str]:
@@ -567,12 +588,126 @@ class KoreanProblemGenerator:
             if current_section_index >= 0 and current_section:
                 sections.append('\n'.join(current_section))
 
-            print(f"문법 섹션 분할 완료: {len(sections)}개 섹션")
-            for i, section in enumerate(sections):
-                print(f"섹션 {i+1}: {len(section)}자")
-
             return sections
-
-        except Exception as e:
-            print(f"문법 섹션 분할 오류: {e}")
+        except Exception:
             return []
+
+    # ========== 병렬 처리 메서드 ==========
+
+    def generate_problems_parallel(self, korean_data: Dict, user_prompt: str, problem_count: int,
+                                   difficulty_ratio: Dict = None, max_workers: int = 5) -> List[Dict]:
+        """병렬로 문제 생성"""
+
+        korean_type = korean_data.get('korean_type', '시')
+        problems = []
+
+        if korean_type == "문법":
+            # 문법은 기존 방식 사용
+            return self._generate_grammar_problems(
+                korean_data, user_prompt, problem_count, None, difficulty_ratio
+            )
+
+        # 시, 소설, 수필/비문학 - 병렬 처리
+        source_texts_info = self._load_multiple_sources_for_single_domain(
+            korean_type, user_prompt, problem_count
+        )
+
+        if not source_texts_info:
+            return []
+
+        # 각 작품별로 문제 수 분배
+        problems_per_work = problem_count // len(source_texts_info)
+        remaining_problems = problem_count % len(source_texts_info)
+
+        # 병렬 작업 리스트 생성
+        tasks = []
+        for i, (source_text, source_info) in enumerate(source_texts_info):
+            work_problem_count = problems_per_work + (1 if i < remaining_problems else 0)
+
+            if work_problem_count > 0:
+                # 유형별 지문 전처리
+                processed_text = self._preprocess_source_by_type(source_text, korean_type, source_info)
+
+                tasks.append({
+                    'source_text': processed_text,
+                    'source_info': source_info,
+                    'count': work_problem_count,
+                    'work_index': i
+                })
+
+        with ThreadPoolExecutor(max_workers=min(len(tasks), max_workers)) as executor:
+            future_to_task = {}
+            for task in tasks:
+                future = executor.submit(
+                    self._generate_problems_for_work_parallel,
+                    task['source_text'],
+                    task['source_info'],
+                    korean_type,
+                    task['count'],
+                    difficulty_ratio,
+                    user_prompt,
+                    korean_data
+                )
+                future_to_task[future] = task
+
+            for future in as_completed(future_to_task):
+                task = future_to_task[future]
+                try:
+                    work_problems = future.result()
+                    problems.extend(work_problems)
+                except Exception as e:
+                    print(f"❌ 작품 '{task['source_info'].get('title', 'Unknown')}' 생성 실패: {str(e)}")
+        return problems[:problem_count]  # 정확한 개수로 제한
+
+    def _generate_problems_for_work_parallel(self, source_text: str, source_info: Dict,
+                                            korean_type: str, count: int,
+                                            difficulty_ratio: Dict, user_prompt: str,
+                                            korean_data: Dict) -> List[Dict]:
+        """하나의 작품에 대해 문제를 생성 (병렬 처리용)"""
+        try:
+            return self._generate_multiple_problems_from_single_text(
+                source_text, source_info, korean_type, count,
+                None, difficulty_ratio, user_prompt, korean_data
+            )
+        except Exception:
+            return self._generate_problems_individually(
+                source_text, source_info, korean_type, count,
+                None, difficulty_ratio, user_prompt, korean_data
+            )
+
+    def _rebuild_korean_prompt_with_feedback(self, original_prompt: str, invalid_problems: List[Dict], korean_type: str) -> str:
+        """피드백을 포함한 국어 프롬프트 재구성"""
+
+        feedback_text = "\n\n**IMPORTANT: Previous attempt had validation failures. Fix these issues:**\n"
+
+        for idx, item in enumerate(invalid_problems):
+            feedback_text += f"\nProblem {idx+1} feedback:\n"
+            scores = item.get('scores', {})
+
+            # 국어 유형별 점수 표시
+            if korean_type == "시":
+                feedback_text += f"- Scores: literary_accuracy={scores.get('literary_accuracy', 0):.1f}, "
+                feedback_text += f"relevance={scores.get('relevance', 0):.1f}, "
+                feedback_text += f"figurative_language_analysis={scores.get('figurative_language_analysis', 0):.1f}, "
+                feedback_text += f"answer_clarity={scores.get('answer_clarity', 0):.1f}\n"
+            elif korean_type == "소설":
+                feedback_text += f"- Scores: narrative_comprehension={scores.get('narrative_comprehension', 0):.1f}, "
+                feedback_text += f"relevance={scores.get('relevance', 0):.1f}, "
+                feedback_text += f"textual_analysis={scores.get('textual_analysis', 0):.1f}, "
+                feedback_text += f"answer_clarity={scores.get('answer_clarity', 0):.1f}\n"
+            elif korean_type == "수필/비문학":
+                feedback_text += f"- Scores: argument_comprehension={scores.get('argument_comprehension', 0):.1f}, "
+                feedback_text += f"relevance={scores.get('relevance', 0):.1f}, "
+                feedback_text += f"critical_thinking={scores.get('critical_thinking', 0):.1f}, "
+                feedback_text += f"answer_clarity={scores.get('answer_clarity', 0):.1f}\n"
+            elif korean_type == "문법":
+                feedback_text += f"- Scores: grammar_accuracy={scores.get('grammar_accuracy', 0):.1f}, "
+                feedback_text += f"example_quality={scores.get('example_quality', 0):.1f}, "
+                feedback_text += f"explanation_clarity={scores.get('explanation_clarity', 0):.1f}, "
+                feedback_text += f"answer_clarity={scores.get('answer_clarity', 0):.1f}\n"
+
+            feedback_text += f"- Issue: {item.get('feedback', 'No feedback')}\n"
+
+        feedback_text += "\n**MUST ensure**: All scores >= 3.5, answer_clarity >= 4.0, relevance to source text\n"
+
+        return original_prompt + feedback_text

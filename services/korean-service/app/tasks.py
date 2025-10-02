@@ -65,16 +65,28 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             'difficulty': request_data['difficulty']
         }
 
-        # 새로운 생성기 사용
+        # 새로운 생성기 사용 - 병렬 처리 적용
         generator = KoreanProblemGenerator()
-        problems = generator.generate_problems(
+
+        # 병렬 처리로 문제 생성 (AI Judge 검증 포함)
+        print(f"🚀 병렬 문제 생성 시작 (AI Judge 검증 포함): {request_data['problem_count']}개")
+        problems = generator.generate_problems_parallel(
             korean_data=korean_data,
             user_prompt=request_data.get('user_text', ''),
             problem_count=request_data['problem_count'],
-            korean_type_ratio=None,  # 단일 도메인이므로 제거
-            question_type_ratio=request_data.get('question_type_ratio'),
-            difficulty_ratio=request_data.get('difficulty_ratio')
+            difficulty_ratio=request_data.get('difficulty_ratio'),
+            max_workers=min(request_data['problem_count'], 5)  # 최대 5개 동시 실행
         )
+
+        # 생성 완료 로깅
+        print(f"✅ 문제 생성 완료: {len(problems)}개 (AI Judge 검증 통과)")
+
+        # 난이도 분포 계산
+        difficulty_distribution = {}
+        for problem in problems:
+            diff = problem.get('difficulty', '중')
+            difficulty_distribution[diff] = difficulty_distribution.get(diff, 0) + 1
+        print(f"📊 난이도 분포: {difficulty_distribution}")
 
         # 진행 상황 업데이트
         current_task.update_state(

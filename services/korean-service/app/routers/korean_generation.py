@@ -280,7 +280,7 @@ async def get_task_status(task_id: str):
 @router.get("/worksheets")
 async def get_worksheets(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=10000),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_teacher)
 ):

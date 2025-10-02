@@ -10,6 +10,69 @@ from sqlalchemy.orm import Session
 from app.models import Word
 
 
+# 소재 카테고리 (모든 학년 공통)
+TOPIC_CATEGORIES = {
+    "개인생활": [
+        "취미, 오락, 여행, 운동, 쇼핑 등 여가 선용",
+        "보건, 위생, 영양 등 개인 건강 관리",
+        "생일, 관심사, 생활 방식 등 개인 일상"
+    ],
+    "가정생활": [
+        "의복, 음식, 주거",
+        "명절, 가족 행사, 집안일 등 가정 일상"
+    ],
+    "학교생활": [
+        "다양한 교육 내용 및 방법, 학교 활동",
+        "교우 관계, 진로, 진학 등 학교 일상"
+    ],
+    "사회생활": [
+        "일, 노동, 직업 윤리 등 근로",
+        "서신 왕래, 소셜 미디어 등 온라인 활동, 면대면 대화 등 대인 관계",
+        "회의, 지역 행사, 졸업, 결혼, 장례식 등 사회적 행사"
+    ],
+    "문화": [
+        "동일 문화권 내의 다른 세대, 성별 간의 문화적 차이",
+        "우리의 문화와 생활 양식 소개",
+        "우리 문화와 다른 문화의 언어⋅문화적 차이",
+        "다양한 문화권의 관습, 규범, 가치, 사고방식, 행동 양식, 의사소통 방식",
+        "세계 문화: 의식주, 명절과 축제, 종교, 언어, 문학, 음악, 예술, 대중문화, 여행 및 관광지, 건축물, 전통, 지리, 역사, 인물, 스포츠, 관혼상제 등",
+        "다양한 문화권의 사람들과의 의사소통, 교류, 협력"
+    ],
+    "민주시민": [
+        "공중도덕, 예절, 협력, 배려, 봉사, 정의, 책임감 등 인성",
+        "인권, 양성평등, 글로벌 에티켓, 평화 등 민주시민 의식 및 세계시민 의식",
+        "올바른 미디어 리터러시를 통한 비판적 사고의 성찰, 사회적 공감과 의사소통",
+        "문제에 대한 비판적 사고와 민주적 의사 결정 및 갈등 해결",
+        "가난 및 기아 해결, 인구 문제, 청소년 문제, 고령화, 다문화 사회, 사회 정의와 불평등 해소",
+        "책임 있는 소비와 생산, 자원과 에너지 문제, 국제 문제 해결을 위한 협력 등 사회 현안",
+        "변화하는 사회 및 국제적 현안을 해결하기 위한 가정, 학교, 지역, 국가 및 세계 공동체의 참여"
+    ],
+    "생태전환": [
+        "인간과 생태계의 관계, 자연환경과 생태 윤리, 생태 감수성과 책임감",
+        "현재 및 미래 세대의 권리로서 환경권 존중",
+        "생태계의 특성과 시스템 탐구, 생태 시스템과 인간 사회 시스템의 연관성",
+        "기후변화와 생태계 문제 탐구",
+        "생태전환을 위한 사회 체계의 변화 제안 및 실천",
+        "생태전환을 위한 지속가능한 과학 기술 제안 및 실천",
+        "일상생활에서의 생태 전환 참여와 실천"
+    ],
+    "디지털및인공지능": [
+        "컴퓨터와 인터넷 활용, 소프트웨어의 이해와 활용 등 디지털 기술의 이해와 활용",
+        "정보의 공유, 온라인 활동 참여와 협업 등 디지털 의사소통과 협력",
+        "정보의 수집, 관리, 분석, 표현 등 정보의 처리와 생성",
+        "디지털 기술과 정보의 안전한 사용 및 윤리적 사용"
+    ],
+    "일반교양": [
+        "생활 안전, 교통안전, 재난 안전, 직업 안전 등의 안전",
+        "동식물 또는 계절, 날씨 등의 자연 현상",
+        "애국심, 평화, 안보, 독도 교육 및 통일",
+        "정치, 경제, 금융, 역사, 지리, 수학, 과학, 교통, 정보 통신, 우주, 해양, 탐험 등 일반 교양",
+        "인문학, 사회 과학, 자연 과학, 예술 분야 등의 학문적 소양",
+        "언어, 문학, 예술 등 심미적 심성과 창의력, 상상력"
+    ]
+}
+
+
 class QuestionDistributionCalculator:
     """문제 수와 비율을 계산하는 클래스"""
     
@@ -112,345 +175,6 @@ class PromptGenerator:
             print(f"단어 추출 중 오류 발생: {str(e)}")
             # 오류 시 기본 메시지 반환
             return "-- 단어목록 : 데이터베이스에서 적절한 수준의 영어 단어들을 활용하여 문제를 생성하세요."
-    
-    def generate_prompt(self, request_data: Dict[str, Any], db: Session = None) -> str:
-        """입력 데이터를 기반으로 문제 생성 프롬프트를 만듭니다."""
-        
-        # DB에서 텍스트 유형 형식 가져오기
-        json_formats_text = self._get_text_type_formats(db)
-        
-        # 기본 정보 추출 및 분배 계산
-        school_level = request_data.get('school_level', '중학교')
-        grade = request_data.get('grade', 1)
-        total_questions = request_data.get('total_questions', 10)
-        subject_details = request_data.get('subject_details', {})
-        additional_requirements = request_data.get('additional_requirements', '')
-        
-        # 분배 계산
-        subject_distribution = self.calculator.calculate_distribution(
-            total_questions, request_data.get('subject_ratios', [])
-        )
-        format_distribution = self.calculator.calculate_distribution(
-            total_questions, request_data.get('format_ratios', [])
-        )
-        difficulty_distribution = self.calculator.calculate_distribution(
-            total_questions, request_data.get('difficulty_distribution', [])
-        )
-        
-        # problem_type 계산 (영역별 비율에 따라)
-        subjects_with_count = [subj for subj in subject_distribution if subj['count'] > 0]
-        print(f"🔍 영역별 분배: {subject_distribution}")
-        print(f"🔍 문제 수가 있는 영역: {subjects_with_count}")
-
-        if len(subjects_with_count) == 1:
-            problem_type = subjects_with_count[0]['subject']
-            print(f"✅ 단일 영역: {problem_type}")
-        else:
-            problem_type = "혼합형"
-            print(f"✅ 혼합형: {len(subjects_with_count)}개 영역")
-
-        # 동적 내용 생성
-        format_lines = [f"{fmt['format']} : {fmt['count']}문제" for fmt in format_distribution]
-        difficulty_lines = [f"난이도 {diff['difficulty']} 문제 : {diff['count']}문제" for diff in difficulty_distribution]
-        subject_lines = [f"{subj['subject']} 문제 : {subj['count']}문제" for subj in subject_distribution]
-        subject_types_lines = self._generate_subject_types_lines(subject_distribution, subject_details, db)
-        vocabulary_list = self._get_vocabulary_list(db, difficulty_distribution)
-        
-        # JSON 응답 템플릿 정의
-        json_template = f"""
-        {{
-            "worksheet_id": 1,
-            "worksheet_name": "",
-            "worksheet_date": "2025-01-01",
-            "worksheet_time": "10:00",
-            "worksheet_duration": "60",
-            "worksheet_subject": "english",
-            "worksheet_level": "{school_level}",
-            "worksheet_grade": {grade},
-            "problem_type": "{problem_type}",
-            "total_questions": {total_questions},
-            "passages": [
-                {{
-                    "passage_id": 1,
-                    "passage_type": "article",
-                    "passage_content": "json 형식에 따른 학생에게 보여질 지문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-                    "original_content": "json 형식에 따른 완전한 형태의 원본 지문",
-                    "korean_translation": "json 형식에 따른 원본 지문의 자연스러운 한글 번역",
-                    "related_questions": [1, 2]
-                }}
-            ],
-            "questions": [
-                {{
-                    "question_id": 1,
-                    "question_type": "객관식|단답형|서술형",
-                    "question_subject": "독해|문법|어휘",
-                    "question_detail_type": "입력받은 세부유형 중 해당되는 유형",
-                    "question_difficulty": "상|중|하",
-                    "question_text": "다음 문장의 빈칸에 들어갈 말로 가장 적절한 것은?",
-                    "example_content": "학생에게 보여질 예문 내용 (빈칸, 순서 배열용 보기 등 포함)",
-                    "example_original_content": "완전한 형태의 원본 예문",
-                    "example_korean_translation": "원본 예문의 자연스러운 한글 번역",
-                    "related_question": 1,
-                    "question_passage_id": 1,
-                    "question_choices": [
-                        "선택지 1",
-                        "선택지 2",
-                        "선택지 3"
-                    ],
-                    "correct_answer": 0 | "정답 텍스트",
-                    "explanation": "정답에 대한 상세한 해설 (한국어)",
-                    "learning_point": "문제와 관련된 핵심 학습 포인트"
-                }}
-            ]
-        }}"""
-        
-        # 프롬프트 구성
-        prompt = f"""당신은 영어 교육 전문가이자 숙련된 문제 출제자입니다. 
-주어진 조건에 따라 학습자의 수준에 맞는 고품질의 영어 문제를 출제해야 합니다.
-
-다음 조건에 따라 {school_level} {grade}학년 영어 시험 문제를 출제해주세요:
-
-# 총 문제 수: {total_questions}
-
-# 답변 형식
-{chr(10).join(format_lines)}
-
-# 문제 난이도
-{chr(10).join(difficulty_lines)}
-
-# 영역별 문제 
-{chr(10).join(subject_lines)}
-
-# 영역별 문제 출제 유형
-{chr(10).join(subject_types_lines)}
-
-# 어휘 수준
-- 제공되는 단어 목록을 최대한 활용하여 생성
-{vocabulary_list}
-
-# 난이도별 문제 요구사항
-**하 단계 (쉬움)**: basic 레벨 단어, 기본 문장구조 
-**중 단계 (보통)**: middle 레벨 단어, 적당한 추론 필요 
-**상 단계 (어려움)**: middle 레벨 고급 단어, 종합적 사고 필요
-
-# 필수 조건
-- **응답은 반드시 아래에 명시된 통합 JSON 형식에 맞춰 유효한 JSON 객체 하나만 생성해야 합니다. (다른 텍스트, 설명, 주석 등 일체 포함 금지)**
-- **문제(questions), 지문(passages), 예문(examples) 객체 안에 학생용 정보와 답안용 정보를 모두 포함하여 한 번에 생성해야 합니다.**
-- `passage_content`와 `example_content`에는 학생에게 보여질 내용(빈칸, 순서 배열용 보기 등)을 포함하세요.
-- `original_content`에는 빈칸이 채워지고 순서가 배열된 완전한 원본 텍스트를 포함하세요.
-- `korean_translation`에는 `original_content`의 자연스러운 한글 번역을 포함하세요.
-- `questions` 객체 안에는 문제 텍스트, 선택지뿐만 아니라 `correct_answer`, `explanation`, `learning_point`를 반드시 포함해야 합니다.
-
-# 답안 및 해설 생성 규칙:
-- **지문 복원**: 
-   - 모든 빈칸을 적절한 정답으로 채워 완전한 문장으로 만들고, 문단 순서 표시나 선택지 기호를 모두 제거하여 자연스러운 흐름으로 연결하세요.
-   - 원래 지문이 가진 의미와 논리적 구조를 그대로 유지하세요.
-- **예문 복원**:
-   - 흩어진 선택지들을 올바른 순서로 재배열하여 완전한 형태로 구성하고, 문법적으로 정확하고 의미가 통하는 자연스러운 영어 표현으로 완성하세요.
-- **정답(correct_answer)**: 객관식은 정답 번호(문자열), 단답형/서술형은 정답 텍스트를 명확하게 기입하세요.
-- **해설(explanation)**: 정답 근거를 명확히 설명하고, 오답의 이유도 간략히 언급하세요. 학습자가 이해하기 쉬운 한국어로 작성하세요.
-- **학습 포인트(learning_point)**: 각 문제의 정답 근거를 명확히 설명하고, 문제 유형별 핵심 학습 포인트(문법/어휘/독해 기법/대화 표현 등)를 제시하세요.
-- **번역 지침**: `korean_translation`은 자연스럽고 읽기 쉬운 한국어로 번역하고, 직역보다는 의역을 통해 한국어답게 표현하세요. 학습자가 이해하기 쉽도록 명확하고 친근한 문체 사용하고, 문화적 맥락을 고려한 적절한 번역을 제공하세요.
-
-- **지문 생성 필수 조건**:
-  - 독해 문제 {sum(subj['count'] for subj in subject_distribution if subj['subject'] == '독해')}개 = 지문 {sum(subj['count'] for subj in subject_distribution if subj['subject'] == '독해')}개 (1:1 매칭)
-  - 각 지문의 related_questions 배열에 연결된 문제 번호 정확히 기입
-  - passage_id는 1부터 순차적으로 부여
-- **문제-지문 연결**:
-  - 독해 문제는 question_passage_id로 지문과 연결
-  - 지문 없는 문제는 question_passage_id를 null로 설정
-"""
-
-        # 추가 요구사항
-        if additional_requirements:
-            prompt += f"""
-
-# 추가 요구사항
-{additional_requirements}"""
-
-        prompt += f"""
-
-# 문제에 사용될 지문과 예문의 정의
-- 지문은 120~150단어 이상의 긴 글을 의미 난이도와 상관없이 길이를 준수하여 생성
-- 지문에는 2개 이상 3개 이하의 문제를 연계하여 출제
-- 예문은 40단어 이하의 짧은 글을 의미(1~3줄) 난이도와 상관없이 길이를 준수하여 생성
-- 지문은 반드시 유형별 json형식을 참고하여 생성
-- 예문의 소재는 글의 소재를 참고하여 생성
-- 지문 글의 유형은 글의 소재, 영역별 문제 출제 유형을 고려하여 자유롭게 선정해서 사용
-
-# 문제 질문과 예문 분리 규칙 (절대 위반 금지)
-
-## 핵심 원칙
-- **example_content에는 절대 지시문을 포함하지 마세요!**
-- **example_content는 순수한 영어 예문, 보기, 문제만 포함해야 합니다!**
-- **모든 지시문과 한국어 설명은 question_text에만 들어가야 합니다!**
-
-## 세부 규칙
-- **문제의 질문(question_text)**: 순수한 한국어 지시문만 (예: "다음과 같이 소유격을 사용하여 쓰시오")
-- **예문 내용(example_content)**: 순수한 영어 예문만 (예: "<보기> The book of Tom → Tom's book\\n<문제> The car of my father")
-- **영어 문장, 대화문, 긴 예시는 반드시 별도의 예문(examples)으로 분리하세요**
-- **예문이 없이 문제 질문과 선택지만 필요한 문제는 예문을 생성하지 않고 선택지에 내용이 포함되어야 합니다.**
-
-## 절대 금지되는 잘못된 예시들:
-
-### example_content에 지시문이 포함된 경우 (절대 금지!)
-** 잘못된 방식:**
-```
-example_content: "다음 명사구를 <보기>와 같이 소유격 형태로 바꾸시오.\\n\\n<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
-```
-
-** 올바른 방식:**
-```
-question_text: "다음과 같이 소유격을 사용하여 쓰시오"
-example_content: "<보기> the bag of the girl → the girl's bag\\n<문제> the hat of my brother"
-```
-
-### question_text에 영어 문장이 포함된 경우
-** 잘못된 방식:**
-```
-question_text: "다음 문장의 빈칸에 들어갈 말은?\\n\\nThey ___ good friends."
-```
-
-** 올바른 방식:**
-```
-question_text: "다음 문장의 빈칸에 들어갈 말은?"
-example_content: "They ___ good friends."
-question_example_id: "1"
-```
-
-### question_text에 대화문이 포함된 경우
-** 잘못된 방식:**
-```
-question_text: "다음 대화를 순서대로 배열하시오\\n(A) Hi! (B) How are you? (C) Fine, thanks."
-```
-
-** 올바른 방식:**
-```
-question_text: "다음 대화를 순서대로 배열하시오"
-example_content: "(A) Hi!\\n(B) How are you?\\n(C) Fine, thanks."
-question_example_id: "2"
-```
-
-### 기억하세요!
-- **question_text**: 순수한 한국어 지시문만!
-- **example_content**: 순수한 영어 예문만! (지시문 절대 금지!)
-
-
-# 글의 소재
-- 개인생활 관련: 취미, 오락, 여행, 운동, 쇼핑, 건강, 일상 등
-- 가정생활 관련: 의복, 음식, 주거, 가족 행사, 집안일 등
-- 학교생활 관련: 교육 내용, 학교 활동, 교우 관계, 진로 등
-- 사회생활 관련: 대인 관계, 직업 윤리, 사회적 행사 등
-- 문화 관련: 세대/성별 간 문화 차이, 다른 문화권의 관습 및 가치 등
-- 민주시민 관련: 공중도덕, 인권, 양성평등, 사회 현안 등
-
-# 지문 글의 유형
-article (일반 글) : 설명문, 논설문, 기사, 연구 보고서, 블로그 포스트, 책의 한 부분 등 (가장 기본적인 '만능' 유형)
-correspondence (서신/소통) : 이메일, 편지, 메모, 사내 공지 등
-dialogue (대화문) : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
-informational (정보성 양식) : 광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등
-review (리뷰/후기) : 상품 후기, 영화 평점, 식당 리뷰 등
-
-# 추가 요청이 없을 시 글의 소재와 글의 유형은 자유롭게 선정해서 사용 단, 유형별 JSON 형식을 반드시 준수하여 생성
-
-# 유형별 JSON 형식
-{json_formats_text}
-
-# 응답 형식 - 절대 준수해야 함
-{json_template}
-
-# 문제와 지문 생성 규칙 (필수 준수)
-- **독해 문제와 지문 수 일치**: 독해 문제가 {sum(subj['count'] for subj in subject_distribution if subj['subject'] == '독해')}개 있으므로, 반드시 {sum(subj['count'] for subj in subject_distribution if subj['subject'] == '독해')}개의 지문을 passages 배열에 생성해야 함
-- **독해 문제별 지문 연결**: 각 독해 문제는 반드시 question_passage_id로 지문과 연결되어야 함
-- **어휘/문법 문제**: 독해가 없다면 세부영역을 고려하여 필요시 지문 생성, 독해가 있다면 독해 지문과 연계 또는 독립 문제 모두 가능
-
-# 문제 배치 및 순서 규칙
-- 지문과 연관된 문제들은 반드시 연속된 번호로 배치해야 합니다.
-- 같은 지문을 사용하는 문제들은 반드시 연속 번호로 배치
-- 문제 번호와 related_questions 배열이 정확히 일치해야 함
-- 각 지문의 related_questions는 연속된 숫자여야 함
-- 문제 총 개수와 questions 배열 길이가 일치해야 함 
-- 모든 문제 번호는 1부터 총 문제 수까지 빠짐없이 존재해야 함 
-
-
-
-# ID 참조 규칙
-- question_text에서 지문이나 예문의 ID(P1, E1, 지문1, 예문1 등)를 절대 언급하지 마세요.
-- 지문 참조 시: "위 글", "위 지문", "다음 글" 등으로만 표현
-- 예문 참조 시: "다음 예문", "위 예문", "다음 문장" 등으로만 표현
-
-**잘못된 예시들 (절대 사용 금지):**
-- "지문 P1의 빈칸에 들어갈 말은?"
-- "예문 E1에서 빈칸에 들어갈 말은?"
-- "지문 1의 내용에 따르면?"
-- "예문 1을 보고 답하시오"
-
-**올바른 예시들 (반드시 이렇게 작성):**
-- "위 글의 빈칸에 들어갈 말은?"
-- "다음 예문에서 빈칸에 들어갈 말은?"
-- "위 글의 내용에 따르면?"
-- "다음을 보고 답하시오"
-
-**ID 형식 규칙:**
-- 지문 ID: 1, 2, 3 (단순한 숫자, integer)
-- 예문 ID: 1, 2, 3 (단순한 숫자, integer)
-- 문제 ID: 1, 2, 3 (단순한 숫자, integer)
-
-**정답 형식 규칙:**
-- 객관식 정답은 question_choices 배열의 인덱스 값 + 1(integer)으로 표시 (1, 2, 3, 4, 5), 절대 문자열 형식으로 표시하지 마세요
-- 단답형, 서술형 정답은 반드시 텍스트로 표시
-
-## 최종 검증 체크리스트 (응답 전 필수 확인!)
-응답하기 전에 반드시 다음을 확인하세요:
-1. example_content에 한국어 지시문이 없는가?
-2. example_content에 "다음을", "~하시오" 같은 지시어가 없는가?
-3. question_text에 영어 문장이 없는가?
-4. question_text와 example_content가 명확히 분리되어 있는가?
-5. 각 example_content는 순수한 영어 예문만 포함하는가?
-
-** 주의: 위 체크리스트를 위반하면 전체 문제지가 사용 불가능해집니다!**
-
-**최종 강조사항:**
-- 위의 JSON 형식을 정확히 따라 유효한 JSON만 응답해주세요
-- 추가 설명이나 텍스트는 절대 포함하지 마세요
-- 추가적인 항목을 만들지 마세요
-- question_text에는 어떤 형태의 ID도 포함하지 마세요!"""
-        
-        # 생성된 프롬프트 로그 출력
-        print("\n" + "="*80)
-        print("📝 생성된 프롬프트 (원문 그대로)")
-        print("="*80)
-        print(prompt)
-        print("="*80)
-        print(f"📊 프롬프트 길이: {len(prompt)} 문자")
-        print("="*80 + "\n")
-        
-        return prompt
-    
-    def _get_text_type_formats(self, db: Session) -> str:
-        """DB에서 텍스트 유형 형식을 가져옵니다."""
-        try:
-            from app.models import TextType
-            text_types = db.query(TextType).all()
-            
-            if text_types:
-                formats = []
-                for text_type in text_types:
-                    formats.append(f"{text_type.type_name} ({text_type.description}) : {text_type.json_format}")
-                return "\n".join(formats)
-            else:
-                return self._get_default_text_formats()
-        except Exception as e:
-            print(f"DB에서 텍스트 유형 조회 오류: {e}")
-            return self._get_default_text_formats()
-    
-    def _get_default_text_formats(self) -> str:
-        """기본 텍스트 형식을 반환합니다."""
-        return """article (일반 글) : content: title, paragraph로 구성된 배열
-correspondence (서신/소통) : metadata: sender, recipient, subject, date 등, content: paragraph
-dialogue (대화문) : metadata: participants 배열, content: { speaker: '이름', line: '대사' } 객체의 배열
-informational (정보성 양식) : content: title, paragraph, list, 그리고 key_value 쌍 (예: { key: '장소', value: '시청 앞' })
-review (리뷰/후기) : metadata: rating (별점), product_name 등"""
     
     def _generate_subject_types_lines(self, subject_distribution: List[Dict], subject_details: Dict, db: Session = None) -> List[str]:
         """영역별 출제 유형 문자열을 DB에서 조회하여 생성합니다."""
@@ -573,215 +297,6 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
             ], total_questions)
         }
 
-    def generate_passage_prompts(self, request_data: Dict[str, Any], db: Session = None) -> List[Dict[str, Any]]:
-        """독해 지문들을 병렬 생성하기 위한 프롬프트들을 생성합니다."""
-
-        # 독해 문제 수 계산
-        total_questions = request_data.get('total_questions', 10)
-        subject_ratios = request_data.get('subject_ratios', [])
-        subject_distribution = self.calculator.calculate_distribution(total_questions, subject_ratios)
-
-        reading_count = 0
-        for subj in subject_distribution:
-            if subj['subject'] == '독해':
-                reading_count = subj['count']
-                break
-
-        if reading_count == 0:
-            print("📝 독해 문제가 없어 지문 생성을 건너뜁니다.")
-            return []
-
-        print(f"📚 독해 {reading_count}문제 → 지문 {reading_count}개 생성 필요")
-
-        # 텍스트 유형 형식 가져오기
-        json_formats_text = self._get_text_type_formats(db)
-
-        # 난이도 분배
-        difficulty_distribution = self.calculator.calculate_distribution(
-            reading_count,
-            request_data.get('difficulty_distribution', [])
-        )
-
-        # 독해 세부 유형 정보 가져오기
-        subject_details = request_data.get('subject_details', {})
-        reading_types_info = ""
-
-        if db and subject_details.get('reading_types'):
-            try:
-                from app.models.content import ReadingType
-                reading_ids = subject_details.get('reading_types', [])
-                reading_types = db.query(ReadingType).filter(ReadingType.id.in_(reading_ids)).all()
-                if reading_types:
-                    types_list = [f"- **{rt.name}**: {rt.description}" for rt in reading_types]
-                    reading_types_info = "\n# 독해 출제 유형 (지문 작성 시 반드시 고려):\n" + "\n".join(types_list) + "\n\n위 유형에 맞는 내용과 구조를 가진 지문을 작성해야 합니다."
-            except Exception as e:
-                print(f"독해 세부 유형 조회 오류: {e}")
-
-        # 각 지문마다 독립적인 프롬프트 생성
-        prompts = []
-        school_level = request_data.get('school_level', '중학교')
-        grade = request_data.get('grade', 1)
-
-        # 학년별 설정 가져오기
-        word_count_range = self._get_word_count_range(school_level, grade)
-        cefr_level = self._get_cefr_level(school_level, grade)
-        topic_guidelines = self._get_topic_guidelines(school_level, grade)
-
-        for i in range(reading_count):
-            passage_id = i + 1
-
-            # 난이도 할당 (순환)
-            difficulty = difficulty_distribution[i % len(difficulty_distribution)]['difficulty']
-
-            prompt = f"""당신은 영어 교육 전문가입니다.
-
-{school_level} {grade}학년 학생을 위한 독해 지문 1개를 생성해주세요.
-
-# 지문 ID: {passage_id}
-# 난이도: {difficulty}
-# 단어 수: {word_count_range} (학년 수준에 맞게 엄격히 준수)
-# CEFR 레벨: {cefr_level}
-{reading_types_info}
-
-# 지문 유형별 JSON 구조
-{json_formats_text}
-
-# 글의 소재 ({school_level} {grade}학년 수준):
-{topic_guidelines}
-
-**중요**: 위에 명시된 독해 출제 유형에 맞는 내용과 구조로 지문을 작성하세요.
-
-# 응답 형식 예시
-
-**article 유형 예시**:
-{{
-    "passage_id": {passage_id},
-    "passage_type": "article",
-    "passage_content": {{
-        "content": [
-            {{"type": "title", "value": "The Benefits of Reading"}},
-            {{"type": "paragraph", "value": "Reading is one of the most important..."}},
-            {{"type": "paragraph", "value": "Furthermore, reading helps us..."}}
-        ]
-    }},
-    "original_content": {{
-        "content": [
-            {{"type": "title", "value": "The Benefits of Reading"}},
-            {{"type": "paragraph", "value": "Reading is one of the most important..."}},
-            {{"type": "paragraph", "value": "Furthermore, reading helps us..."}}
-        ]
-    }},
-    "korean_translation": {{
-        "content": [
-            {{"type": "title", "value": "독서의 이점"}},
-            {{"type": "paragraph", "value": "독서는 가장 중요한..."}},
-            {{"type": "paragraph", "value": "게다가, 독서는 우리를..."}}
-        ]
-    }}
-}}
-
-**dialogue 유형 예시**:
-{{
-    "passage_id": {passage_id},
-    "passage_type": "dialogue",
-    "passage_content": {{
-        "metadata": {{"participants": ["Tom", "Sarah"]}},
-        "content": [
-            {{"speaker": "Tom", "line": "Hi Sarah! How was your weekend?"}},
-            {{"speaker": "Sarah", "line": "It was great! I went hiking."}}
-        ]
-    }},
-    "original_content": {{
-        "metadata": {{"participants": ["Tom", "Sarah"]}},
-        "content": [
-            {{"speaker": "Tom", "line": "Hi Sarah! How was your weekend?"}},
-            {{"speaker": "Sarah", "line": "It was great! I went hiking."}}
-        ]
-    }},
-    "korean_translation": {{
-        "metadata": {{"participants": ["톰", "사라"]}},
-        "content": [
-            {{"speaker": "톰", "line": "안녕 사라! 주말 어땠어?"}},
-            {{"speaker": "사라", "line": "좋았어! 하이킹 갔다 왔어."}}
-        ]
-    }}
-}}
-
-**correspondence 유형 예시**:
-{{
-    "passage_id": {passage_id},
-    "passage_type": "correspondence",
-    "passage_content": {{
-        "metadata": {{
-            "sender": "John Smith",
-            "recipient": "Emily Brown",
-            "subject": "Meeting Schedule",
-            "date": "March 15, 2024"
-        }},
-        "content": [
-            {{"type": "paragraph", "value": "Dear Emily, I hope this email finds you well..."}}
-        ]
-    }},
-    "original_content": {{ /* 동일 구조 */ }},
-    "korean_translation": {{ /* 동일 구조, 한글로 */ }}
-}}
-
-**informational 유형 예시**:
-{{
-    "passage_id": {passage_id},
-    "passage_type": "informational",
-    "passage_content": {{
-        "content": [
-            {{"type": "title", "value": "Library Opening Hours"}},
-            {{"type": "paragraph", "value": "Welcome to the City Library!"}},
-            {{"type": "list", "items": ["Monday-Friday: 9AM-6PM", "Saturday: 10AM-5PM"]}},
-            {{"type": "key_value", "pairs": [{{"key": "Location", "value": "123 Main Street"}}]}}
-        ]
-    }},
-    "original_content": {{ /* 동일 구조 */ }},
-    "korean_translation": {{ /* 동일 구조, 한글로 */ }}
-}}
-
-**review 유형 예시**:
-{{
-    "passage_id": {passage_id},
-    "passage_type": "review",
-    "passage_content": {{
-        "metadata": {{
-            "rating": 4.5,
-            "product_name": "Wireless Headphones"
-        }},
-        "content": [
-            {{"type": "paragraph", "value": "I've been using these headphones for a month..."}}
-        ]
-    }},
-    "original_content": {{ /* 동일 구조 */ }},
-    "korean_translation": {{ /* 동일 구조, 한글로 */ }}
-}}
-
-**중요 규칙**:
-- passage_content, original_content, korean_translation 모두 반드시 위 JSON 구조를 따라야 함
-- passage_content = 학생용 (빈칸/보기 포함 가능), **반드시 출제 유형에 최적화된 내용과 구조로 작성**
-  - 빈칸이 필요한 경우: `<u>___</u>` 형식 사용
-  - 밑줄이 필요한 경우: `<u>밑줄 칠 텍스트</u>` 형식 사용
-  - 강조가 필요한 경우: `<strong>강조 텍스트</strong>` 형식 사용
-  - HTML 태그를 사용하여 시각적 요소를 명확하게 표현
-- original_content = 완전한 원본 (빈칸 없음, HTML 태그 없음)
-- korean_translation = 원본의 자연스러운 한글 번역
-- 반드시 선택한 passage_type에 맞는 JSON 구조 사용
-- 다른 텍스트나 설명 없이 JSON만 응답
-- 난이도 {difficulty}에 맞는 어휘와 문장 구조 사용
-"""
-
-            prompts.append({
-                'passage_id': passage_id,
-                'difficulty': difficulty,
-                'prompt': prompt
-            })
-
-        print(f"✅ 지문 {len(prompts)}개에 대한 프롬프트 생성 완료")
-        return prompts
-
     def _get_word_count_range(self, school_level: str, grade: int) -> str:
         """학년별 지문 단어 수 범위를 반환합니다."""
         if school_level == '중학교':
@@ -812,11 +327,73 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
         else:
             return "B1"  # 기본값
 
+    def _get_depth_guidelines(self, school_level: str, grade: int) -> dict:
+        """학년별 내용 깊이 가이드라인"""
+
+        if school_level == "중학교":
+            if grade in [1, 2]:
+                return {
+                    "vocabulary_level": "기초 어휘 (CEFR A2 수준)",
+                    "sentence_structure": "단문 중심, 기본 접속사(and, but, because) 사용",
+                    "abstraction": "구체적 사례와 일상 경험 중심",
+                    "information_density": "단일 주제, 명확한 주제문",
+                    "cognitive_level": "사실 확인, 내용 이해 중심 (Remember, Understand)",
+                    "content_approach": "개인 경험, 관찰 가능한 현상, 간단한 행동 묘사"
+                }
+            else:  # grade 3
+                return {
+                    "vocabulary_level": "중급 어휘 (CEFR B1 수준)",
+                    "sentence_structure": "복문 사용, 기본 관계대명사, 접속부사",
+                    "abstraction": "원인-결과 관계, 비교와 대조",
+                    "information_density": "2-3개 관련 아이디어 연결",
+                    "cognitive_level": "이유 설명, 간단한 추론 (Apply, Analyze)",
+                    "content_approach": "행동의 이유와 결과, 간단한 문제-해결 구조"
+                }
+
+        else:  # 고등학교
+            if grade == 1:
+                return {
+                    "vocabulary_level": "중급-고급 어휘 (CEFR B1-B2)",
+                    "sentence_structure": "다양한 종속절, 분사구문, 관계절",
+                    "abstraction": "사회적 맥락, 다양한 관점 소개",
+                    "information_density": "다층적 정보, 구체적 예시 포함",
+                    "cognitive_level": "비교 분석, 타당성 평가 (Evaluate)",
+                    "content_approach": "개인과 사회 연결, 현상의 배경 설명, 다양한 입장"
+                }
+            elif grade == 2:
+                return {
+                    "vocabulary_level": "고급 어휘 (CEFR B2)",
+                    "sentence_structure": "복잡한 구문, 수동태, 도치, 강조",
+                    "abstraction": "추상적 개념, 철학적 질문",
+                    "information_density": "복합적 논점, 암시적 의미",
+                    "cognitive_level": "비판적 사고, 가치 판단 (Evaluate)",
+                    "content_approach": "이론과 실제 연결, 윤리적 딜레마, 대안 탐색"
+                }
+            else:  # grade 3
+                return {
+                    "vocabulary_level": "고급 어휘 (CEFR B2+, 학술 어휘 포함)",
+                    "sentence_structure": "학술적 문체, 복합 구문, 가정법",
+                    "abstraction": "패러다임 전환, 메타 인지적 사고",
+                    "information_density": "다학제적 접근, 함축적 의미",
+                    "cognitive_level": "창의적 종합, 새로운 관점 제시 (Create, Synthesize)",
+                    "content_approach": "개념 간 통합, 미래 전망, 근본적 질문"
+                }
+
+    def _format_topic_categories(self) -> str:
+        """소재 카테고리를 프롬프트용 문자열로 변환"""
+        result = []
+        for category, items in TOPIC_CATEGORIES.items():
+            result.append(f"\n**{category}**:")
+            for item in items:
+                result.append(f"  - {item}")
+        return "\n".join(result)
+
     def _get_topic_guidelines(self, school_level: str, grade: int) -> str:
         """학년별 소재 가이드라인을 반환합니다."""
         if school_level == '중학교':
             if grade <= 2:
-                return """- 개인생활: 취미, 여행, 운동, 건강 등 (일상적이고 친숙한 주제)
+                return """
+- 개인생활: 취미, 여행, 운동, 건강 등 (일상적이고 친숙한 주제)
 - 가정생활: 음식, 주거, 가족 행사 등 (구체적인 경험)
 - 학교생활: 교육, 학교 활동, 진로 등 (학생 주변 환경)
 - 친구 관계: 우정, 놀이, 대화 등 (또래 문화)
@@ -929,9 +506,6 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
         reading_count = sum(1 for p in question_plan if p['needs_passage'])
         print(f"📋 배치 계획: 독해 {reading_count}문제(지문 포함), 문법/어휘 {total_questions - reading_count}문제")
 
-        # 텍스트 유형 형식 가져오기 (독해용)
-        json_formats_text = self._get_text_type_formats(db)
-
         # 독해 세부 유형 정보 가져오기
         reading_types_info = ""
         if db and subject_details.get('reading_types'):
@@ -965,6 +539,10 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
                 db
             )
 
+            # 깊이 가이드라인 가져오기
+            depth_guide = self._get_depth_guidelines(school_level, grade)
+            topic_categories_str = self._format_topic_categories()
+
             # 독해 문제는 지문 생성 포함
             if needs_passage:
                 prompt = f"""당신은 영어 교육 전문가입니다.
@@ -986,27 +564,90 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
 # 출제 유형
 {chr(10).join(subject_types_info)}
 
+# 학년별 내용 깊이 가이드라인 (반드시 준수)
+- **어휘 수준**: {depth_guide['vocabulary_level']}
+- **문장 구조**: {depth_guide['sentence_structure']}
+- **내용 추상도**: {depth_guide['abstraction']}
+- **정보 밀도**: {depth_guide['information_density']}
+- **인지 수준**: {depth_guide['cognitive_level']}
+- **접근 방식**: {depth_guide['content_approach']}
+
 # 지문 생성 가이드
 
 ## 지문 요구사항:
 - 단어 수: {word_count_range} (학년 수준에 맞게 엄격히 준수)
 - CEFR 레벨: {cefr_level} (학년 기준선)
 - 난이도: {difficulty}에 맞는 어휘와 문장 구조 (위 난이도 설명 참고)
-- **출제 유형에 최적화된 내용과 구조로 작성**
+- **출제 유형, 소재를 고려하고 적합한 지문 유형을 선택하여 최적화된 내용과 구조로 작성**
+- **위 깊이 가이드라인을 엄격히 준수하여 학년 수준에 맞는 내용 작성**
+- **소재와 유형을 다양하게 섞어서 작성**
+
+## 글의 소재 (모든 학년 공통 - 깊이만 조절):
+{topic_categories_str}
+
+**중요**: 위 소재는 모든 학년이 공통으로 사용하되, 학년별 깊이 가이드라인에 따라 내용의 복잡도와 추상도를 조절하세요.
+- 중1-2: 구체적 사례, 일상 경험 중심
+- 중3: 원인-결과, 비교-대조 중심
+- 고1: 사회적 맥락, 다양한 관점 소개
+- 고2-3: 추상적 개념, 철학적 사고, 복합적 논점
 
 ## 지문 유형별 JSON 구조:
-{json_formats_text}
 
-## 글의 소재 ({school_level} {grade}학년 수준):
-{topic_guidelines}
+**1. article (일반 글)**:
+ - 설명 : 설명문, 논설문, 기사, 연구 보고서, 블로그 포스트, 책의 한 부분 등 (가장 기본적인 '만능' 유형)
+반드시 passage_content안에 {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}} 형식 사용
+
+**2. informational (정보성 양식)**:
+ - 설명 : 광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등
+반드시 passage_content안에 {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}} 형식 사용
+
+**3. dialogue (대화문)**:
+ - 설명 : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
+반드시 passage_content안에 {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}} 형식 사용
+
+**4. correspondence (서신/소통)**:
+ - 설명 : 이메일, 편지, 메모, 사내 공지 등
+반드시 passage_content안에 {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}} 형식 사용
+
+**5. review (리뷰/후기)**:
+ - 설명 : 상품 후기, 영화 평점, 식당 리뷰 등
+반드시 passage_content안에 {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}} 형식 사용
 
 ## 지문 작성 시 주의사항:
+- passage_type: article, dialogue, correspondence, informational, review 중 선택
+- passage_content: 해당 유형에 맞는 JSON 구조 사용 (반드시 passage_content와 유형 별 content를 구분해서 사용, 무조건 content 키 사용 혹은 metadata 키 사용 생략 금지)
 - passage_content: 학생용 (빈칸/보기 포함 가능), **출제 유형에 최적화**
   - 빈칸: `<u>___</u>` 형식 사용
   - 밑줄: `<u>텍스트</u>` 형식 사용
   - 강조: `<strong>텍스트</strong>` 형식 사용
-- original_content: 완전한 원본 (빈칸 없음, HTML 태그 없음)
-- korean_translation: 원본의 자연스러운 한글 번역
+- original_content: passage_content와 동일한 구조의 완전한 원본 (빈칸 없음, HTML 태그 없음)
+- korean_translation: passage_content와 동일한 구조의 original_content의 자연스러운 한글 번역
+
+## 지문(passage) vs 예문(example) 구분
+
+### 지문(passage): 독해 문제의 본문 (필수)
+- **긴 글** (50단어 이상의 읽기 자료)
+- article, dialogue, correspondence, informational, review 등
+- JSON 구조로 작성
+
+### 예문(example): 지문, 질문, 선택지와 별개의 추가적인 보기
+- **반드시 단순 문자열** (no array, no object)
+- **문제 유형에 따라 필요한 경우 추가, 필요없으면 null로 설정**
+- example_content: 학생용 보기 (빈칸/보기 포함 가능), **출제 유형에 최적화**
+  - 빈칸: `<u>___</u>` 형식 사용
+  - 밑줄: `<u>텍스트</u>` 형식 사용
+  - 강조: `<strong>텍스트</strong>` 형식 사용
+- example_original_content: 완전한 원본 보기
+- example_korean_translation: example_original_content의 한국어 번역
+
+**지문 내용 중복 금지**:
+- 지문에 있는 문장을 example에 다시 넣기
+- 지문의 일부를 떼어서 example에 넣기
+
+**지시문(question_text) 작성 시 주의사항**:
+- 지시문은 순수한 한국어 지시문만
+- 지시문은 영어 예문이나 보기, 선택지, 삽입할 문장 등을 포함하지 않음
+- 부정 표현은 밑줄 표시 (ex, <u>does not</u> | ~~옳지 <u>않은</u>~~ 것을)
 
 # 응답 형식 (JSON)
 {{
@@ -1014,7 +655,7 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
         "passage_id": {passage_id},
         "passage_type": "article|dialogue|correspondence|informational|review 중 선택",
         "passage_content": {{...위 JSON 구조 참고...}},
-        "original_content": {{...위 JSON 구조 참고...}},
+        "original_content": {{...위 JSON 구조 참고..."}},
         "korean_translation": {{...위 JSON 구조 참고...}}
     }},
     "question": {{
@@ -1024,9 +665,9 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
         "question_detail_type": "세부 유형명",
         "question_difficulty": "{difficulty}",
         "question_text": "순수한 한국어 지시문만",
-        "example_content": null,
-        "example_original_content": null,
-        "example_korean_translation": null,
+        "example_content": "필요시 추가 예문 (예: 보기, 선택지, 삽입할 문장 등), 불필요하면 null",
+        "example_original_content": "필요시 완전한 원본 예문, 불필요하면 null",
+        "example_korean_translation": "필요시 예문 한글 번역, 불필요하면 null",
         "question_passage_id": {passage_id},
         "question_choices": ["선택지1", "선택지2", ...],
         "correct_answer": 정답인덱스(객관식) | "정답텍스트"(주관식),
@@ -1037,7 +678,8 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
 
 **중요 규칙**:
 - 반드시 passage와 question을 모두 포함한 JSON 응답
-- 독해 문제는 대부분 example 필드가 null (지문 전체가 문제이므로)
+- example 필드는 출제 유형에 따라 필요시 작성 (예: 문장 삽입, 빈칸에 들어갈 보기, 어법 선택 등)
+- 단순한 주제/제목/내용 파악 문제는 example 필드를 null로 설정
 - question_text는 "위 글의 주제로 가장 적절한 것은?" 같은 형식
 - 다른 텍스트나 설명 없이 JSON만 응답
 """
@@ -1061,15 +703,69 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
 # 출제 유형
 {chr(10).join(subject_types_info)}
 
-# 예문 및 선택지 작성 가이드 ({school_level} {grade}학년 수준):
+# 학년별 내용 깊이 가이드라인 (반드시 준수)
+- **어휘 수준**: {depth_guide['vocabulary_level']}
+- **문장 구조**: {depth_guide['sentence_structure']}
+- **내용 추상도**: {depth_guide['abstraction']}
+- **정보 밀도**: {depth_guide['information_density']}
+- **인지 수준**: {depth_guide['cognitive_level']}
+- **접근 방식**: {depth_guide['content_approach']}
 
-## 어휘 및 소재:
-{topic_guidelines}
+# 예문 및 선택지 작성 가이드
 
-## 문장 구조 및 길이:
+## 글의 소재 (모든 학년 공통 - 깊이만 조절):
+{topic_categories_str}
+
+**중요**: 위 소재는 모든 학년이 공통으로 사용하되, 학년별 깊이 가이드라인에 따라 내용의 복잡도와 추상도를 조절하세요.
+
+## 문장 구조 및 어휘:
 - CEFR {cefr_level} 수준에 맞는 문장 구조와 어휘 사용
 - 예문은 {school_level} {grade}학년이 이해 가능한 길이와 복잡도로 작성
-- 학년 수준에 적합한 문법 구조와 표현 사용
+- **위 깊이 가이드라인을 엄격히 준수하여 학년 수준에 맞는 예문 작성**
+
+### 예문(example): 지문, 질문, 선택지와 별개의 추가적인 보기
+- **반드시 단순 문자열** (no array, no object)
+- **문제 유형에 따라 필요한 경우 추가, 필요없으면 null로 설정**
+- example_content: 학생용 보기 (빈칸/보기 포함 가능), **출제 유형에 최적화**
+  - 빈칸: `<u>___</u>` 형식 사용
+  - 밑줄: `<u>텍스트</u>` 형식 사용
+  - 강조: `<strong>텍스트</strong>` 형식 사용
+- example_original_content: 완전한 원본 보기
+- example_korean_translation: example_original_content의 한국어 번역
+
+**지시문(question_text) 작성 시 주의사항**:
+- 지시문은 순수한 한국어 지시문만
+- 지시문은 영어 예문이나 보기, 선택지, 삽입할 문장 등을 포함하지 않음
+- 부정 표현은 밑줄 표시 (ex, <u>does not</u> | ~~옳지 <u>않은</u>~~ 것을 등)
+
+**올바른 예시들:**
+1. **빈칸 채우기**:
+   ```
+   example_content: "She <u>___</u> to school every day."
+   example_original_content: "She goes to school every day."
+   example_korean_translation: "그녀는 매일 학교에 간다."
+   question_text: "다음 빈칸에 알맞은 것을 고르시오."
+   question_choices: ["go", "goes", "went", "gone"]
+   ```
+
+2. **밑줄 친 부분 고르기**:
+   ```
+   example_content: "I have <u>seen</u> that movie before."
+   example_original_content: "I have seen that movie before."
+   example_korean_translation: "나는 전에 그 영화를 본 적이 있다."
+   question_text: "다음 밑줄 친 부분이 문법적으로 올바른지 판단하시오."
+   ```
+
+3. **어휘 의미 파악**:
+   ```
+   example_content: "The book was very <u>interesting</u>."
+   example_original_content: "The book was very interesting."
+   example_korean_translation: "그 책은 매우 흥미로웠다."
+   question_text: "다음 밑줄 친 단어의 의미로 가장 적절한 것은?"
+   question_choices: ["지루한", "흥미로운", "어려운", "쉬운"]
+   ```
+
+**중요**: example은 단순 문자열만 허용 (no array, no object)
 
 # 응답 형식 (JSON)
 {{
@@ -1104,7 +800,15 @@ review (리뷰/후기) : metadata: rating (별점), product_name 등"""
                 'format': format_type,
                 'needs_passage': needs_passage,
                 'passage_id': passage_id,
-                'prompt': prompt
+                'prompt': prompt,
+                'metadata': {  # AI Judge 검증에 필요한 메타데이터
+                    'school_level': school_level,
+                    'grade': grade,
+                    'cefr_level': cefr_level,
+                    'difficulty': difficulty,
+                    'subject': subject,
+                    'format_type': format_type
+                }
             })
 
         print(f"✅ 문제 {len(prompts)}개에 대한 프롬프트 생성 완료 (독해 {reading_count}개는 지문 포함)")

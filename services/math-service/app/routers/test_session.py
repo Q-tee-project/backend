@@ -60,12 +60,10 @@ async def submit_test(
         if problem.problem_type == 'multiple_choice':
             if student_answer == problem.correct_answer:
                 is_correct = True
-        elif problem.problem_type in ['short_answer', 'essay']:
-            # 1차: DB 정답과 비교
+        elif problem.problem_type == 'short_answer':
+            # DB 정답과 비교 (OCR 추출 텍스트)
             if student_answer == problem.correct_answer:
                 is_correct = True
-            # 2차: LLM 채점 (추후 구현)
-            # 여기서는 일단 DB 정답과 같으면 맞는 것으로 처리
 
         if is_correct:
             correct_answers += 1
@@ -120,7 +118,7 @@ async def submit_test(
         if problem.problem_type == 'multiple_choice':
             if student_answer == problem.correct_answer:
                 is_correct = True
-        elif problem.problem_type in ['short_answer', 'essay']:
+        elif problem.problem_type == 'short_answer':
             if student_answer == problem.correct_answer:
                 is_correct = True
 
@@ -136,7 +134,7 @@ async def submit_test(
             points_per_problem=points_per_problem,
             problem_type=problem.problem_type,
             difficulty=problem.difficulty,
-            input_method="handwriting_ocr" if problem.problem_type in ['short_answer', 'essay'] else "checkbox",
+            input_method="handwriting_ocr" if problem.problem_type == 'short_answer' else "checkbox",
             explanation=problem.explanation
         )
         db.add(problem_result)

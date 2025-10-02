@@ -30,7 +30,7 @@ settings = get_settings()
 
 @router.post("/worksheet-generate")
 async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = Depends(get_db)):
-    """비동기 영어 문제 생성을 시작합니다."""
+    """비동기 영어 문제 생성을 시작합니다. (AI Judge 검증 항상 활성화)"""
     print("🚨 비동기 문제 생성 요청 시작!")
 
     try:
@@ -41,6 +41,7 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
         print(f" 학년: {request.grade}학년")
         print(f" 총 문제 수: {request.total_questions}개")
         print(f" 선택된 영역: {', '.join(request.subjects)}")
+        print(f" AI Judge 검증: 활성화 (항상)")
 
         # 세부 영역 정보 출력
         if request.subject_details:
@@ -54,8 +55,12 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
 
         print("="*80)
 
+        # 요청 데이터에 검증 항상 활성화
+        request_data = request.model_dump()
+        request_data['enable_validation'] = True
+
         # 비동기 태스크 시작
-        task = generate_english_worksheet_task.delay(request.model_dump())
+        task = generate_english_worksheet_task.delay(request_data)
 
         print(f"🚀 Celery 태스크 시작됨: {task.id}")
 

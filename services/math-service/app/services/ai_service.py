@@ -50,36 +50,55 @@ class AIService:
     def regenerate_single_problem(self, current_problem: Dict, requirements: str, curriculum_info: Dict = None) -> Dict:
         """단일 문제 빠른 재생성 - 복잡한 파이프라인 없이 직접 AI 호출"""
         try:
-            # 간단한 재생성 프롬프트 구성
+            # 그래프가 필요한지 확인 (tikz_code가 있거나 has_diagram이 true인 경우)
             has_tikz = bool(current_problem.get('tikz_code'))
+            has_diagram = current_problem.get('has_diagram', 'false')
+
+            # has_diagram이 문자열인 경우 처리
+            if isinstance(has_diagram, str):
+                has_diagram = has_diagram.lower() == 'true'
+
+            needs_graph = has_tikz or has_diagram
+
             tikz_instruction = ""
-            if has_tikz:
+            if needs_graph:
                 tikz_instruction = """
-- TikZ 그래프: 기존 문제에 그래프가 있었으므로, 개선된 문제에도 적절한 TikZ 코드를 생성해주세요.
-  * 축 범위는 데이터 포인트에 맞게 최소화하고 x축과 y축의 비율을 균형있게 유지하세요.
-  * 일반적으로 좋은 범위: -5 to 5, -1 to 10, 0 to 20 (극단적인 범위 피하기)
-  * TikZ 코드에는 영어와 수학 기호만 사용하고 한글은 사용하지 마세요.
+
+**TikZ Graph Requirements**:
+- This problem requires a graph visualization. Generate appropriate TikZ code.
+- Axis ranges: Minimize empty space, keep data points well-proportioned
+- Typical good ranges: -5 to 5, -1 to 10, 0 to 20 (avoid extremes)
+- Use ONLY English and math symbols in TikZ code, NO Korean text
+- For coordinate plane problems, include appropriate points, lines, and shapes
+
+**CRITICAL - Answer Point Hiding Rule**:
+  * If the question asks to find a specific point (e.g., "Find the coordinate of point D"), that point is the ANSWER
+  * **DO NOT draw or label the answer point on the graph** (NO \\coordinate or \\filldraw for answer point)
+  * Only show GIVEN points on the graph
+  * Example: Question asks "Find point D" and gives "A(1,2), B(5,2), C(6,5)" → Only draw A, B, C. DO NOT draw D.
 """
 
-            prompt = f"""
-다음 수학 문제를 사용자 요구사항에 맞게 개선해주세요.
+            prompt = f"""You are an expert math problem regenerator. Improve the following math problem based on user requirements.
 
-기존 문제:
-- 문제: {current_problem.get('question', '')}
-- 정답: {current_problem.get('correct_answer', '')}
-- 해설: {current_problem.get('explanation', '')}
-- 선택지: {current_problem.get('choices', [])}
-{f"- 기존 TikZ 코드: {current_problem.get('tikz_code', '')}" if has_tikz else ""}
+**Current Problem**:
+- Question: {current_problem.get('question', '')}
+- Correct Answer: {current_problem.get('correct_answer', '')}
+- Explanation: {current_problem.get('explanation', '')}
+- Choices: {current_problem.get('choices', [])}
+- Needs Graph: {needs_graph}
+{f"- Existing TikZ Code: {current_problem.get('tikz_code', '')}" if has_tikz else ""}
 
-사용자 요구사항: {requirements}
+**User Requirements**: {requirements}
 {tikz_instruction}
 
-아래 JSON 형식으로만 응답해주세요:
+**IMPORTANT**: All content fields (question, choices, correct_answer, explanation) MUST be in Korean.
+
+Return ONLY valid JSON in this format:
 {{
-    "question": "개선된 문제 내용",
-    "choices": ["선택지1", "선택지2", "선택지3", "선택지4"],
-    "correct_answer": "정답",
-    "explanation": "해설"{', "tikz_code": "TikZ LaTeX 코드"' if has_tikz else ''}
+    "question": "Improved question content (in Korean)",
+    "choices": ["Choice 1 (Korean)", "Choice 2 (Korean)", "Choice 3 (Korean)", "Choice 4 (Korean)"],
+    "correct_answer": "Correct answer (Korean)",
+    "explanation": "Explanation (in Korean)"{', "tikz_code": "TikZ LaTeX code"' if needs_graph else ''}
 }}
 """
 
