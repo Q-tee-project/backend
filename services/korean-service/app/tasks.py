@@ -7,7 +7,6 @@ from datetime import datetime
 
 from .celery_app import celery_app
 from .database import SessionLocal
-from .models.korean_generation import KoreanGeneration
 from .models.worksheet import Worksheet, WorksheetStatus
 from .models.problem import Problem, ProblemType, Difficulty, KoreanType
 from .services.ai_service import AIService
@@ -28,25 +27,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
 
         # 생성 세션 ID 생성
         generation_id = str(uuid.uuid4())
-
-        # 생성 세션 저장
-        generation_session = KoreanGeneration(
-            generation_id=generation_id,
-            user_id=user_id,
-            school_level=request_data['school_level'],
-            grade=request_data['grade'],
-            korean_type=request_data['korean_type'],
-            question_type=request_data['question_type'],
-            difficulty=request_data['difficulty'],
-            problem_count=request_data['problem_count'],
-            question_type_ratio=request_data.get('question_type_ratio'),
-            difficulty_ratio=request_data.get('difficulty_ratio'),
-            user_text=request_data.get('user_text', ''),
-            celery_task_id=self.request.id,
-            status='processing'
-        )
-        db.add(generation_session)
-        db.commit()
 
         # 진행 상황 업데이트
         current_task.update_state(
@@ -188,13 +168,6 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
         worksheet.actual_question_type_distribution = question_type_counts
         worksheet.actual_difficulty_distribution = difficulty_counts
 
-        # 생성 세션 업데이트
-        generation_session.status = 'completed'
-        generation_session.total_generated = len(saved_problems)
-        generation_session.actual_korean_type_distribution = korean_type_counts
-        generation_session.actual_question_type_distribution = question_type_counts
-        generation_session.actual_difficulty_distribution = difficulty_counts
-
         db.commit()
 
         # 진행 상황 업데이트
@@ -213,18 +186,20 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
         }
 
     except Exception as e:
-        # 오류 발생 시 세션 상태 업데이트
+        # 워크시트 상태를 FAILED로 업데이트
         try:
-            generation_session.status = 'failed'
-            db.commit()
+            if 'worksheet' in locals() and worksheet:
+                worksheet.status = WorksheetStatus.FAILED
+                db.commit()
         except:
             pass
-
-        db.close()
+        finally:
+            db.close()
         raise Exception(f"국어 문제 생성 중 오류: {str(e)}")
 
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 @celery_app.task(bind=True)

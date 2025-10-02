@@ -4,47 +4,6 @@ from sqlalchemy.sql import func
 from ..database import Base
 
 
-class KoreanGeneration(Base):
-    """국어 문제 생성 세션 모델"""
-    __tablename__ = "generations"
-    __table_args__ = {"schema": "korean_service"}
-
-    id = Column(Integer, primary_key=True, index=True)
-    generation_id = Column(String, unique=True, nullable=False, index=True)
-
-    # 사용자 정보
-    user_id = Column(Integer, nullable=False)
-
-    # 교육과정 정보
-    school_level = Column(String, nullable=False)  # "중학교", "고등학교"
-    grade = Column(Integer, nullable=False)
-
-    # 국어 과목 정보
-    korean_type = Column(String, nullable=False)  # "시", "소설", "수필/비문학", "문법"
-    question_type = Column(String, nullable=False)  # "객관식", "서술형", "단답형"
-    difficulty = Column(String, nullable=False)  # "상", "중", "하"
-
-    # 요청 설정
-    problem_count = Column(Integer, nullable=False)
-    question_type_ratio = Column(JSON, nullable=True)  # {"객관식": 50, "서술형": 30, "단답형": 20}
-    difficulty_ratio = Column(JSON, nullable=True)  # {"상": 30, "중": 40, "하": 30}
-    user_text = Column(Text, nullable=True)
-
-    # 생성 결과
-    total_generated = Column(Integer, default=0)
-    actual_korean_type_distribution = Column(JSON, nullable=True)
-    actual_question_type_distribution = Column(JSON, nullable=True)
-    actual_difficulty_distribution = Column(JSON, nullable=True)
-
-    # 비동기 처리
-    celery_task_id = Column(String, nullable=True)
-    status = Column(String, default="pending")  # pending, processing, completed, failed
-
-    # 시간 관리
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-
 class Assignment(Base):
     """국어 과제 모델"""
     __tablename__ = "korean_assignments"

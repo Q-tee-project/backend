@@ -108,13 +108,14 @@ services:
       - KOREAN_GEMINI_API_KEY=${KOREAN_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
+      - AUTH_SERVICE_URL=http://auth-service:8000
       - PORT=8000
     ports:
       - "8004:8000"
     depends_on:
       - postgres
       - redis
+      - auth-service
     volumes:
       - ./services/korean-service:/app
     networks:

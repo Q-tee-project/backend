@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
-from ..models.korean_generation import KoreanGeneration
 from ..models.worksheet import Worksheet, WorksheetStatus
 from ..models.problem import Problem
 
@@ -8,21 +7,6 @@ from ..models.problem import Problem
 class KoreanGenerationService:
     def __init__(self):
         pass
-
-    def get_generation_history(self, db: Session, user_id: int, skip: int = 0, limit: int = 10) -> List[KoreanGeneration]:
-        """국어 문제 생성 이력 조회"""
-        return db.query(KoreanGeneration)\
-            .filter(KoreanGeneration.user_id == user_id)\
-            .order_by(KoreanGeneration.created_at.desc())\
-            .offset(skip)\
-            .limit(limit)\
-            .all()
-
-    def get_generation_detail(self, db: Session, generation_id: str, user_id: int) -> Optional[KoreanGeneration]:
-        """국어 문제 생성 세션 상세 조회"""
-        return db.query(KoreanGeneration)\
-            .filter(KoreanGeneration.generation_id == generation_id, KoreanGeneration.user_id == user_id)\
-            .first()
 
     def get_worksheet_problems(self, db: Session, worksheet_id: int) -> List[Dict]:
         """워크시트의 문제들 조회"""

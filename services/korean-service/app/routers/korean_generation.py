@@ -40,7 +40,7 @@ async def generate_korean_problems(
     """국어 문제 생성"""
     try:
         task = generate_korean_problems_task.apply_async(
-            args=[request.model_dump(), current_user["id"]],
+            args=[request.model_dump(), current_user["user_id"]],
             queue='korean_queue'
         )
 
@@ -71,7 +71,7 @@ async def delete_worksheet(
 
         # 워크시트 조회 (권한 확인)
         worksheet = db.query(Worksheet) \
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"]) \
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["user_id"]) \
             .first()
 
         if not worksheet:
@@ -129,29 +129,26 @@ async def get_generation_history(
     current_user: dict = Depends(get_current_teacher)
 ):
     """국어 문제 생성 이력 조회"""
-    try:
-        history = korean_service.get_generation_history(db, user_id=current_user["id"], skip=skip, limit=limit)
+    from ..models.worksheet import Worksheet
 
-        result = []
-        for session in history:
-            result.append({
-                "generation_id": session.generation_id,
-                "school_level": session.school_level,
-                "grade": session.grade,
-                "korean_type": session.korean_type,
-                "question_type": session.question_type,
-                "problem_count": session.problem_count,
-                "total_generated": session.total_generated,
-                "created_at": session.created_at.isoformat()
-            })
+    worksheets = db.query(Worksheet).filter(
+        Worksheet.teacher_id == current_user["user_id"]
+    ).order_by(Worksheet.created_at.desc()).offset(skip).limit(limit).all()
 
-        return {"history": result, "total": len(result)}
+    result = []
+    for worksheet in worksheets:
+        result.append({
+            "generation_id": worksheet.generation_id,
+            "school_level": worksheet.school_level,
+            "grade": worksheet.grade,
+            "korean_type": worksheet.korean_type,
+            "question_type": worksheet.question_type,
+            "problem_count": worksheet.problem_count,
+            "total_generated": worksheet.problem_count,
+            "created_at": worksheet.created_at.isoformat()
+        })
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"생성 이력 조회 중 오류: {str(e)}"
-        )
+    return {"history": result, "total": len(result)}
 
 
 @router.get("/generation/{generation_id}")
@@ -161,75 +158,60 @@ async def get_generation_detail(
     current_user: dict = Depends(get_current_teacher)
 ):
     """국어 문제 생성 세션 상세 조회"""
-    try:
-        session = korean_service.get_generation_detail(db, generation_id, user_id=current_user["id"])
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 생성 세션을 찾을 수 없습니다"
-            )
+    from ..models.problem import Problem
+    from ..models.worksheet import Worksheet
 
-        from ..models.problem import Problem
-        from ..models.worksheet import Worksheet
-        worksheet = db.query(Worksheet)\
-            .filter(Worksheet.generation_id == generation_id)\
-            .first()
+    worksheet = db.query(Worksheet).filter(
+        Worksheet.generation_id == generation_id,
+        Worksheet.teacher_id == current_user["user_id"]
+    ).first()
 
-        if not worksheet:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 생성 세션의 워크시트를 찾을 수 없습니다"
-            )
-
-        problems = db.query(Problem)\
-            .filter(Problem.worksheet_id == worksheet.id)\
-            .order_by(Problem.sequence_order)\
-            .all()
-
-        problem_list = []
-        for problem in problems:
-            problem_dict = {
-                "id": problem.id,
-                "problem_type": problem.problem_type.value,
-                "korean_type": problem.korean_type.value,
-                "difficulty": problem.difficulty.value,
-                "question": problem.question,
-                "choices": json.loads(problem.choices) if problem.choices else None,
-                "correct_answer": problem.correct_answer,
-                "explanation": problem.explanation,
-                "source_text": problem.source_text,
-                "source_title": problem.source_title,
-                "source_author": problem.source_author
-            }
-            problem_list.append(problem_dict)
-
-        return {
-            "generation_info": {
-                "generation_id": session.generation_id,
-                "school_level": session.school_level,
-                "grade": session.grade,
-                "korean_type": session.korean_type,
-                "question_type": session.question_type,
-                "problem_count": session.problem_count,
-                "question_type_ratio": session.question_type_ratio,
-                "difficulty_ratio": session.difficulty_ratio,
-                "user_text": session.user_text,
-                "actual_korean_type_distribution": session.actual_korean_type_distribution,
-                "actual_question_type_distribution": session.actual_question_type_distribution,
-                "actual_difficulty_distribution": session.actual_difficulty_distribution,
-                "total_generated": session.total_generated,
-                "created_at": session.created_at.isoformat()
-            },
-            "problems": problem_list
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
+    if not worksheet:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"세션 상세 조회 중 오류: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="해당 생성 세션을 찾을 수 없습니다"
         )
+
+    problems = db.query(Problem).filter(
+        Problem.worksheet_id == worksheet.id
+    ).order_by(Problem.sequence_order).all()
+
+    problem_list = []
+    for problem in problems:
+        problem_dict = {
+            "id": problem.id,
+            "problem_type": problem.problem_type,
+            "korean_type": problem.korean_type,
+            "difficulty": problem.difficulty,
+            "question": problem.question,
+            "choices": json.loads(problem.choices) if problem.choices else None,
+            "correct_answer": problem.correct_answer,
+            "explanation": problem.explanation,
+            "source_text": problem.source_text,
+            "source_title": problem.source_title,
+            "source_author": problem.source_author
+        }
+        problem_list.append(problem_dict)
+
+    return {
+        "generation_info": {
+            "generation_id": worksheet.generation_id,
+            "school_level": worksheet.school_level,
+            "grade": worksheet.grade,
+            "korean_type": worksheet.korean_type,
+            "question_type": worksheet.question_type,
+            "problem_count": worksheet.problem_count,
+            "question_type_ratio": worksheet.question_type_ratio,
+            "difficulty_ratio": worksheet.difficulty_ratio,
+            "user_text": worksheet.user_text,
+            "actual_korean_type_distribution": worksheet.actual_korean_type_distribution,
+            "actual_question_type_distribution": worksheet.actual_question_type_distribution,
+            "actual_difficulty_distribution": worksheet.actual_difficulty_distribution,
+            "total_generated": worksheet.problem_count,
+            "created_at": worksheet.created_at.isoformat()
+        },
+        "problems": problem_list
+    }
 
 
 @router.get("/tasks/{task_id}")
@@ -289,7 +271,7 @@ async def get_worksheets(
         from ..models.worksheet import Worksheet
 
         worksheets = db.query(Worksheet)\
-            .filter(Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.teacher_id == current_user["user_id"])\
             .order_by(Worksheet.created_at.desc())\
             .offset(skip)\
             .limit(limit)\
@@ -337,7 +319,7 @@ async def get_worksheet_detail(
         from ..models.problem import Problem
 
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["user_id"])\
             .first()
 
         if not worksheet:
@@ -413,7 +395,7 @@ async def update_worksheet(
         from ..models.worksheet import Worksheet
         
         worksheet = db.query(Worksheet)\
-            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["id"])\
+            .filter(Worksheet.id == worksheet_id, Worksheet.teacher_id == current_user["user_id"])\
             .first()
         
         if not worksheet:
