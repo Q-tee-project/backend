@@ -1,25 +1,13 @@
 # 수학 문제 생성 시스템 플로우 (Math Problem Generation Flow)
 
-**버전**: v1.0
-**마지막 업데이트**: 2025-10-02
-**시스템**: math-service
-
-## 목차
-1. [시스템 개요](#시스템-개요)
-2. [전체 문제 생성 플로우](#전체-문제-생성-플로우)
-3. [AI Judge 검증 시스템](#ai-judge-검증-시스템)
-4. [단일 문제 재생성 플로우](#단일-문제-재생성-플로우)
-5. [TikZ 그래프 생성](#tikz-그래프-생성)
-6. [모듈 구조](#모듈-구조)
-7. [버전 히스토리](#버전-히스토리)
-
 ---
 
 ## 시스템 개요
 
-수학 문제 생성 시스템은 **Gemini 2.5 Pro**와 **GPT-4o-mini**를 활용한 이중 검증 시스템입니다.
+수학 문제 생성 시스템은 **Gemini 2.5 Pro**와 **GPT-4o-mini**를 활용한 이중 검증 시스템
 
 ### 핵심 특징
+
 - **이중 AI 모델**: Gemini 2.5 Pro(생성) + GPT-4o-mini(검증)
 - **AI Judge 검증**: 모든 문제는 4가지 기준으로 평가 (수학정확성, 정답일치, 완결성, 논리성)
 - **재시도 메커니즘**: 불합격 문제에 대한 피드백 기반 재생성 (최대 3회)
@@ -29,7 +17,8 @@
 - **3단계 난이도**: A(직접계산), B(응용번역), C(통합발견)
 
 ### 사용 모델
-- **문제 생성**: Gemini 2.5 Pro (`gemini-2.0-flash-exp`)
+
+- **문제 생성**: Gemini 2.5 Pro
 - **AI Judge 검증**: GPT-4o-mini (OpenAI)
 
 ---
@@ -163,10 +152,10 @@ for idx, problem in enumerate(problems):
 
     if is_valid:
         valid_problems.append(problem)
-        print(f"✅ 문제 {len(valid_problems)}번: VALID - 평균 {scores['overall_score']:.1f}점")
+        print(f" 문제 {len(valid_problems)}번: VALID - 평균 {scores['overall_score']:.1f}점")
     else:
-        print(f"❌ 문제 {idx+1}번: INVALID - 평균 {scores['overall_score']:.1f}점")
-        print(f"💬 피드백: {feedback}")
+        print(f" 문제 {idx+1}번: INVALID - 평균 {scores['overall_score']:.1f}점")
+        print(f" 피드백: {feedback}")
         invalid_problems.append({
             "problem": problem,
             "feedback": feedback,
@@ -192,10 +181,11 @@ Decision rule:
 ```
 
 **검증 상세 출력**:
+
 ```
-✅ 문제 1번: VALID - 평균 4.5점 [수학정확성:5.0 정답일치:5.0 완결성:4.0 논리성:4.0]
-❌ 문제 2번: INVALID - 평균 3.2점 [수학정확성:4.0 정답일치:2.5 완결성:3.5 논리성:3.0]
-   💬 피드백: 풀이 과정의 마지막 답이 정답과 일치하지 않습니다
+O 문제 1번: VALID - 평균 4.5점 [수학정확성:5.0 정답일치:5.0 완결성:4.0 논리성:4.0]
+X 문제 2번: INVALID - 평균 3.2점 [수학정확성:4.0 정답일치:2.5 완결성:3.5 논리성:3.0]
+    피드백: 풀이 과정의 마지막 답이 정답과 일치하지 않습니다
 ```
 
 ### 7단계: 재시도 메커니즘 (Feedback-Enhanced Regeneration)
@@ -204,7 +194,7 @@ Decision rule:
 # 불합격 문제가 있고 아직 재시도 가능한 경우
 if len(valid_problems) < target_count and retry_attempt < max_retries - 1:
     shortage = target_count - len(valid_problems)
-    print(f"⚠️ 부족: {shortage}개 추가 생성 필요 (현재 {len(valid_problems)}/{target_count})")
+    print(f"부족: {shortage}개 추가 생성 필요 (현재 {len(valid_problems)}/{target_count})")
 
     # 피드백을 포함한 프롬프트 재구성
     if invalid_problems:
@@ -212,6 +202,7 @@ if len(valid_problems) < target_count and retry_attempt < max_retries - 1:
 ```
 
 **피드백 강화 프롬프트 예시**:
+
 ```
 [원본 프롬프트]
 
@@ -277,26 +268,27 @@ graph TD
     A[생성된 문제] --> B{AI Judge<br/>GPT-4o-mini}
     B --> C[4가지 기준 평가]
     C --> D{consistency ≥ 4.0<br/>AND<br/>others avg ≥ 3.5?}
-    D -->|Yes| E[✅ VALID<br/>valid_problems에 추가]
-    D -->|No| F[❌ INVALID<br/>invalid_problems에 추가<br/>+ 피드백 저장]
+    D -->|Yes| E[VALID<br/>valid_problems에 추가]
+    D -->|No| F[INVALID<br/>invalid_problems에 추가<br/>+ 피드백 저장]
     E --> G{목표 달성?}
     F --> G
     G -->|Yes| H[완료]
     G -->|No, 재시도 가능| I[피드백 포함 재생성]
-    G -->|No, 재시도 소진| J[❌ 실패]
+    G -->|No, 재시도 소진| J[실패]
     I --> A
 ```
 
 ### 검증 기준 상세
 
-| 항목 | 설명 | 점수 범위 |
-|------|------|----------|
-| **mathematical_accuracy** | 수학적 오류 없음 | 1-5 |
-| **consistency** | 풀이의 최종 답 = correct_answer | 1-5 |
-| **completeness** | 필수 필드 완비 (객관식은 4개 보기) | 1-5 |
-| **logic_flow** | 풀이 논리성 및 이해 용이성 | 1-5 |
+| 항목                      | 설명                               | 점수 범위 |
+| ------------------------- | ---------------------------------- | --------- |
+| **mathematical_accuracy** | 수학적 오류 없음                   | 1-5       |
+| **consistency**           | 풀이의 최종 답 = correct_answer    | 1-5       |
+| **completeness**          | 필수 필드 완비 (객관식은 4개 보기) | 1-5       |
+| **logic_flow**            | 풀이 논리성 및 이해 용이성         | 1-5       |
 
 **합격 조건**:
+
 1. **consistency ≥ 4.0** (필수, 가장 중요)
 2. **AND** (mathematical_accuracy + completeness + logic_flow) / 3 ≥ 3.5
 
@@ -573,15 +565,3 @@ class MathGenerationService:
 ```
 
 ---
-
-## 버전 히스토리
-
-### v1.0 (2025-10-02)
-- 초기 문서화 작성
-- Gemini 2.5 Pro + GPT-4o-mini 이중 검증 시스템 설명
-- AI Judge 검증 기준 (4가지 항목) 상세화
-- 재시도 메커니즘 (피드백 강화) 문서화
-- 부분 재생성 로직 설명 추가
-- TikZ 그래프 생성 플로우 추가
-- 단일 문제 재생성 플로우 추가
-- 모듈 구조 정리 (832줄 메인 파일)
