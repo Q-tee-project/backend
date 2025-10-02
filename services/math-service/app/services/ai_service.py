@@ -48,21 +48,24 @@ class AIService:
             }
 
     def regenerate_single_problem(self, current_problem: Dict, requirements: str, curriculum_info: Dict = None) -> Dict:
-        """단일 문제 빠른 재생성 - 복잡한 파이프라인 없이 직접 AI 호출"""
-        try:
-            # 그래프가 필요한지 확인 (tikz_code가 있거나 has_diagram이 true인 경우)
-            has_tikz = bool(current_problem.get('tikz_code'))
-            has_diagram = current_problem.get('has_diagram', 'false')
+        """단일 문제 빠른 재생성 - AI Judge 검증 포함"""
+        max_retries = 3
 
-            # has_diagram이 문자열인 경우 처리
-            if isinstance(has_diagram, str):
-                has_diagram = has_diagram.lower() == 'true'
+        for attempt in range(max_retries):
+            try:
+                # 그래프가 필요한지 확인 (tikz_code가 있거나 has_diagram이 true인 경우)
+                has_tikz = bool(current_problem.get('tikz_code'))
+                has_diagram = current_problem.get('has_diagram', 'false')
 
-            needs_graph = has_tikz or has_diagram
+                # has_diagram이 문자열인 경우 처리
+                if isinstance(has_diagram, str):
+                    has_diagram = has_diagram.lower() == 'true'
 
-            tikz_instruction = ""
-            if needs_graph:
-                tikz_instruction = """
+                needs_graph = has_tikz or has_diagram
+
+                tikz_instruction = ""
+                if needs_graph:
+                    tikz_instruction = """
 
 **TikZ Graph Requirements**:
 - This problem requires a graph visualization. Generate appropriate TikZ code.
@@ -78,7 +81,7 @@ class AIService:
   * Example: Question asks "Find point D" and gives "A(1,2), B(5,2), C(6,5)" → Only draw A, B, C. DO NOT draw D.
 """
 
-            prompt = f"""You are an expert math problem regenerator. Improve the following math problem based on user requirements.
+                prompt = f"""You are an expert math problem regenerator. Improve the following math problem based on user requirements.
 
 **Current Problem**:
 - Question: {current_problem.get('question', '')}
@@ -102,23 +105,43 @@ Return ONLY valid JSON in this format:
 }}
 """
 
-            # AI 모델 호출
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+                # AI 모델 호출
+                response = self.model.generate_content(prompt)
+                response_text = response.text.strip()
 
-            # JSON 응답 파싱
-            if response_text.startswith('```json'):
-                response_text = response_text[7:]
-            if response_text.endswith('```'):
-                response_text = response_text[:-3]
+                # JSON 응답 파싱
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
 
-            result = json.loads(response_text.strip())
-            return result
+                result = json.loads(response_text.strip())
 
-        except Exception as e:
-            print(f"❌ 문제 재생성 오류: {str(e)}")
-            # 실패 시 기존 문제 반환
-            return current_problem
+                # AI Judge 검증 (problem_generator의 검증 로직 활용)
+                is_valid, scores, feedback = self.problem_generator._validate_with_ai_judge(result)
+
+                if is_valid:
+                    print(f"✅ 재생성 문제 검증 통과 - 평균 {scores['overall_score']:.1f}점")
+                    return result
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ 재생성 문제 검증 실패 (시도 {attempt + 1}/{max_retries}) - {scores['overall_score']:.1f}점")
+                        print(f"   피드백: {feedback}")
+                        # 재시도 시 피드백을 프롬프트에 추가
+                        requirements = f"{requirements}\n\n**Previous issue**: {feedback}"
+                        continue
+                    else:
+                        print(f"❌ 최종 검증 실패 - 기존 문제 반환")
+                        return current_problem
+
+            except Exception as e:
+                print(f"❌ 문제 재생성 오류 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    continue
+                # 실패 시 기존 문제 반환
+                return current_problem
+
+        return current_problem
 
     def ocr_handwriting(self, image_data: bytes) -> str:
         """OCR 처리 - 분리된 서비스 사용"""
