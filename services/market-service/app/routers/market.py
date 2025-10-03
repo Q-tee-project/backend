@@ -70,46 +70,40 @@ async def create_product(
     current_user: dict = Depends(get_current_teacher)
 ):
     """상품 등록 (워크시트 복사본 생성)"""
+    # 1. 워크시트 소유권 확인
+    is_owner = await MarketService.verify_worksheet_ownership(
+        current_user["id"],
+        product_data.original_worksheet_id,
+        product_data.original_service
+    )
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="해당 워크시트의 소유자만 상품을 등록할 수 있습니다.")
+
+    # 2. 중복 상품 확인
+    existing = await MarketService.check_duplicate_product(
+        db, product_data.original_service, product_data.original_worksheet_id
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="이미 등록된 워크시트입니다.")
+
+    # 3. 구매한 워크시트 재등록 방지
+    is_purchased = await MarketService.check_purchased_worksheet(
+        db, current_user["id"], product_data.original_service, product_data.original_worksheet_id
+    )
+    if is_purchased:
+        raise HTTPException(status_code=400, detail="구매한 워크시트는 다시 등록할 수 없습니다.")
+
+    # 4. 상품 생성
     try:
-        # 1. 워크시트 소유권 확인
-        is_owner = await MarketService.verify_worksheet_ownership(
-            current_user["id"],
-            product_data.original_worksheet_id,
-            product_data.original_service
-        )
-        if not is_owner:
-            raise HTTPException(status_code=403, detail="해당 워크시트의 소유자만 상품을 등록할 수 있습니다.")
-
-        # 2. 중복 상품 확인
-        existing = await MarketService.check_duplicate_product(
-            db, product_data.original_service, product_data.original_worksheet_id
-        )
-        if existing:
-            raise HTTPException(status_code=400, detail="이미 등록된 워크시트입니다.")
-
-        # 3. 구매한 워크시트 재등록 방지
-        is_purchased = await MarketService.check_purchased_worksheet(
-            db, current_user["id"], product_data.original_service, product_data.original_worksheet_id
-        )
-        if is_purchased:
-            raise HTTPException(status_code=400, detail="구매한 워크시트는 다시 등록할 수 없습니다.")
-
-        # 4. 상품 생성
         product = await MarketService.create_product_from_worksheet(
             db=db,
             product_data=product_data,
             seller_id=current_user["id"],
             seller_name=current_user["name"]
         )
-
         return product
-
-    except HTTPException:
-        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="상품 등록 중 오류가 발생했습니다.")
 
 
 @router.get("/my-products", response_model=List[MarketProductListResponse])
@@ -137,23 +131,17 @@ async def update_product(
     current_user: dict = Depends(get_current_teacher)
 ):
     """상품 수정 (제목, 설명만 수정 가능)"""
-    try:
-        product = await MarketService.update_product(
-            db=db,
-            product_id=product_id,
-            seller_id=current_user["id"],
-            update_data=update_data
-        )
+    product = await MarketService.update_product(
+        db=db,
+        product_id=product_id,
+        seller_id=current_user["id"],
+        update_data=update_data
+    )
 
-        if not product:
-            raise HTTPException(status_code=404, detail="상품을 찾을 수 없거나 수정 권한이 없습니다.")
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없거나 수정 권한이 없습니다.")
 
-        return product
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="상품 수정 중 오류가 발생했습니다.")
+    return product
 
 
 @router.delete("/products/{product_id}")
@@ -194,19 +182,16 @@ async def charge_points(
     current_user: dict = Depends(get_current_user)
 ):
     """포인트 충전"""
-    try:
-        transaction = await PointService.charge_points(
-            db=db,
-            user_id=current_user["id"],
-            amount=charge_data.amount
-        )
-        return {
-            "message": f"{charge_data.amount:,} 포인트가 충전되었습니다.",
-            "transaction_id": transaction.id,
-            "new_balance": transaction.balance_after
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="포인트 충전 중 오류가 발생했습니다.")
+    transaction = await PointService.charge_points(
+        db=db,
+        user_id=current_user["id"],
+        amount=charge_data.amount
+    )
+    return {
+        "message": f"{charge_data.amount:,} 포인트가 충전되었습니다.",
+        "transaction_id": transaction.id,
+        "new_balance": transaction.balance_after
+    }
 
 
 @router.get("/points/transactions", response_model=List[PointTransactionResponse])
@@ -235,54 +220,33 @@ async def purchase_with_points(
     current_user: dict = Depends(get_current_user)
 ):
     """포인트로 상품 구매"""
+    # 1. 상품 정보 확인
+    product = await MarketService.get_product_by_id(db, purchase_data.product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+
+    # 2. 자기 상품 구매 방지
+    if product.seller_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="자신의 상품은 구매할 수 없습니다.")
+
+    # 3. 중복 구매 확인
+    already_purchased = await MarketService.check_already_purchased(
+        db, current_user["id"], purchase_data.product_id
+    )
+    if already_purchased:
+        raise HTTPException(status_code=400, detail="이미 구매한 상품입니다.")
+
+    # 4. 포인트로 구매 처리
     try:
-        print(f"[DEBUG] 구매 요청 시작 - product_id: {purchase_data.product_id}, buyer_id: {current_user['id']}")
-
-        # 1. 상품 정보 확인
-        product = await MarketService.get_product_by_id(db, purchase_data.product_id)
-        if not product:
-            print(f"[ERROR] 상품을 찾을 수 없음 - product_id: {purchase_data.product_id}")
-            raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
-
-        print(f"[DEBUG] 상품 정보 - title: {product.title}, seller_id: {product.seller_id}, service: {product.original_service}")
-
-        # 2. 자기 상품 구매 방지
-        if product.seller_id == current_user["id"]:
-            print(f"[ERROR] 자기 상품 구매 시도 - seller_id: {product.seller_id}")
-            raise HTTPException(status_code=400, detail="자신의 상품은 구매할 수 없습니다.")
-
-        # 3. 중복 구매 확인
-        already_purchased = await MarketService.check_already_purchased(
-            db, current_user["id"], purchase_data.product_id
-        )
-        if already_purchased:
-            print(f"[ERROR] 중복 구매 시도 - buyer_id: {current_user['id']}, product_id: {purchase_data.product_id}")
-            raise HTTPException(status_code=400, detail="이미 구매한 상품입니다.")
-
-        print(f"[DEBUG] 구매 검증 완료, 구매 처리 시작")
-
-        # 4. 포인트로 구매 처리
         purchase_result = await MarketService.purchase_with_points(
             db=db,
             buyer_id=current_user["id"],
             buyer_name=current_user["name"],
             product_id=purchase_data.product_id
         )
-
-        print(f"[DEBUG] 구매 처리 완료 - purchase_id: {purchase_result}")
-
         return purchase_result
-
-    except HTTPException:
-        raise
     except ValueError as e:
-        print(f"[ERROR] 구매 처리 중 ValueError: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(f"[ERROR] 구매 처리 중 예상치 못한 오류: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="구매 처리 중 오류가 발생했습니다.")
 
 
 @router.get("/my-purchases", response_model=List[MarketPurchaseResponse])
@@ -309,27 +273,16 @@ async def get_purchased_worksheet(
     current_user: dict = Depends(get_current_user)
 ):
     """구매한 워크시트 조회 (구매자의 워크시트 서비스에 추가된 것)"""
-    try:
-        print(f"[DEBUG] 구매 기록 조회 - purchase_id: {purchase_id}, user_id: {current_user['id']}")
+    worksheet = await MarketService.get_purchased_worksheet_by_purchase_id(
+        db=db,
+        purchase_id=purchase_id,
+        buyer_id=current_user["id"]
+    )
 
-        worksheet = await MarketService.get_purchased_worksheet_by_purchase_id(
-            db=db,
-            purchase_id=purchase_id,
-            buyer_id=current_user["id"]
-        )
+    if not worksheet:
+        raise HTTPException(status_code=404, detail="구매 기록을 찾을 수 없습니다.")
 
-        if not worksheet:
-            print(f"[DEBUG] 구매 기록을 찾을 수 없음 - purchase_id: {purchase_id}")
-            raise HTTPException(status_code=404, detail="구매 기록을 찾을 수 없습니다.")
-
-        print(f"[DEBUG] 구매 기록 찾음: {worksheet}")
-        return worksheet
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[ERROR] 구매 기록 조회 중 오류: {str(e)}")
-        raise HTTPException(status_code=500, detail="구매 기록 조회 중 오류가 발생했습니다.")
+    return worksheet
 
 
 # ==================== 리뷰 시스템 API ====================
@@ -342,36 +295,30 @@ async def create_review(
     current_user: dict = Depends(get_current_user)
 ):
     """리뷰 작성 (구매자만 가능)"""
-    try:
-        # 구매 여부 확인
-        purchased = await MarketService.check_already_purchased(
-            db, current_user["id"], product_id
-        )
-        if not purchased:
-            raise HTTPException(status_code=403, detail="구매한 상품만 리뷰를 작성할 수 있습니다.")
+    # 구매 여부 확인
+    purchased = await MarketService.check_already_purchased(
+        db, current_user["id"], product_id
+    )
+    if not purchased:
+        raise HTTPException(status_code=403, detail="구매한 상품만 리뷰를 작성할 수 있습니다.")
 
-        # 중복 리뷰 확인
-        existing_review = await MarketService.get_user_review(
-            db, current_user["id"], product_id
-        )
-        if existing_review:
-            raise HTTPException(status_code=400, detail="이미 리뷰를 작성했습니다.")
+    # 중복 리뷰 확인
+    existing_review = await MarketService.get_user_review(
+        db, current_user["id"], product_id
+    )
+    if existing_review:
+        raise HTTPException(status_code=400, detail="이미 리뷰를 작성했습니다.")
 
-        # 리뷰 생성
-        review = await MarketService.create_review(
-            db=db,
-            product_id=product_id,
-            reviewer_id=current_user["id"],
-            reviewer_name=current_user["name"],
-            rating=review_data.rating
-        )
+    # 리뷰 생성
+    review = await MarketService.create_review(
+        db=db,
+        product_id=product_id,
+        reviewer_id=current_user["id"],
+        reviewer_name=current_user["name"],
+        rating=review_data.rating
+    )
 
-        return review
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="리뷰 작성 중 오류가 발생했습니다.")
+    return review
 
 
 @router.get("/products/{product_id}/reviews", response_model=List[MarketReviewResponse])

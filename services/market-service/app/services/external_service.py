@@ -102,36 +102,6 @@ class ExternalService:
             return None
 
     @staticmethod
-    async def get_problems_by_ids(service: str, problem_ids: List[int]) -> List[Dict[str, Any]]:
-        """문제 ID 목록으로 문제 상세 조회"""
-        try:
-            service_urls = {
-                "korean": settings.KOREAN_SERVICE_URL,
-                "math": settings.MATH_SERVICE_URL,
-                "english": settings.ENGLISH_SERVICE_URL,
-            }
-
-            if service not in service_urls:
-                return []
-
-            url = f"{service_urls[service]}/problems/batch"
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    json={"problem_ids": problem_ids},
-                    timeout=15.0
-                )
-
-                if response.status_code == 200:
-                    return response.json()
-                return []
-
-        except Exception as e:
-            print(f"Error fetching problems from {service}: {str(e)}")
-            return []
-
-    @staticmethod
     async def copy_worksheet_to_user(service: str, worksheet_id: int,
                                     target_user_id: int, new_title: str) -> Optional[int]:
         """워크시트를 구매자의 계정으로 복사"""
@@ -162,8 +132,6 @@ class ExternalService:
             else:
                 url = f"{base_url}/worksheets/copy"
 
-            print(f"[DEBUG] Calling copy API: {url} with data: {copy_data}")
-
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     url,
@@ -171,53 +139,13 @@ class ExternalService:
                     timeout=20.0
                 )
 
-                print(f"[DEBUG] Copy API response: status={response.status_code}, text={response.text}")
-
                 if response.status_code == 201:
                     result = response.json()
-                    new_id = result.get("new_worksheet_id")
-                    print(f"[DEBUG] Copy successful: new_worksheet_id={new_id}")
-                    return new_id
-                else:
-                    print(f"[ERROR] Copy failed: status={response.status_code}, response={response.text}")
+                    return result.get("new_worksheet_id")
                 return None
 
-        except Exception as e:
-            print(f"Error copying worksheet from {service}: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    @staticmethod
-    async def check_user_access(service: str, user_id: int, worksheet_id: int) -> bool:
-        """사용자가 해당 워크시트에 접근 권한이 있는지 확인"""
-        try:
-            service_urls = {
-                "korean": settings.KOREAN_SERVICE_URL,
-                "math": settings.MATH_SERVICE_URL,
-                "english": settings.ENGLISH_SERVICE_URL,
-            }
-
-            if service not in service_urls:
-                return False
-
-            url = f"{service_urls[service]}/worksheets/{worksheet_id}/access"
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    params={"user_id": user_id},
-                    timeout=10.0
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    return data.get("has_access", False)
-
         except Exception:
-            pass
-
-        return False
+            return None
 
     @staticmethod
     def get_service_display_name(service: str) -> str:

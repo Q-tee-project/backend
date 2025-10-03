@@ -133,8 +133,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - KOREAN_SERVICE_URL=http://korean-service:8000
       - MATH_SERVICE_URL=http://math-service:8000
+      - ENGLISH_SERVICE_URL=http://english-service:8000
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
       - "8005:8000"
@@ -142,6 +142,7 @@ services:
       - postgres
       - korean-service
       - math-service
+      - english-service
       - auth-service
     volumes:
       - ./services/market-service:/app
