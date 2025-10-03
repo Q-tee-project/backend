@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from ..schemas.math_generation import MathProblemGenerationRequest, MathProblemGenerationResponse
 from .ai_client import problem_generator_instance
-from ..models.math_generation import MathProblemGeneration
 from ..models.problem import Problem
 from ..models.worksheet import Worksheet, WorksheetStatus
 import uuid
@@ -166,31 +165,8 @@ class MathGenerationService:
         
         db.add(worksheet)
         db.flush()
-        
-        # 6. 생성 세션 저장
-        generation_session = MathProblemGeneration(
-            generation_id=generation_id,
-            school_level=request.school_level.value,
-            grade=request.grade,
-            semester=request.semester.value,
-            unit_number=request.unit_number,
-            unit_name=request.chapter.unit_name,
-            chapter_number=request.chapter.chapter_number,
-            chapter_name=request.chapter.chapter_name,
-            problem_count=request.problem_count.value_int,
-            difficulty_ratio=request.difficulty_ratio.model_dump(),
-            problem_type_ratio=request.problem_type_ratio.model_dump(),
-            user_text=request.user_text,
-            actual_difficulty_distribution=self._calculate_difficulty_distribution(generated_problems),
-            actual_type_distribution=self._calculate_type_distribution(generated_problems),
-            total_generated=len(generated_problems),
-            created_by=user_id
-        )
-        
-        db.add(generation_session)
-        db.flush()
-        
-        # 7. 생성된 문제들을 워크시트에 연결하여 저장
+
+        # 6. 생성된 문제들을 워크시트에 연결하여 저장
         problem_responses = []
         for i, problem_data in enumerate(generated_problems):
             # 문제 유형과 난이도 검증
@@ -266,23 +242,6 @@ class MathGenerationService:
             created_at=datetime.now().isoformat()
         )
     
-    def get_generation_history(self, db: Session, user_id: int, skip: int = 0, limit: int = 10) -> List[MathProblemGeneration]:
-        """문제 생성 이력 조회"""
-        return db.query(MathProblemGeneration)\
-            .filter(MathProblemGeneration.created_by == user_id)\
-            .order_by(MathProblemGeneration.created_at.desc())\
-            .offset(skip)\
-            .limit(limit)\
-            .all()
-    
-    def get_generation_detail(self, db: Session, generation_id: str, user_id: int) -> Optional[MathProblemGeneration]:
-        """특정 생성 세션 상세 조회"""
-        return db.query(MathProblemGeneration)\
-            .filter(
-                MathProblemGeneration.generation_id == generation_id,
-                MathProblemGeneration.created_by == user_id
-            )\
-            .first()
     
     def _get_curriculum_data(self, request: MathProblemGenerationRequest) -> Dict:
         """요청에서 교육과정 데이터 추출"""

@@ -7,8 +7,6 @@ import enum
 
 class ProblemType(str, enum.Enum):
     MULTIPLE_CHOICE = "객관식"
-    ESSAY = "서술형"
-    SHORT_ANSWER = "단답형"
 
 
 class Difficulty(str, enum.Enum):

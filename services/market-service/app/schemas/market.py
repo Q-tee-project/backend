@@ -4,31 +4,24 @@ from datetime import datetime
 from decimal import Decimal
 
 
-# 미리보기 문제 스키마 제거됨 - 프론트엔드에서 subject, grade, title로 이미지 렌더링
-
-
 class MarketProductBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200, description="상품명")
     description: Optional[str] = Field(None, description="상품 설명")
 
 
 class MarketProductCreate(MarketProductBase):
-    # 원본 워크시트 정보
     original_service: Literal["korean", "math", "english"] = Field(..., description="원본 서비스")
     original_worksheet_id: int = Field(..., description="원본 문제지 ID")
-
-    # 미리보기 문제 기능 제거됨
 
 
 class MarketProductUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200, description="상품명")
     description: Optional[str] = Field(None, description="상품 설명")
-    # 미리보기 문제 기능 제거됨
 
 
 class MarketProductResponse(MarketProductBase):
     id: int
-    price: int  # 1500 or 3000
+    price: int
 
     # 판매자 정보
     seller_id: int
@@ -43,8 +36,6 @@ class MarketProductResponse(MarketProductBase):
     semester: Optional[str] = None
     unit_info: Optional[str] = None
     tags: List[str]
-
-    # 미리보기 문제 기능 제거됨
 
     # 원본 참조
     original_service: str
@@ -75,7 +66,6 @@ class MarketProductListResponse(BaseModel):
     problem_count: int
     school_level: str
     grade: int
-    # 미리보기 문제 기능 제거됨 - subject, grade, title로 이미지 생성
     satisfaction_rate: float
     view_count: int
     purchase_count: int
@@ -88,7 +78,6 @@ class MarketProductListResponse(BaseModel):
 
 class MarketPurchaseCreate(BaseModel):
     product_id: int
-    # 포인트 결제만 지원
 
 
 class MarketPurchaseResponse(BaseModel):
@@ -99,7 +88,7 @@ class MarketPurchaseResponse(BaseModel):
     buyer_id: int
     buyer_name: str
     purchase_price: int
-    payment_method: str = "points"  # 항상 포인트
+    payment_method: str = "points"
     payment_status: str
     subject_type: str
     tags: List[str]

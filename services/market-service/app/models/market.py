@@ -11,17 +11,14 @@ class SubjectType(str, enum.Enum):
     ENGLISH = "영어"
 
 
-# ProductStatus enum 제거 - 단순 CRUD만 필요
-
-
 class ReviewRating(str, enum.Enum):
-    RECOMMEND = "recommend"        # 추천
-    NORMAL = "normal"             # 보통
-    NOT_RECOMMEND = "not-recommend" # 추천안함
+    RECOMMEND = "recommend"
+    NORMAL = "normal"
+    NOT_RECOMMEND = "not-recommend"
 
 
 class MarketProduct(Base):
-    """마켓 상품 모델 - Worksheet 복사본 기반"""
+    """마켓 상품 모델"""
     __tablename__ = "market_products"
     __table_args__ = (
         UniqueConstraint('original_service', 'original_worksheet_id', name='unique_worksheet_product'),
@@ -30,49 +27,45 @@ class MarketProduct(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # 상품 기본 정보 (수정 가능)
-    title = Column(String(200), nullable=False, index=True)  # 상품명 (수정 가능)
-    description = Column(Text, nullable=True)  # 상품 설명 (수정 가능)
-
-    # 가격 (자동 계산 - 10문제: 1500원, 20문제: 3000원)
-    price = Column(Integer, nullable=False)  # 1500 or 3000
+    # 상품 기본 정보
+    title = Column(String(200), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    price = Column(Integer, nullable=False)
 
     # 판매자 정보
     seller_id = Column(Integer, nullable=False, index=True)
     seller_name = Column(String(100), nullable=False)
 
-    # 원본 Worksheet 복사본 데이터 (등록 시점 스냅샷)
-    worksheet_title = Column(String(200), nullable=False)  # 원본 제목
-    worksheet_problems = Column(JSON, nullable=False)      # 전체 문제 복사본
-    problem_count = Column(Integer, nullable=False)        # 10 or 20
+    # 워크시트 데이터
+    worksheet_title = Column(String(200), nullable=False)
+    worksheet_problems = Column(JSON, nullable=False)
+    problem_count = Column(Integer, nullable=False)
 
-    # Worksheet 메타데이터 (태그로 사용 - 고정)
-    school_level = Column(String(20), nullable=False)      # "중학교", "고등학교"
-    grade = Column(Integer, nullable=False)                # 1, 2, 3
-    subject_type = Column(String(20), nullable=False, index=True)  # "국어", "수학", "영어"
-    semester = Column(String(10), nullable=True)           # "1학기", "2학기"
-    unit_info = Column(String(100), nullable=True)         # "1단원", "2단원" 등
-    tags = Column(JSON, nullable=False)  # ["중학교", "1학년", "국어", "1학기"] - 자동생성, 고정
+    # 메타데이터
+    school_level = Column(String(20), nullable=False)
+    grade = Column(Integer, nullable=False)
+    subject_type = Column(String(20), nullable=False, index=True)
+    semester = Column(String(10), nullable=True)
+    unit_info = Column(String(100), nullable=True)
+    tags = Column(JSON, nullable=False)
 
-    # 미리보기 문제 설정 제거됨 - 프론트엔드에서 subject, grade, title로 이미지 렌더링
-
-    # 원본 참조 정보 (참조용만)
-    original_service = Column(String(20), nullable=False)   # "korean", "math", "english"
+    # 원본 참조
+    original_service = Column(String(20), nullable=False)
     original_worksheet_id = Column(Integer, nullable=False)
 
     # 통계
     view_count = Column(Integer, default=0)
     purchase_count = Column(Integer, default=0)
-    total_revenue = Column(Integer, default=0)  # 누적 판매금액
+    total_revenue = Column(Integer, default=0)
 
-    # 리뷰 통계 (자동 계산)
+    # 리뷰 통계
     total_reviews = Column(Integer, default=0)
     recommend_count = Column(Integer, default=0)
     normal_count = Column(Integer, default=0)
     not_recommend_count = Column(Integer, default=0)
-    satisfaction_rate = Column(Float, default=0.0)  # recommend_count / total_reviews * 100
+    satisfaction_rate = Column(Float, default=0.0)
 
-    # 시간 관리
+    # 시간
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -90,18 +83,18 @@ class MarketPurchase(Base):
 
     # 구매 정보
     product_id = Column(Integer, ForeignKey("market_service.market_products.id"), nullable=False)
-    buyer_id = Column(Integer, nullable=False, index=True)  # auth-service의 user_id
+    buyer_id = Column(Integer, nullable=False, index=True)
     buyer_name = Column(String(100), nullable=False)
 
     # 결제 정보
-    purchase_price = Column(Numeric(10, 2), nullable=False)  # 구매 당시 가격
+    purchase_price = Column(Numeric(10, 2), nullable=False)
     payment_method = Column(String(50), nullable=True)
     payment_status = Column(String(20), default="completed")
 
     # 복사된 워크시트 정보
-    copied_worksheet_id = Column(Integer, nullable=True)  # 복사된 워크시트 ID
+    copied_worksheet_id = Column(Integer, nullable=True)
 
-    # 시간 관리
+    # 시간
     purchased_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 관계
@@ -117,14 +110,13 @@ class MarketReview(Base):
 
     # 리뷰 정보
     product_id = Column(Integer, ForeignKey("market_service.market_products.id"), nullable=False)
-    reviewer_id = Column(Integer, nullable=False, index=True)  # auth-service의 user_id
+    reviewer_id = Column(Integer, nullable=False, index=True)
     reviewer_name = Column(String(100), nullable=False)
 
-    # 리뷰 내용 (단순화)
-    rating = Column(String(20), nullable=False)  # 'recommend', 'normal', 'not-recommend'
-    # comment 제거 - 텍스트 리뷰 없음
+    # 리뷰 내용
+    rating = Column(String(20), nullable=False)
 
-    # 시간 관리
+    # 시간
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -132,7 +124,6 @@ class MarketReview(Base):
     product = relationship("MarketProduct", back_populates="reviews")
 
 
-# 유틸리티 함수들
 def calculate_price_by_problem_count(problem_count: int) -> int:
     """문제 수에 따른 가격 계산"""
     if problem_count == 10:
@@ -162,12 +153,6 @@ def generate_tags_from_metadata(school_level: str, grade: int, subject: str,
 
     return tags
 
-
-# validate_preview_problems 함수 제거됨 - 미리보기 기능 사용 안함
-
-
-# ==================== 간단한 포인트 시스템 ====================
-
 class PointTransactionType(str, enum.Enum):
     CHARGE = "charge"           # 포인트 충전
     PURCHASE = "purchase"       # 상품 구매 (차감)
@@ -180,17 +165,17 @@ class UserPoint(Base):
     __tablename__ = "user_points"
     __table_args__ = {"schema": "market_service"}
 
-    user_id = Column(Integer, primary_key=True, index=True)  # auth-service의 user_id
+    user_id = Column(Integer, primary_key=True, index=True)
 
     # 포인트 잔액
-    available_points = Column(Integer, default=0)       # 사용 가능 포인트
+    available_points = Column(Integer, default=0)
 
-    # 통계 (선택사항)
-    total_earned = Column(Integer, default=0)          # 총 판매 수익
-    total_spent = Column(Integer, default=0)           # 총 구매 금액
-    total_charged = Column(Integer, default=0)         # 총 충전 금액
+    # 통계
+    total_earned = Column(Integer, default=0)
+    total_spent = Column(Integer, default=0)
+    total_charged = Column(Integer, default=0)
 
-    # 시간 관리
+    # 시간
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -204,21 +189,19 @@ class PointTransaction(Base):
     user_id = Column(Integer, nullable=False, index=True)
 
     # 거래 정보
-    transaction_type = Column(String(20), nullable=False)  # PointTransactionType
-    amount = Column(Integer, nullable=False)              # 포인트 양 (+ or -)
-    balance_after = Column(Integer, nullable=False)       # 거래 후 잔액
+    transaction_type = Column(String(20), nullable=False)
+    amount = Column(Integer, nullable=False)
+    balance_after = Column(Integer, nullable=False)
 
     # 연관 정보
-    product_id = Column(Integer, nullable=True)           # 상품 관련 거래 시
-    description = Column(String(200), nullable=False)     # 거래 설명
+    product_id = Column(Integer, nullable=True)
+    description = Column(String(200), nullable=False)
 
     # 시간
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-# ==================== 포인트 시스템 유틸리티 ====================
-
-PLATFORM_FEE_RATE = 0.1  # 플랫폼 수수료 10%
+PLATFORM_FEE_RATE = 0.1
 
 def calculate_seller_earning(sale_amount: int) -> tuple:
     """판매 수익 계산"""

@@ -41,7 +41,6 @@ async def check_username(username_data: dict, db: Session = Depends(get_db)):
 
 @router.post("/teacher/signup", response_model=TeacherResponse)
 async def teacher_signup(teacher_data: TeacherSignup, db: Session = Depends(get_db)):
-    # Check if username or email already exists
     existing_teacher = db.query(Teacher).filter(
         (Teacher.username == teacher_data.username) | (Teacher.email == teacher_data.email)
     ).first()
@@ -52,13 +51,11 @@ async def teacher_signup(teacher_data: TeacherSignup, db: Session = Depends(get_
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already registered"
             )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
 
-    # Create new teacher
     hashed_password = get_password_hash(teacher_data.password)
     teacher = Teacher(
         username=teacher_data.username,
@@ -68,40 +65,13 @@ async def teacher_signup(teacher_data: TeacherSignup, db: Session = Depends(get_
         hashed_password=hashed_password
     )
 
-    try:
-        db.add(teacher)
-        db.commit()
-        db.refresh(teacher)
-        return teacher
-    except IntegrityError as e:
-        db.rollback()
-        # 데이터베이스 제약조건 위반 시 더 구체적인 에러 메시지
-        error_message = str(e.orig)
-        if "username" in error_message.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
-            )
-        elif "email" in error_message.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Registration failed due to duplicate data"
-            )
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during registration"
-        )
+    db.add(teacher)
+    db.commit()
+    db.refresh(teacher)
+    return teacher
 
 @router.post("/student/signup", response_model=StudentResponse)
 async def student_signup(student_data: StudentSignup, db: Session = Depends(get_db)):
-    # Check if username or email already exists
     existing_student = db.query(Student).filter(
         (Student.username == student_data.username) | (Student.email == student_data.email)
     ).first()
@@ -112,13 +82,11 @@ async def student_signup(student_data: StudentSignup, db: Session = Depends(get_
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already registered"
             )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
 
-    # Create new student
     hashed_password = get_password_hash(student_data.password)
     student = Student(
         username=student_data.username,
@@ -131,36 +99,10 @@ async def student_signup(student_data: StudentSignup, db: Session = Depends(get_
         hashed_password=hashed_password
     )
 
-    try:
-        db.add(student)
-        db.commit()
-        db.refresh(student)
-        return student
-    except IntegrityError as e:
-        db.rollback()
-        # 데이터베이스 제약조건 위반 시 더 구체적인 에러 메시지
-        error_message = str(e.orig)
-        if "username" in error_message.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
-            )
-        elif "email" in error_message.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Registration failed due to duplicate data"
-            )
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during registration"
-        )
+    db.add(student)
+    db.commit()
+    db.refresh(student)
+    return student
 
 @router.post("/teacher/login", response_model=Token)
 async def teacher_login(login_data: UserLogin, db: Session = Depends(get_db)):
@@ -219,3 +161,38 @@ async def get_student_by_id(
             detail=f"Student with id {student_id} not found"
         )
     return student
+
+@router.post("/verify-token")
+async def verify_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """다른 마이크로서비스에서 JWT 토큰 검증용"""
+    try:
+        teacher = await get_current_user(credentials.credentials, db, "teacher")
+        return {
+            "valid": True,
+            "user_id": teacher.id,
+            "user_type": "teacher",
+            "username": teacher.username,
+            "name": teacher.name,
+            "email": teacher.email
+        }
+    except Exception:
+        try:
+            student = await get_current_user(credentials.credentials, db, "student")
+            return {
+                "valid": True,
+                "user_id": student.id,
+                "user_type": "student",
+                "username": student.username,
+                "name": student.name,
+                "email": student.email,
+                "school_level": student.school_level.value,
+                "grade": student.grade
+            }
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )

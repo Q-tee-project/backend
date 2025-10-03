@@ -46,8 +46,6 @@ class MarketService:
         db: Session, user_id: int, service: str, worksheet_id: int
     ) -> bool:
         """사용자가 구매한 워크시트인지 확인 (구매한 워크시트는 재등록 불가)"""
-        print(f"[DEBUG] check_purchased_worksheet - user_id: {user_id}, service: {service}, worksheet_id: {worksheet_id}")
-
         # 방법 1: 해당 워크시트를 원본으로 하는 마켓 상품이 있고, 그것을 구매했는지 확인
         original_product = db.query(MarketProduct).filter(
             MarketProduct.original_service == service,
@@ -60,7 +58,6 @@ class MarketService:
                 MarketPurchase.product_id == original_product.id
             ).first()
             if purchase:
-                print(f"[DEBUG] Found purchase via original worksheet - purchase_id: {purchase.id}")
                 return True
 
         # 방법 2: 해당 worksheet_id가 구매 기록의 copied_worksheet_id와 일치하는지 확인
@@ -69,12 +66,7 @@ class MarketService:
             MarketPurchase.copied_worksheet_id == worksheet_id
         ).first()
 
-        if copied_purchase:
-            print(f"[DEBUG] Found purchase via copied worksheet - purchase_id: {copied_purchase.id}")
-            return True
-
-        print(f"[DEBUG] No purchase found for this worksheet")
-        return False
+        return bool(copied_purchase)
 
     @staticmethod
     async def create_product_from_worksheet(
@@ -248,13 +240,9 @@ class MarketService:
         db: Session, product_id: int
     ) -> Optional[MarketProductResponse]:
         """상품 상세 정보 조회"""
-
         product = db.query(MarketProduct).filter(MarketProduct.id == product_id).first()
         if not product:
             return None
-
-        # 미리보기 관련 로직이 제거되어, 미리보기 데이터는 항상 비어있습니다.
-        preview_problem_details = []
 
         return MarketProductResponse(
             id=product.id,
@@ -271,8 +259,6 @@ class MarketService:
             semester=product.semester,
             unit_info=product.unit_info,
             tags=product.tags or [],
-            preview_problems=preview_problem_details,
-            main_preview_problem_id=None, # 미리보기 기능 제거
             original_service=product.original_service,
             original_worksheet_id=product.original_worksheet_id,
             view_count=product.view_count,
@@ -439,22 +425,18 @@ class MarketService:
             description=f"{product.title} 판매 수익"
         )
 
-        # 3. 구매자의 워크시트 서비스에 복사 (구매 기록 생성 전에 먼저 수행)
+        # 3. 구매자의 워크시트 서비스에 복사
         copied_worksheet_id = await ExternalService.copy_worksheet_to_user(
             service=product.original_service,
             worksheet_id=product.original_worksheet_id,
             target_user_id=buyer_id,
-            new_title=product.title  # 판매자가 등록한 상품명을 워크시트 제목으로 사용
+            new_title=product.title
         )
 
         if not copied_worksheet_id:
-            # 워크시트 복사 실패 시 롤백 처리 (포인트 복구 등)
-            # 실제로는 트랜잭션을 사용해야 함
             raise ValueError("워크시트 복사 중 오류가 발생했습니다.")
 
-        print(f"[DEBUG] 워크시트 복사 완료: copied_worksheet_id={copied_worksheet_id}")
-
-        # 4. 구매 기록 생성 (복사된 워크시트 ID 포함)
+        # 4. 구매 기록 생성
         purchase = MarketPurchase(
             product_id=product_id,
             buyer_id=buyer_id,
@@ -462,7 +444,7 @@ class MarketService:
             purchase_price=price,
             payment_method="points",
             payment_status="completed",
-            copied_worksheet_id=copied_worksheet_id  # 복사된 워크시트 ID 저장
+            copied_worksheet_id=copied_worksheet_id
         )
         db.add(purchase)
 
@@ -636,43 +618,22 @@ class MarketService:
         db: Session, purchase_id: int, buyer_id: int
     ) -> Optional[Dict[str, Any]]:
         """구매 ID로 구매한 워크시트 정보 조회"""
-        # 디버그: 해당 사용자의 모든 구매 기록 확인
-        all_purchases = db.query(MarketPurchase).filter(MarketPurchase.buyer_id == buyer_id).all()
-        print(f"[DEBUG] 사용자 {buyer_id}의 모든 구매 기록: {[(p.id, p.product_id) for p in all_purchases]}")
-
-        # 디버그: 해당 purchase_id의 모든 기록 확인 (다른 사용자 포함)
-        all_purchase_with_id = db.query(MarketPurchase).filter(MarketPurchase.id == purchase_id).all()
-        print(f"[DEBUG] purchase_id {purchase_id}의 모든 기록: {[(p.id, p.buyer_id, p.product_id) for p in all_purchase_with_id]}")
-
-        # 디버그: 개별 조건 확인
-        by_id = db.query(MarketPurchase).filter(MarketPurchase.id == purchase_id).first()
-        by_buyer = db.query(MarketPurchase).filter(MarketPurchase.buyer_id == buyer_id).first()
-        print(f"[DEBUG] by_id 결과: {by_id.id if by_id else None}")
-        print(f"[DEBUG] by_buyer 결과: {by_buyer.id if by_buyer else None}")
-
         purchase = db.query(MarketPurchase).filter(
             MarketPurchase.id == purchase_id,
             MarketPurchase.buyer_id == buyer_id
         ).first()
 
         if not purchase:
-            print(f"[DEBUG] 구매 기록 없음: purchase_id={purchase_id}, buyer_id={buyer_id}")
-            print(f"[DEBUG] 쿼리 결과: {purchase}")
             return None
 
-        print(f"[DEBUG] 구매 기록 찾음: id={purchase.id}, buyer_id={purchase.buyer_id}, product_id={purchase.product_id}")
-
-        # 구매한 워크시트는 이미 구매자 계정에 복사되었으므로 바로 정보 반환
-        worksheet_info = {
+        return {
             "purchase_id": purchase.id,
             "product_id": purchase.product_id,
             "title": purchase.product.title,
             "worksheet_title": purchase.product.worksheet_title,
             "service": purchase.product.original_service,
             "original_worksheet_id": purchase.product.original_worksheet_id,
-            "copied_worksheet_id": purchase.copied_worksheet_id,  # 복사된 워크시트 ID 추가
+            "copied_worksheet_id": purchase.copied_worksheet_id,
             "purchased_at": purchase.purchased_at,
             "access_granted": True
         }
-        print(f"[DEBUG] 워크시트 정보 반환: {worksheet_info}")
-        return worksheet_info

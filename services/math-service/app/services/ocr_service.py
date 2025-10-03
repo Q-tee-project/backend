@@ -13,7 +13,7 @@ try:
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
-    print("⚠️ PIL/Pillow not available - image preprocessing disabled")
+    
 
 try:
     import numpy as np
@@ -21,7 +21,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    print("⚠️ OpenCV/NumPy not available - advanced preprocessing disabled")
+    
 
 
 class OCRService:

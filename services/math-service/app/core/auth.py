@@ -1,66 +1,41 @@
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-from jose import JWTError, jwt
+from typing import Dict, Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 import os
 import httpx
 
-from ..database import get_db
-
-SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "qt_project_super_secret_key_for_jwt_tokens_change_in_production")
-ALGORITHM = "HS256"
-
 security = HTTPBearer()
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Dict[str, Any]:
-    """JWT 토큰에서 현재 사용자 정보를 추출"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
+    """Auth Service를 통해 JWT 토큰 검증 및 사용자 정보 추출"""
     try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        user_type: str = payload.get("type")
-
-        if username is None or user_type is None:
-            raise credentials_exception
-
-    except JWTError as e:
-        raise credentials_exception
-
-    # Auth service에서 사용자 정보 가져오기
-    try:
-        auth_url = f"http://auth-service:8000/api/auth/{user_type}/me"
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                auth_url,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0
+            response = await client.post(
+                f"{AUTH_SERVICE_URL}/api/auth/verify-token",
+                headers={"Authorization": f"Bearer {credentials.credentials}"},
+                timeout=5.0
             )
-
-            if response.status_code == 200:
-                user_info = response.json()
-                return {
-                    "id": user_info["id"],
-                    "username": user_info["username"],
-                    "name": user_info["name"],
-                    "user_type": user_type
-                }
-            else:
-                raise credentials_exception
-
-    except Exception as e:
-        raise credentials_exception
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable"
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable"
+        )
 
 
 def verify_teacher_permission(current_user: Dict[str, Any]) -> Dict[str, Any]:
