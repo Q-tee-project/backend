@@ -283,3 +283,31 @@ async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get
     # draft와 deployed 모든 과제를 반환
     assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id).all()
     return assignments
+
+@router.delete("/{assignment_id}")
+async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    """과제 삭제 (관련 deployment, session, answers 포함)"""
+    from ..models.math_generation import Assignment, AssignmentDeployment, TestSession, TestAnswer
+
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # 해당 과제의 모든 세션 조회
+    sessions = db.query(TestSession).filter(TestSession.assignment_id == assignment_id).all()
+
+    # 각 세션의 답변들 삭제
+    for session in sessions:
+        db.query(TestAnswer).filter(TestAnswer.session_id == session.session_id).delete()
+
+    # 관련 test sessions 삭제
+    db.query(TestSession).filter(TestSession.assignment_id == assignment_id).delete()
+
+    # 관련 deployments 삭제
+    db.query(AssignmentDeployment).filter(AssignmentDeployment.assignment_id == assignment_id).delete()
+
+    # 과제 삭제
+    db.delete(assignment)
+    db.commit()
+
+    return {"message": "Assignment deleted successfully", "assignment_id": assignment_id}

@@ -657,3 +657,24 @@ async def get_assignment_results(assignment_id: int, db: Session = Depends(get_d
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"과제 결과 조회 중 오류 발생: {str(e)}"
         )
+
+@router.delete("/{assignment_id}")
+async def delete_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db)
+):
+    """과제 삭제 (관련 deployment 포함)"""
+    from ..models.assignment import AssignmentDeployment
+
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # 관련 deployments 삭제
+    db.query(AssignmentDeployment).filter(AssignmentDeployment.assignment_id == assignment_id).delete()
+
+    # 과제 삭제 (grading results는 워크시트와 연결되어 있으므로 유지)
+    db.delete(assignment)
+    db.commit()
+
+    return {"message": "Assignment deleted successfully", "assignment_id": assignment_id}
