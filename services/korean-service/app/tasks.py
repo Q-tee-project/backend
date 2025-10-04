@@ -449,6 +449,19 @@ def regenerate_korean_problem_task(self, problem_id: int, requirements: str, cur
         db.commit()
         db.refresh(problem)
 
+        # 문제 재생성 완료 알림 전송
+        from .utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+        safe_send_notification(
+            send_problem_regeneration_notification,
+            teacher_id=worksheet.teacher_id,
+            task_id=task_id,
+            subject="korean",
+            worksheet_id=worksheet.id,
+            worksheet_title=worksheet.title,
+            problem_indices=[problem.sequence_order],
+            success=True
+        )
+
         # 결과 데이터 구성
         result = {
             "message": f"{problem.sequence_order}번 문제가 성공적으로 재생성되었습니다.",

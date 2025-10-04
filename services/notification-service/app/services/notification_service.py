@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from .redis_client import redis_client
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class NotificationService:
             "type": notif_type,
             "id": notif_id,
             "data": data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "read": False
         }
 
@@ -96,9 +96,9 @@ class NotificationService:
                 "assignment_title": data['assignment_title'],
                 "student_id": data['student_id'],
                 "student_name": data['student_name'],
-                "classroom_id": data['classroom_id'],
-                "classroom_name": data['classroom_name'],
-                "subject": data['subject']
+                "class_id": data['class_id'],
+                "class_name": data['class_name'],
+                "submitted_at": data['submitted_at']
             }
         )
         return self._send_notification(data['receiver_type'], data['receiver_id'], notification)
@@ -111,11 +111,8 @@ class NotificationService:
             {
                 "assignment_id": data['assignment_id'],
                 "assignment_title": data['assignment_title'],
-                "teacher_id": data['teacher_id'],
-                "teacher_name": data['teacher_name'],
-                "classroom_id": data['classroom_id'],
-                "classroom_name": data['classroom_name'],
-                "subject": data['subject'],
+                "class_id": data['class_id'],
+                "class_name": data['class_name'],
                 "due_date": data.get('due_date')
             }
         )
@@ -125,14 +122,13 @@ class NotificationService:
         """클래스 가입 요청 알림 (선생님이 받음)"""
         notification = self._create_notification(
             "class_join_request",
-            f"class_join_{data['classroom_id']}_{data['student_id']}_{int(datetime.now().timestamp())}",
+            f"class_join_{data['class_id']}_{data['student_id']}_{int(datetime.now().timestamp())}",
             {
                 "student_id": data['student_id'],
                 "student_name": data['student_name'],
-                "student_grade": data['student_grade'],
-                "student_school_level": data['student_school_level'],
-                "classroom_id": data['classroom_id'],
-                "classroom_name": data['classroom_name']
+                "class_id": data['class_id'],
+                "class_name": data['class_name'],
+                "message": data.get('message')
             }
         )
         return self._send_notification(data['receiver_type'], data['receiver_id'], notification)
@@ -141,11 +137,10 @@ class NotificationService:
         """클래스 승인 알림 (학생이 받음)"""
         notification = self._create_notification(
             "class_approved",
-            f"class_approved_{data['classroom_id']}_{int(datetime.now().timestamp())}",
+            f"class_approved_{data['class_id']}_{int(datetime.now().timestamp())}",
             {
-                "classroom_id": data['classroom_id'],
-                "classroom_name": data['classroom_name'],
-                "teacher_id": data['teacher_id'],
+                "class_id": data['class_id'],
+                "class_name": data['class_name'],
                 "teacher_name": data['teacher_name']
             }
         )
@@ -159,13 +154,8 @@ class NotificationService:
             {
                 "assignment_id": data['assignment_id'],
                 "assignment_title": data['assignment_title'],
-                "teacher_id": data['teacher_id'],
-                "teacher_name": data['teacher_name'],
-                "classroom_id": data['classroom_id'],
-                "classroom_name": data['classroom_name'],
-                "subject": data['subject'],
-                "old_score": data.get('old_score'),
-                "new_score": data['new_score']
+                "score": data['score'],
+                "feedback": data.get('feedback')
             }
         )
         return self._send_notification(data['receiver_type'], data['receiver_id'], notification)
@@ -180,7 +170,7 @@ class NotificationService:
                 "product_title": data['product_title'],
                 "buyer_id": data['buyer_id'],
                 "buyer_name": data['buyer_name'],
-                "price": data['price']
+                "amount": data['amount']
             }
         )
         return self._send_notification(data['receiver_type'], data['receiver_id'], notification)
@@ -193,10 +183,7 @@ class NotificationService:
             {
                 "product_id": data['product_id'],
                 "product_title": data['product_title'],
-                "author_id": data['author_id'],
-                "author_name": data['author_name'],
-                "subject": data['subject'],
-                "price": data['price']
+                "seller_name": data['seller_name']
             }
         )
         return self._send_notification(data['receiver_type'], data['receiver_id'], notification)

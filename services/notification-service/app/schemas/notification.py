@@ -59,48 +59,38 @@ class AssignmentSubmittedNotificationRequest(BaseNotificationRequest):
     assignment_title: str
     student_id: int
     student_name: str
-    classroom_id: int
-    classroom_name: str
-    subject: Literal["math", "korean", "english"]
+    class_id: int
+    class_name: str
+    submitted_at: str
 
 # 과제 배포 알림 (학생이 받음)
 class AssignmentDeployedNotificationRequest(BaseNotificationRequest):
     assignment_id: int
     assignment_title: str
-    teacher_id: int
-    teacher_name: str
-    classroom_id: int
-    classroom_name: str
-    subject: Literal["math", "korean", "english"]
+    class_id: int
+    class_name: str
     due_date: Optional[str] = None
 
 # 클래스 가입 요청 알림 (선생님이 받음)
 class ClassJoinRequestNotificationRequest(BaseNotificationRequest):
     student_id: int
     student_name: str
-    student_grade: int
-    student_school_level: Literal["middle", "high"]
-    classroom_id: int
-    classroom_name: str
+    class_id: int
+    class_name: str
+    message: Optional[str] = None
 
 # 클래스 승인 알림 (학생이 받음)
 class ClassApprovedNotificationRequest(BaseNotificationRequest):
-    classroom_id: int
-    classroom_name: str
-    teacher_id: int
+    class_id: int
+    class_name: str
     teacher_name: str
 
 # 채점 수정 알림 (학생이 받음)
 class GradingUpdatedNotificationRequest(BaseNotificationRequest):
     assignment_id: int
     assignment_title: str
-    teacher_id: int
-    teacher_name: str
-    classroom_id: int
-    classroom_name: str
-    subject: Literal["math", "korean", "english"]
-    old_score: Optional[float] = None
-    new_score: float
+    score: float
+    feedback: Optional[str] = None
 
 # 마켓 판매 알림 (판매자가 받음)
 class MarketSaleNotificationRequest(BaseNotificationRequest):
@@ -108,16 +98,13 @@ class MarketSaleNotificationRequest(BaseNotificationRequest):
     product_title: str
     buyer_id: int
     buyer_name: str
-    price: int
+    amount: int
 
 # 마켓 신상품 알림 (관심있는 사용자가 받음)
 class MarketNewProductNotificationRequest(BaseNotificationRequest):
     product_id: int
     product_title: str
-    author_id: int
-    author_name: str
-    subject: Literal["math", "korean", "english"]
-    price: int
+    seller_name: str
 
 # 대량 알림 요청
 class BulkNotificationRequest(BaseModel):

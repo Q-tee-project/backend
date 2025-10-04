@@ -60,6 +60,9 @@ async def send_problem_regeneration_notification(
 ) -> bool:
     """문제 재생성 완료/실패 알림 전송"""
     try:
+        # problem_indices 리스트의 첫 번째 값을 problem_number로 사용
+        problem_number = problem_indices[0] if problem_indices else 0
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{NOTIFICATION_SERVICE_URL}/api/notifications/problem/regeneration",
@@ -70,14 +73,14 @@ async def send_problem_regeneration_notification(
                     "subject": subject,
                     "worksheet_id": worksheet_id,
                     "worksheet_title": worksheet_title,
-                    "problem_indices": problem_indices,
+                    "problem_number": problem_number,
                     "success": success,
                     "error_message": error_message
                 },
                 timeout=5.0
             )
             if response.status_code == 200:
-                print(f"✅ 문제 재생성 알림 전송 성공: teacher_id={teacher_id}, worksheet_id={worksheet_id}")
+                print(f"✅ 문제 재생성 알림 전송 성공: teacher_id={teacher_id}, worksheet_id={worksheet_id}, problem_number={problem_number}")
                 return True
             else:
                 print(f"⚠️ 문제 재생성 알림 전송 실패: status={response.status_code}")
