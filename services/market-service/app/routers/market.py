@@ -101,6 +101,25 @@ async def create_product(
             seller_id=current_user["id"],
             seller_name=current_user["name"]
         )
+        
+        # 5. 신상품 알림 전송 (팔로워 기능이 구현되면 활성화)
+        # TODO: 판매자를 팔로우하는 사용자들에게 알림 전송
+        # from ..utils.notification_helper import send_market_new_product_notification
+        # followers = await get_seller_followers(db, current_user["id"])
+        # for follower in followers:
+        #     try:
+        #         await send_market_new_product_notification(
+        #             receiver_id=follower.id,
+        #             receiver_type=follower.type,
+        #             seller_id=current_user["id"],
+        #             seller_name=current_user["name"],
+        #             product_id=product.id,
+        #             product_title=product.title,
+        #             price=product.price
+        #         )
+        #     except Exception as e:
+        #         print(f"⚠️ 알림 전송 실패: {e}")
+        
         return product
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -244,6 +263,22 @@ async def purchase_with_points(
             buyer_name=current_user["name"],
             product_id=purchase_data.product_id
         )
+        
+        # 5. 판매자에게 판매 알림 전송
+        from ..utils.notification_helper import send_market_sale_notification
+        try:
+            await send_market_sale_notification(
+                seller_id=product.seller_id,
+                seller_type=product.seller_type,
+                buyer_id=current_user["id"],
+                buyer_name=current_user["name"],
+                product_id=product.id,
+                product_title=product.title,
+                amount=product.price
+            )
+        except Exception as e:
+            print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+        
         return purchase_result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

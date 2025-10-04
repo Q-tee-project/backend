@@ -141,6 +141,26 @@ async def submit_test(
 
     db.commit()
 
+    # 6. 과제 제출 알림 전송 (선생님에게)
+    from ..models.worksheet import Worksheet
+    from ..utils.notification_helper import send_assignment_submitted_notification
+    
+    worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
+    if worksheet and deployment:
+        try:
+            await send_assignment_submitted_notification(
+                teacher_id=worksheet.teacher_id,
+                student_id=current_user["user_id"],
+                student_name=current_user.get("name", f"학생{current_user['user_id']}"),
+                class_id=deployment.classroom_id,
+                class_name=f"클래스 {deployment.classroom_id}",  # TODO: 실제 클래스명 조회
+                assignment_id=assignment.id,
+                assignment_title=assignment.title,
+                submitted_at=session.submitted_at.isoformat()
+            )
+        except Exception as e:
+            print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
     return TestSubmissionResponse(
         session_id=session_id,
         submitted_at=session.submitted_at.isoformat(),

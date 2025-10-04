@@ -97,6 +97,20 @@ async def create_join_request_endpoint(
             detail="Join request already exists"
         )
     
+    # 클래스 가입 요청 알림 전송
+    from ..utils.notification_helper import send_class_join_request_notification
+    try:
+        await send_class_join_request_notification(
+            teacher_id=classroom.teacher_id,
+            student_id=current_student.id,
+            student_name=current_student.name,
+            class_id=classroom.id,
+            class_name=classroom.name,
+            message=request_data.message if hasattr(request_data, 'message') else None
+        )
+    except Exception as e:
+        print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+    
     return join_request
 
 @router.get("/join-requests/pending", response_model=List[StudentJoinRequestResponse])
@@ -127,6 +141,26 @@ async def approve_join_request(
         )
     
     updated_request = approve_or_reject_join_request(db, request_id, approval_data.status)
+    
+    # 승인된 경우에만 학생에게 알림 전송
+    if approval_data.status == "approved":
+        from ..utils.notification_helper import send_class_approved_notification
+        from ..models.student import Student
+        
+        classroom = db.query(ClassRoom).filter(ClassRoom.id == join_request.classroom_id).first()
+        student = db.query(Student).filter(Student.id == join_request.student_id).first()
+        
+        if classroom and student:
+            try:
+                await send_class_approved_notification(
+                    student_id=student.id,
+                    class_id=classroom.id,
+                    class_name=classroom.name,
+                    teacher_name=current_teacher.name
+                )
+            except Exception as e:
+                print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+    
     return updated_request
 
 @router.post("/{classroom_id}/students/register", response_model=StudentResponse)

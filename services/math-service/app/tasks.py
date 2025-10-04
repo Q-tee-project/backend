@@ -94,6 +94,19 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
             db.commit()
             print(f"✅ 워크시트 {worksheet.id}와 문제 {len(problems_to_save)}개 저장 완료.")
 
+            # 문제 생성 완료 알림 전송
+            from .utils.notification_helper import safe_send_notification, send_problem_generation_notification
+            safe_send_notification(
+                send_problem_generation_notification,
+                teacher_id=user_id,
+                task_id=task_id,
+                subject="math",
+                worksheet_id=worksheet.id,
+                worksheet_title=worksheet_title,
+                problem_count=len(problems_to_save),
+                success=True
+            )
+
         except Exception as e:
             db.rollback()
             worksheet.status = WorksheetStatus.FAILED
@@ -112,9 +125,23 @@ def generate_math_problems_task(self, request_data: dict, user_id: int):
                 worksheet.status = WorksheetStatus.FAILED
                 worksheet.error_message = str(e)
                 db.commit()
+
+                # 문제 생성 실패 알림 전송
+                from .utils.notification_helper import safe_send_notification, send_problem_generation_notification
+                safe_send_notification(
+                    send_problem_generation_notification,
+                    teacher_id=user_id,
+                    task_id=task_id,
+                    subject="math",
+                    worksheet_id=worksheet.id,
+                    worksheet_title=worksheet_title if worksheet_title else "문제지",
+                    problem_count=0,
+                    success=False,
+                    error_message=str(e)
+                )
             except Exception as update_err:
                 print(f"❌ 실패 상태 업데이트 중 추가 오류: {update_err}")
-        
+
         self.update_state(state='FAILURE', meta={'error': str(e), 'status': '문제 생성 실패'})
         raise
 
@@ -230,10 +257,39 @@ def regenerate_single_problem_task(self, problem_id: int, requirements: str, cur
         db.commit()
         db.refresh(problem)
 
+        # 문제 재생성 완료 알림 전송
+        from .utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+        safe_send_notification(
+            send_problem_regeneration_notification,
+            teacher_id=worksheet.teacher_id,
+            task_id=task_id,
+            subject="math",
+            worksheet_id=worksheet.id,
+            worksheet_title=worksheet.title,
+            problem_indices=[problem.sequence_order],
+            success=True
+        )
+
         return {"message": f"{problem.sequence_order}번 문제가 성공적으로 재생성되었습니다.", "problem_id": problem_id, **new_problem_data}
 
     except Exception as e:
         print(f"❌ Problem regeneration failed: {str(e)}")
+
+        # 문제 재생성 실패 알림 전송
+        if 'worksheet' in locals() and worksheet:
+            from .utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+            safe_send_notification(
+                send_problem_regeneration_notification,
+                teacher_id=worksheet.teacher_id,
+                task_id=task_id,
+                subject="math",
+                worksheet_id=worksheet.id,
+                worksheet_title=worksheet.title,
+                problem_indices=[problem.sequence_order] if 'problem' in locals() and problem else [],
+                success=False,
+                error_message=str(e)
+            )
+
         self.update_state(state='FAILURE', meta={'error': str(e), 'status': '문제 재생성 실패'})
         raise
     finally:
