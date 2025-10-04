@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 import logging
@@ -113,7 +113,7 @@ async def deploy_assignment(
                 class_name=f"클래스 {deploy_request.classroom_id}",  # TODO: 실제 클래스명 조회
                 assignment_id=assignment.id,
                 assignment_title=assignment.title,
-                due_date=assignment.due_date.isoformat() if assignment.due_date else None
+                due_date=assignment.due_date.isoformat() if hasattr(assignment, 'due_date') and assignment.due_date else None
             )
         except Exception as e:
             print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
@@ -142,6 +142,15 @@ async def get_student_assignments(
     ).all()
     
     return [StudentAssignmentResponse.from_orm(d) for d in deployments]
+
+@router.get("/{assignment_id}/details")
+async def get_assignment_details(
+    assignment_id: int,
+    student_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """학생용 과제 상세 정보 조회 (query param 버전)"""
+    return await get_assignment_detail(assignment_id, student_id, db)
 
 @router.get("/{assignment_id}/student/{student_id}")
 async def get_assignment_detail(

@@ -113,7 +113,7 @@ async def update_grading_session(
             session.status = update_data["status"]
 
         # 선생님이 수정한 경우 teacher_id와 승인 시간 업데이트
-        session.teacher_id = current_teacher["id"]
+        session.teacher_id = current_teacher.get("user_id") or current_teacher.get("id")
         session.approved_at = datetime.now()
 
         # 문제별 정답/오답 수정사항 적용

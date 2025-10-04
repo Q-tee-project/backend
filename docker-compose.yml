@@ -37,6 +37,7 @@ services:
       - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SERVICE_URL=http://auth-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
       - PORT=8000
     ports:
       - "8001:8000"
@@ -44,6 +45,7 @@ services:
       - postgres
       - redis
       - auth-service
+      - notification-service
     volumes:
       - ./services/math-service:/app
     networks:
@@ -109,6 +111,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUTH_SERVICE_URL=http://auth-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
       - PORT=8000
     ports:
       - "8004:8000"
@@ -116,6 +119,7 @@ services:
       - postgres
       - redis
       - auth-service
+      - notification-service
     volumes:
       - ./services/korean-service:/app
     networks:
