@@ -102,23 +102,36 @@ async def create_product(
             seller_name=current_user["name"]
         )
         
-        # 5. 신상품 알림 전송 (팔로워 기능이 구현되면 활성화)
-        # TODO: 판매자를 팔로우하는 사용자들에게 알림 전송
-        # from ..utils.notification_helper import send_market_new_product_notification
-        # followers = await get_seller_followers(db, current_user["id"])
-        # for follower in followers:
-        #     try:
-        #         await send_market_new_product_notification(
-        #             receiver_id=follower.id,
-        #             receiver_type=follower.type,
-        #             seller_id=current_user["id"],
-        #             seller_name=current_user["name"],
-        #             product_id=product.id,
-        #             product_title=product.title,
-        #             price=product.price
-        #         )
-        #     except Exception as e:
-        #         print(f"⚠️ 알림 전송 실패: {e}")
+        # 5. 신상품 알림 전송 (모든 선생님에게)
+        from ..utils.notification_helper import send_market_new_product_notification
+        import httpx
+
+        # auth-service에서 모든 선생님 목록 가져오기
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "http://auth-service:8000/api/auth/teachers/all",
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    teachers = response.json()
+                    # 본인을 제외한 모든 선생님에게 알림 전송
+                    for teacher in teachers:
+                        if teacher["id"] != current_user["id"]:
+                            try:
+                                await send_market_new_product_notification(
+                                    receiver_id=teacher["id"],
+                                    receiver_type="teacher",
+                                    seller_id=current_user["id"],
+                                    seller_name=current_user["name"],
+                                    product_id=product.id,
+                                    product_title=product.title,
+                                    price=product.price
+                                )
+                            except Exception as e:
+                                print(f"⚠️ 알림 전송 실패 (teacher_id={teacher['id']}): {e}")
+        except Exception as e:
+            print(f"⚠️ 선생님 목록 조회 실패 (알림 전송 생략): {e}")
         
         return product
     except ValueError as e:
@@ -269,7 +282,7 @@ async def purchase_with_points(
         try:
             await send_market_sale_notification(
                 seller_id=product.seller_id,
-                seller_type=product.seller_type,
+                seller_type="teacher",  # 마켓은 선생님만 판매 가능
                 buyer_id=current_user["id"],
                 buyer_name=current_user["name"],
                 product_id=product.id,

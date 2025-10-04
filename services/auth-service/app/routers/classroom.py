@@ -145,7 +145,7 @@ async def approve_join_request(
     # 승인된 경우에만 학생에게 알림 전송
     if approval_data.status == "approved":
         from ..utils.notification_helper import send_class_approved_notification
-        from ..models.student import Student
+        from ..models.user import Student
         
         classroom = db.query(ClassRoom).filter(ClassRoom.id == join_request.classroom_id).first()
         student = db.query(Student).filter(Student.id == join_request.student_id).first()

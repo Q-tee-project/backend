@@ -162,6 +162,12 @@ async def get_student_by_id(
         )
     return student
 
+@router.get("/teachers/all")
+async def get_all_teachers(db: Session = Depends(get_db)):
+    """모든 활성 선생님 목록 조회 (마켓 알림용)"""
+    teachers = db.query(Teacher).all()
+    return [{"id": t.id, "name": t.name, "email": t.email} for t in teachers]
+
 @router.post("/verify-token")
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
