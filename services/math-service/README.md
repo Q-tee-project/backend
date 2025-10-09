@@ -9,6 +9,7 @@ Math Service는 Gemini 2.5 Pro와 GPT-4o-mini를 활용하여 교육과정 기�
 ### 주요 기능
 
 #### 1. 문제 생성 (Problem Generation)
+
 - **AI 기반 문제 생성**: Gemini 2.5 Pro를 활용한 수학 문제 자동 생성
 - **AI Judge 검증**: GPT-4o-mini를 통한 4가지 기준 검증 (수학정확성, 정답일치, 완결성, 논리성)
 - **교육과정 기반**: 학년/학기/단원/차시별 맞춤 문제 생성
@@ -19,6 +20,7 @@ Math Service는 Gemini 2.5 Pro와 GPT-4o-mini를 활용하여 교육과정 기�
 - **비동기 처리**: Celery를 통한 백그라운드 작업
 
 #### 2. 워크시트 관리 (Worksheet Management)
+
 - **워크시트 생성**: 10개 또는 20개 문제로 구성된 문제지 생성
 - **생성 이력 조회**: 교사별 문제 생성 기록 관리
 - **워크시트 수정/삭제**: 제목, 설정 변경 및 삭제
@@ -26,23 +28,26 @@ Math Service는 Gemini 2.5 Pro와 GPT-4o-mini를 활용하여 교육과정 기�
 - **상태 관리**: draft, processing, completed, failed, published
 
 #### 3. 문제 관리 (Problem Management)
+
 - **문제 수정**: 개별 문제 내용, 정답, 해설 수정
 - **문제 재생성**: AI를 통한 특정 요구사항 기반 문제 재생성
 - **TikZ 지원**: 그래프 문제의 LaTeX 코드 관리
 
-#### 4. AI 채점 (AI Grading)
+#### 4. 채점 관리 (Grading)
+
 - **객관식 자동 채점**: 즉시 정답 비교 및 점수 산출
-- **서술형 AI 채점**: Gemini를 활용한 주관식 답안 분석
 - **OCR 지원**: 손글씨 답안 이미지 텍스트 추출 (Google Vision API)
 - **캔버스 방식**: 문제별 직접 입력 및 OCR 혼합 채점
 - **피드백 제공**: AI 피드백, 잘한 점, 개선점, 키워드 분석
 
 #### 5. 시험 세션 (Test Session)
+
 - **시험 제출**: 학생의 시험 답안 제출
 - **답안 저장**: 개별 문제별 답안 저장
 - **OCR 답안 저장**: 손글씨 이미지 업로드 및 인식
 
 #### 6. 교육과정 (Curriculum)
+
 - **교육과정 구조 조회**: 학년/학기별 단원 및 차시 정보
 - **단원 목록**: 특정 학년/학기의 단원 리스트
 - **차시 목록**: 특정 단원의 차시 리스트
@@ -50,22 +55,27 @@ Math Service는 Gemini 2.5 Pro와 GPT-4o-mini를 활용하여 교육과정 기�
 ### 데이터 모델
 
 #### Worksheet Models
+
 - **Worksheet**: 문제지 정보 (title, school_level, grade, semester, unit_name, chapter_name, problem_count, difficulty_ratio, problem_type_ratio, status, celery_task_id, teacher_id)
 - **WorksheetStatus**: draft, processing, completed, failed, published
 
 #### Problem Models
+
 - **Problem**: 문제 정보 (worksheet_id, sequence_order, problem_type, difficulty, question, choices, correct_answer, explanation, tikz_code, has_diagram, diagram_type)
 
 #### Grading Models
+
 - **GradingSession**: 채점 세션 (worksheet_id, celery_task_id, total_problems, correct_count, total_score, max_possible_score, ocr_text, ocr_results, input_method, graded_by)
 - **ProblemGradingResult**: 문제별 채점 결과 (grading_session_id, problem_id, user_answer, correct_answer, is_correct, score, ai_score, ai_feedback, strengths, improvements)
 
 #### Curriculum Model
+
 - **Curriculum**: 교육과정 정보 (grade, subject, semester, unit_number, unit_name, chapter_number, chapter_name, learning_objectives, keywords, difficulty_levels)
 
 ### API 엔드포인트
 
 #### Worksheets (`/api/worksheets`)
+
 ```
 POST   /generate                    # 문제 생성 (비동기)
 GET    /generation-history          # 생성 이력 조회
@@ -78,12 +88,14 @@ POST   /copy                        # 워크시트 복사
 ```
 
 #### Problems (`/api/problems`)
+
 ```
 PUT    /{problem_id}                # 문제 수정
 POST   /regenerate-async            # 문제 재생성 (비동기)
 ```
 
 #### Grading (`/api/grading`)
+
 ```
 POST   /                            # 워크시트 채점 (이미지 업로드)
 POST   /canvas                      # 워크시트 채점 (캔버스 방식)
@@ -97,6 +109,7 @@ GET    /student/{student_id}/info   # 학생 정보 조회
 ```
 
 #### Test Sessions (`/api/test-sessions`)
+
 ```
 POST   /submit                      # 시험 제출
 POST   /answers/save                # 답안 저장
@@ -104,6 +117,7 @@ POST   /answers/save-ocr            # OCR 답안 저장
 ```
 
 #### Curriculum (`/api/curriculum`)
+
 ```
 GET    /structure                   # 교육과정 구조 조회
 GET    /units                       # 단원 목록 조회
@@ -111,6 +125,7 @@ GET    /chapters                    # 차시 목록 조회
 ```
 
 #### Tasks (`/api/tasks`)
+
 ```
 GET    /{task_id}/status            # Celery 태스크 상태 조회
 GET    /status/{task_id}            # 태스크 상태 조회 (별칭)
@@ -206,18 +221,21 @@ celery -A app.celery_app worker --loglevel=info
 ### 주요 특징
 
 #### TikZ 그래프 생성
+
 - **적용 단원**: "그래프와 비례" (좌표평면, 정비례, 반비례)
 - **자동 생성**: 문제의 60% 이상 그래프 포함
 - **답안 은닉**: 문제에서 묻는 점은 그래프에 표시하지 않음
 - **LaTeX 코드**: 프론트엔드에서 SVG로 렌더링 가능한 TikZ 코드 제공
 
 #### AI Judge 검증 시스템
+
 - **4가지 평가 기준**: 각 1-5점 척도
 - **엄격한 합격 조건**: consistency ≥ 4.0 AND 평균 ≥ 3.5
 - **피드백 기반 재생성**: 불합격 문제의 피드백을 다음 프롬프트에 포함
 - **부분 재생성**: 부족한 개수만큼만 추가 생성
 
 #### 비동기 처리
+
 - **Celery**: Redis를 브로커로 사용한 백그라운드 작업
 - **Task 상태 추적**: task_id로 실시간 상태 조회
 - **에러 핸들링**: 실패 시 error_message 저장
