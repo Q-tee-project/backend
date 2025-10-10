@@ -28,6 +28,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """모든 요청에 대해 JWT 토큰 검증을 수행하는 미들웨어"""
 
     async def dispatch(self, request: Request, call_next):
+        # CORS preflight 요청은 인증을 건너뛰어야 합니다.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # 공개 경로는 인증 건너뛰기
         if self._is_public_path(request.url.path):
             return await call_next(request)

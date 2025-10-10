@@ -62,6 +62,7 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-qt_project_db}
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
+      - AUTH_SERVICE_URL=http://auth-service:8000
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:

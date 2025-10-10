@@ -545,252 +545,286 @@ class PromptGenerator:
 
             # 독해 문제는 지문 생성 포함
             if needs_passage:
-                prompt = f"""당신은 영어 교육 전문가입니다.
+                prompt = f"""You are a Korean English education expert specializing in Korean national curriculum standards.
 
-{school_level} {grade}학년 학생을 위한 독해 문제 1개를 **지문과 함께** 생성해주세요.
+Generate 1 reading comprehension question WITH passage for Korean {school_level} Grade {grade} students.
 
-# 문제 정보
-- 문제 번호: {qid}
-- 영역: {subject}
-- 난이도: {difficulty}
-  - **난이도는 {school_level} {grade}학년 수준 내에서의 상대적 난이도입니다**
-  - 하: 해당 학년에서 기본적이고 쉬운 수준
-  - 중: 해당 학년에서 표준적인 수준
-  - 상: 해당 학년에서 도전적이고 복잡한 수준
-- 형식: {format_type}
-- 지문 ID: {passage_id}
+# Question Information
+- Question ID: {qid}
+- Subject: {subject}
+- Difficulty: {difficulty}
+  Note: Difficulty is RELATIVE to Grade {grade} level within {school_level}
+  - 하 (Low): Basic and easy within this grade
+  - 중 (Medium): Standard for this grade
+  - 상 (High): Challenging and complex within this grade
+- Format: {format_type}
+- Passage ID: {passage_id}
 {reading_types_info}
 
-# 출제 유형
+# Question Types
 {chr(10).join(subject_types_info)}
 
-# 학년별 내용 깊이 가이드라인 (반드시 준수)
-- **어휘 수준**: {depth_guide['vocabulary_level']}
-- **문장 구조**: {depth_guide['sentence_structure']}
-- **내용 추상도**: {depth_guide['abstraction']}
-- **정보 밀도**: {depth_guide['information_density']}
-- **인지 수준**: {depth_guide['cognitive_level']}
-- **접근 방식**: {depth_guide['content_approach']}
+# Grade-Level Depth Guidelines (Strictly Follow)
+- Vocabulary Level: {depth_guide['vocabulary_level']}
+- Sentence Structure: {depth_guide['sentence_structure']}
+- Abstraction Level: {depth_guide['abstraction']}
+- Information Density: {depth_guide['information_density']}
+- Cognitive Level: {depth_guide['cognitive_level']}
+- Content Approach: {depth_guide['content_approach']}
 
-# 지문 생성 가이드
+# Passage Generation Guidelines
 
-## 지문 요구사항:
-- 단어 수: {word_count_range} (학년 수준에 맞게 엄격히 준수)
-- CEFR 레벨: {cefr_level} (학년 기준선)
-- 난이도: {difficulty}에 맞는 어휘와 문장 구조 (위 난이도 설명 참고)
-- **출제 유형, 소재를 고려하고 적합한 지문 유형을 선택하여 최적화된 내용과 구조로 작성**
-- **위 깊이 가이드라인을 엄격히 준수하여 학년 수준에 맞는 내용 작성**
-- **소재와 지문 유형을 다양하게 섞어서 작성**
+## Passage Requirements:
+- Word count: {word_count_range} (strictly follow for grade level)
+- CEFR level: {cefr_level} (grade baseline)
+- Difficulty: Match vocabulary and sentence structure to {difficulty} (see above)
+- Select appropriate passage type and optimize content/structure for question type
+- Strictly follow depth guidelines above
+- Mix various topics and passage types
 
-## 글의 소재 (모든 학년 공통 - 깊이만 조절):
+## Topic Categories (Common for all grades - adjust depth only):
 {topic_categories_str}
 
-**중요**: 위 소재는 모든 학년이 공통으로 사용하되, 학년별 깊이 가이드라인에 따라 내용의 복잡도와 추상도를 조절하세요.
-- 중1-2: 구체적 사례, 일상 경험 중심
-- 중3: 원인-결과, 비교-대조 중심
-- 고1: 사회적 맥락, 다양한 관점 소개
-- 고2-3: 추상적 개념, 철학적 사고, 복합적 논점
+Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines:
+- Grades 7-8 (Middle 1-2): Concrete examples, daily experiences
+- Grade 9 (Middle 3): Cause-effect, compare-contrast
+- Grade 10 (High 1): Social context, diverse perspectives
+- Grades 11-12 (High 2-3): Abstract concepts, philosophical thinking, complex arguments
 
-## 지문 유형별 JSON 구조:
+## Passage Type JSON Structures:
 
-**1. article (일반 글)**:
- - 설명 : 설명문, 논설문, 기사, 연구 보고서, 블로그 포스트, 책의 한 부분 등 (가장 기본적인 '만능' 유형)
-반드시 passage_content안에 {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}} 형식 사용
+1. article (General text):
+   Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts (most versatile type)
+   Required format: passage_content must contain {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}}
 
-**2. informational (정보성 양식)**:
- - 설명 : 광고, 안내문, 포스터, 일정표, 메뉴판, 영수증 등
-반드시 passage_content안에 {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}} 형식 사용
+2. informational (Informational format):
+   Description: Advertisements, notices, posters, schedules, menus, receipts
+   Required format: passage_content must contain {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}}
 
-**3. dialogue (대화문)**:
- - 설명 : 문자 메시지, 채팅, 인터뷰, 연극 대본 등
-반드시 passage_content안에 {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}} 형식 사용
+3. dialogue (Conversation):
+   Description: Text messages, chat, interviews, play scripts
+   Required format: passage_content must contain {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}}
 
-**4. correspondence (서신/소통)**:
- - 설명 : 이메일, 편지, 메모, 사내 공지 등
-반드시 passage_content안에 {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}} 형식 사용
+4. correspondence (Letters/Communication):
+   Description: Emails, letters, memos, internal notices
+   Required format: passage_content must contain {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
 
-**5. review (리뷰/후기)**:
- - 설명 : 상품 후기, 영화 평점, 식당 리뷰 등
-반드시 passage_content안에 {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}} 형식 사용
+5. review (Reviews/Feedback):
+   Description: Product reviews, movie ratings, restaurant reviews
+   Required format: passage_content must contain {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
 
-## 지문 작성 시 주의사항:
-- passage_type: article, dialogue, correspondence, informational, review 중 선택
-- passage_content: 해당 유형에 맞는 JSON 구조 사용 (반드시 passage_content와 유형 별 content를 구분해서 사용, 무조건 content 키 사용 혹은 metadata 키 사용 생략 금지)
-- passage_content: 학생용 (빈칸/보기 포함 가능), **출제 유형에 최적화**
-  - 빈칸: `<u>___</u>` 형식 사용
-  - 밑줄: `<u>텍스트</u>` 형식 사용
-  - 강조: `<strong>텍스트</strong>` 형식 사용
-- original_content: passage_content와 동일한 구조의 완전한 원본 (빈칸 없음, HTML 태그 없음)
-- korean_translation: passage_content와 동일한 구조의 original_content의 자연스러운 한글 번역
+## Important Notes for Passage Writing:
+- passage_type: Choose one from: article, dialogue, correspondence, informational, review
+- passage_content: Use JSON structure matching the type (must distinguish between passage_content and type-specific content, never omit content key or metadata key)
+- passage_content: For students (may include blanks/underlines), optimized for question type
+  - Blank: Use `<u>___</u>` format
+  - Underline: Use `<u>text</u>` format
+  - Emphasis: Use `<strong>text</strong>` format
+- original_content: Complete original with same structure as passage_content (no blanks, no HTML tags)
+- korean_translation: Natural Korean translation of original_content with same structure
 
-## 지문(passage) vs 예문(example) 구분
+## Passage vs Example Distinction
 
-### 지문(passage): 독해 문제의 본문 (필수)
-- **긴 글** (50단어 이상의 읽기 자료)
-- article, dialogue, correspondence, informational, review 등
-- JSON 구조로 작성
+### Passage: Main reading material for comprehension (Required)
+- Long text (50+ words of reading material)
+- Types: article, dialogue, correspondence, informational, review
+- Written in JSON structure
 
-### 예문(example): 지문, 질문, 선택지와 별개의 추가적인 보기
-- **반드시 단순 문자열** (no array, no object)
-- **문제 유형에 따라 필요한 경우 추가, 필요없으면 null로 설정**
-- example_content: 학생용 보기 (빈칸/보기 포함 가능), **출제 유형에 최적화**
-  - 빈칸: `<u>___</u>` 형식 사용
-  - 밑줄: `<u>텍스트</u>` 형식 사용
-  - 강조: `<strong>텍스트</strong>` 형식 사용
-- example_original_content: 완전한 원본 보기
-- example_korean_translation: example_original_content의 한국어 번역
+### Example: Additional reference separate from passage/question/choices
+- MUST be simple string only (no array, no object)
+- Add only when question type requires it, otherwise set to null
+- example_content: For students (may include blanks/underlines), optimized for question type
+  - Blank: Use `<u>___</u>` format
+  - Underline: Use `<u>text</u>` format
+  - Emphasis: Use `<strong>text</strong>` format
+- example_original_content: Complete original version
+- example_korean_translation: Korean translation of example_original_content
 
-**지문 내용 중복 금지**:
-- 지문에 있는 문장을 example에 다시 넣기
-- 지문의 일부를 떼어서 example에 넣기
+AVOID DUPLICATION:
+- Do NOT copy sentences from passage to example
+- Do NOT extract parts of passage into example
 
-**지시문(question_text) 작성 시 주의사항**:
-- 지시문은 순수한 한국어 지시문만
-- 지시문은 영어 예문이나 보기, 선택지, 삽입할 문장 등을 포함하지 않음
-- 부정 표현은 밑줄 표시 (ex, <u>does not</u> | ~~옳지 <u>않은</u>~~ 것을)
+IMPORTANT NOTES for question_text:
+- question_text must be pure Korean instruction only
+- Do NOT include English examples, choices, or sentences in question_text
+- Underline negative expressions (ex: <u>does not</u> in English | <u>않은</u> in Korean)
 
-# 응답 형식 (JSON)
+# OUTPUT LANGUAGE REQUIREMENTS - CRITICAL
+
+You MUST generate content in TWO languages according to these strict rules:
+
+ENGLISH Content (Student reading material):
+- passage_content: Write in ENGLISH
+- example_content: Write in ENGLISH (if needed)
+- question_choices: Write in ENGLISH
+
+KOREAN Content (Instructions and explanations):
+- question_text: Write in KOREAN (Korean instruction for students)
+  Example: "위 글의 주제로 가장 적절한 것은?"
+- question_detail_type: Write in KOREAN (Korean question type name)
+  Example: "주제 파악"
+- explanation: Write in KOREAN (Korean explanation)
+  Example: "정답은 2번입니다. 지문에서..."
+- learning_point: Write in KOREAN (Korean learning point)
+  Example: "주제문은 글의 첫 문장이나 마지막 문장에 위치합니다."
+- korean_translation: Write in KOREAN (Korean translation of passage)
+
+# Response Format (JSON)
 {{
     "passage": {{
         "passage_id": {passage_id},
-        "passage_type": "article|dialogue|correspondence|informational|review 중 선택",
-        "passage_content": {{...위 JSON 구조 참고...}},
-        "original_content": {{...위 JSON 구조 참고..."}},
-        "korean_translation": {{...위 JSON 구조 참고...}}
+        "passage_type": "Choose one: article, dialogue, correspondence, informational, review",
+        "passage_content": {{...see JSON structure above...}},
+        "original_content": {{...see JSON structure above...}},
+        "korean_translation": {{...see JSON structure above...}}
     }},
     "question": {{
         "question_id": {qid},
         "question_type": "{format_type}",
         "question_subject": "{subject}",
-        "question_detail_type": "세부 유형명",
+        "question_detail_type": "Korean question type name",
         "question_difficulty": "{difficulty}",
-        "question_text": "순수한 한국어 지시문만",
-        "example_content": "필요시 추가 예문 (예: 보기, 선택지, 삽입할 문장 등), 불필요하면 null",
-        "example_original_content": "필요시 완전한 원본 예문, 불필요하면 null",
-        "example_korean_translation": "필요시 예문 한글 번역, 불필요하면 null",
+        "question_text": "Pure Korean instruction only",
+        "example_content": "English example if needed, null otherwise",
+        "example_original_content": "Complete original English example if needed, null otherwise",
+        "example_korean_translation": "Korean translation if example exists, null otherwise",
         "question_passage_id": {passage_id},
-        "question_choices": ["선택지1", "선택지2", ...],
-        "correct_answer": 정답인덱스(객관식) | "정답텍스트"(주관식),
-        "explanation": "정답 해설 (한국어)",
-        "learning_point": "핵심 학습 포인트"
+        "question_choices": ["Choice 1 in English", "Choice 2 in English", ...],
+        "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+        "explanation": "Korean explanation",
+        "learning_point": "Korean learning point"
     }}
 }}
 
-**중요 규칙**:
-- 반드시 passage와 question을 모두 포함한 JSON 응답
-- example 필드는 출제 유형에 따라 필요시 작성 (예: 문장 삽입, 빈칸에 들어갈 보기, 어법 선택 등)
-- 단순한 주제/제목/내용 파악 문제는 example 필드를 null로 설정
-- question_text는 "위 글의 주제로 가장 적절한 것은?" 같은 형식
-- 다른 텍스트나 설명 없이 JSON만 응답
+CRITICAL RULES:
+- Response MUST include both passage and question in JSON
+- example fields: Write only when question type requires (e.g. sentence insertion, fill-in-the-blank options)
+- Simple topic/title/content questions: Set example fields to null
+- question_text format: Must be in Korean like "위 글의 주제로 가장 적절한 것은?"
+- Return ONLY JSON, no other text or explanation
 """
             else:
                 # 문법/어휘 문제 (지문 없음)
-                prompt = f"""당신은 영어 교육 전문가입니다.
+                prompt = f"""You are a Korean English education expert specializing in Korean national curriculum standards.
 
-{school_level} {grade}학년 학생을 위한 {subject} 문제 1개를 생성해주세요.
+Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 
-# 문제 정보
-- 문제 번호: {qid}
-- 영역: {subject}
-- 난이도: {difficulty}
-  - **난이도는 {school_level} {grade}학년 수준 내에서의 상대적 난이도입니다**
-  - 하: 해당 학년에서 기본적이고 쉬운 수준
-  - 중: 해당 학년에서 표준적인 수준
-  - 상: 해당 학년에서 도전적이고 복잡한 수준
-- 형식: {format_type}
-- CEFR 레벨: {cefr_level} (학년 기준선)
+# Question Information
+- Question ID: {qid}
+- Subject: {subject}
+- Difficulty: {difficulty}
+  Note: Difficulty is RELATIVE to Grade {grade} level within {school_level}
+  - 하 (Low): Basic and easy within this grade
+  - 중 (Medium): Standard for this grade
+  - 상 (High): Challenging and complex within this grade
+- Format: {format_type}
+- CEFR level: {cefr_level} (grade baseline)
 
-# 출제 유형
+# Question Types
 {chr(10).join(subject_types_info)}
 
-# 학년별 내용 깊이 가이드라인 (반드시 준수)
-- **어휘 수준**: {depth_guide['vocabulary_level']}
-- **문장 구조**: {depth_guide['sentence_structure']}
-- **내용 추상도**: {depth_guide['abstraction']}
-- **정보 밀도**: {depth_guide['information_density']}
-- **인지 수준**: {depth_guide['cognitive_level']}
-- **접근 방식**: {depth_guide['content_approach']}
+# Grade-Level Depth Guidelines (Strictly Follow)
+- Vocabulary Level: {depth_guide['vocabulary_level']}
+- Sentence Structure: {depth_guide['sentence_structure']}
+- Abstraction Level: {depth_guide['abstraction']}
+- Information Density: {depth_guide['information_density']}
+- Cognitive Level: {depth_guide['cognitive_level']}
+- Content Approach: {depth_guide['content_approach']}
 
-# 예문 및 선택지 작성 가이드
+# Example Sentence and Choices Guidelines
 
-## 글의 소재 (모든 학년 공통 - 깊이만 조절):
+## Topic Categories (Common for all grades - adjust depth only):
 {topic_categories_str}
 
-**중요**: 위 소재는 모든 학년이 공통으로 사용하되, 학년별 깊이 가이드라인에 따라 내용의 복잡도와 추상도를 조절하세요.
+Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines.
 
-## 문장 구조 및 어휘:
-- CEFR {cefr_level} 수준에 맞는 문장 구조와 어휘 사용
-- 예문은 {school_level} {grade}학년이 이해 가능한 길이와 복잡도로 작성
-- **위 깊이 가이드라인을 엄격히 준수하여 학년 수준에 맞는 예문 작성**
+## Sentence Structure and Vocabulary:
+- Use sentence structure and vocabulary matching CEFR {cefr_level} level
+- Example sentences should be appropriate length and complexity for {school_level} Grade {grade}
+- Strictly follow depth guidelines above for grade-appropriate examples
 
-### 예문(example): 지문, 질문, 선택지와 별개의 추가적인 보기
-- **반드시 단순 문자열** (no array, no object)
-- **문제 유형에 따라 필요한 경우 추가, 필요없으면 null로 설정**
-- example_content: 학생용 보기 (빈칸/보기 포함 가능), **출제 유형에 최적화**
-  - 빈칸: `<u>___</u>` 형식 사용
-  - 밑줄: `<u>텍스트</u>` 형식 사용
-  - 강조: `<strong>텍스트</strong>` 형식 사용
-- example_original_content: 완전한 원본 보기
-- example_korean_translation: example_original_content의 한국어 번역
+### Example: Additional reference separate from passage/question/choices
+- MUST be simple string only (no array, no object)
+- Add only when question type requires it, otherwise set to null
+- example_content: For students (may include blanks/underlines), optimized for question type
+  - Blank: Use `<u>___</u>` format
+  - Underline: Use `<u>text</u>` format
+  - Emphasis: Use `<strong>text</strong>` format
+- example_original_content: Complete original version
+- example_korean_translation: Korean translation of example_original_content
 
-**지시문(question_text) 작성 시 주의사항**:
-- 지시문은 순수한 한국어 지시문만
-- 지시문은 영어 예문이나 보기, 선택지, 삽입할 문장 등을 포함하지 않음
-- 부정 표현은 밑줄 표시 (ex, <u>does not</u> | ~~옳지 <u>않은</u>~~ 것을 등)
+IMPORTANT NOTES for question_text:
+- question_text must be pure Korean instruction only
+- Do NOT include English examples, choices, or sentences in question_text
+- Underline negative expressions (ex: <u>does not</u> in English | <u>않은</u> in Korean)
 
-**올바른 예시들:**
-1. **빈칸 채우기**:
-   ```
-   example_content: "She <u>___</u> to school every day."
-   example_original_content: "She goes to school every day."
-   example_korean_translation: "그녀는 매일 학교에 간다."
-   question_text: "다음 빈칸에 알맞은 것을 고르시오."
-   question_choices: ["go", "goes", "went", "gone"]
-   ```
+CORRECT EXAMPLES:
 
-2. **밑줄 친 부분 고르기**:
-   ```
-   example_content: "I have <u>seen</u> that movie before."
-   example_original_content: "I have seen that movie before."
-   example_korean_translation: "나는 전에 그 영화를 본 적이 있다."
-   question_text: "다음 밑줄 친 부분이 문법적으로 올바른지 판단하시오."
-   ```
+Example 1 - Fill in the blank:
+example_content: "She <u>___</u> to school every day."
+example_original_content: "She goes to school every day."
+example_korean_translation: "그녀는 매일 학교에 간다."
+question_text: "다음 빈칸에 알맞은 것을 고르시오."
+question_choices: ["go", "goes", "went", "gone"]
 
-3. **어휘 의미 파악**:
-   ```
-   example_content: "The book was very <u>interesting</u>."
-   example_original_content: "The book was very interesting."
-   example_korean_translation: "그 책은 매우 흥미로웠다."
-   question_text: "다음 밑줄 친 단어의 의미로 가장 적절한 것은?"
-   question_choices: ["지루한", "흥미로운", "어려운", "쉬운"]
-   ```
+Example 2 - Underlined grammar:
+example_content: "I have <u>seen</u> that movie before."
+example_original_content: "I have seen that movie before."
+example_korean_translation: "나는 전에 그 영화를 본 적이 있다."
+question_text: "다음 밑줄 친 부분이 문법적으로 올바른지 판단하시오."
 
-**중요**: example은 단순 문자열만 허용 (no array, no object)
+Example 3 - Vocabulary meaning:
+example_content: "The book was very <u>interesting</u>."
+example_original_content: "The book was very interesting."
+example_korean_translation: "그 책은 매우 흥미로웠다."
+question_text: "다음 밑줄 친 단어의 의미로 가장 적절한 것은?"
+question_choices: ["지루한", "흥미로운", "어려운", "쉬운"]
 
-# 응답 형식 (JSON)
+Important: example must be simple string only (no array, no object)
+
+# OUTPUT LANGUAGE REQUIREMENTS - CRITICAL
+
+You MUST generate content in TWO languages according to these strict rules:
+
+ENGLISH Content (Student reading material):
+- example_content: Write in ENGLISH (if needed)
+- question_choices: Write in ENGLISH for grammar questions, KOREAN for vocabulary meaning questions
+
+KOREAN Content (Instructions and explanations):
+- question_text: Write in KOREAN (Korean instruction)
+  Example: "다음 빈칸에 알맞은 것을 고르시오."
+- question_detail_type: Write in KOREAN (Korean question type name)
+  Example: "빈칸 추론"
+- explanation: Write in KOREAN (Korean explanation)
+  Example: "정답은 2번입니다. 주어가 3인칭 단수이므로..."
+- learning_point: Write in KOREAN (Korean learning point)
+  Example: "현재 시제에서 주어가 3인칭 단수일 때 동사에 -s를 붙입니다."
+- example_korean_translation: Write in KOREAN (Korean translation of example)
+
+# Response Format (JSON)
 {{
     "question_id": {qid},
     "question_type": "{format_type}",
     "question_subject": "{subject}",
-    "question_detail_type": "세부 유형명",
+    "question_detail_type": "Korean question type name",
     "question_difficulty": "{difficulty}",
-    "question_text": "순수한 한국어 지시문만",
-    "example_content": "순수한 영어 예문 (필요 시)",
-    "example_original_content": "완전한 원본 예문 (필요 시)",
-    "example_korean_translation": "예문 한글 번역 (필요 시)",
+    "question_text": "Pure Korean instruction only",
+    "example_content": "English example if needed, null otherwise",
+    "example_original_content": "Complete original English example if needed, null otherwise",
+    "example_korean_translation": "Korean translation if example exists, null otherwise",
     "question_passage_id": null,
-    "question_choices": ["선택지1", "선택지2", ...],
-    "correct_answer": 정답인덱스(객관식) | "정답텍스트"(주관식),
-    "explanation": "정답 해설 (한국어)",
-    "learning_point": "핵심 학습 포인트"
+    "question_choices": ["Choice 1", "Choice 2", ...],
+    "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+    "explanation": "Korean explanation",
+    "learning_point": "Korean learning point"
 }}
 
-**중요 규칙**:
-- question_text는 순수 한국어 지시문만
-- example 필드는 필요 시 작성, 불필요하면 null
-- HTML 태그 사용: 빈칸 `<u>___</u>`, 밑줄 `<u>텍스트</u>`, 강조 `<strong>텍스트</strong>`
-- **예문의 내용과 어휘는 반드시 {school_level} {grade}학년 수준과 위 소재 가이드에 맞춰 작성**
-- 다른 텍스트나 설명 없이 JSON만 응답
+CRITICAL RULES:
+- question_text must be pure Korean instruction
+- example fields: Write only when needed, null otherwise
+- HTML tags: Blank `<u>___</u>`, Underline `<u>text</u>`, Emphasis `<strong>text</strong>`
+- Example content and vocabulary must match {school_level} Grade {grade} level and topic guidelines above
+- Return ONLY JSON, no other text or explanation
 """
 
             prompts.append({

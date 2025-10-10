@@ -1,41 +1,17 @@
 from typing import Dict, Any
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import os
-import httpx
+from fastapi import Depends, HTTPException, status, Request
 
-security = HTTPBearer()
-AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> Dict[str, Any]:
-    """Auth Service를 통해 JWT 토큰 검증 및 사용자 정보 추출"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{AUTH_SERVICE_URL}/api/auth/verify-token",
-                headers={"Authorization": f"Bearer {credentials.credentials}"},
-                timeout=5.0
-            )
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token"
-            )
+async def get_current_user(request: Request) -> Dict[str, Any]:
+    """
+    미들웨어에서 검증하고 request.state에 저장한 사용자 정보를 반환합니다.
+    (네트워크 호출을 다시 하지 않음)
+    """
+    if not hasattr(request.state, "user"):
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials from middleware",
         )
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable"
-        )
+    return request.state.user
 
 
 def verify_teacher_permission(current_user: Dict[str, Any]) -> Dict[str, Any]:
