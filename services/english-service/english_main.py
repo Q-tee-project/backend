@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from app.database import init_db
 from app.core.config import get_settings, print_settings_summary
+from app.core.auth_middleware import AuthMiddleware
 from app.routers.health_router import router as health_router
 from app.routers.category_router import router as category_router
 from app.routers.worksheet_router import router as worksheet_router
@@ -63,6 +64,9 @@ app.add_middleware(
     allow_methods=settings.allowed_methods,
     allow_headers=settings.allowed_headers,
 )
+
+# 인증 미들웨어 추가 (모든 요청에 대해 토큰 검증)
+app.add_middleware(AuthMiddleware)
 
 # 정적 파일 서빙 (HTML, CSS, JS 등) - static 폴더가 있을 때만
 import os

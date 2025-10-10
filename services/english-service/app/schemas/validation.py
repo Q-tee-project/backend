@@ -43,35 +43,6 @@ class QuestionValidationResult(BaseModel):
     )
 
 
-# 호환성을 위한 중첩 구조 (내부 사용, API에는 전달 안함)
-class AlignmentEvaluation(BaseModel):
-    """문항-콘텐츠 정합성 평가 (30점)"""
-    curriculum_relevance: int
-    difficulty_consistency: int
-    topic_appropriateness: int
-    total_score: int
-    rationale: str
-
-
-class ContentQualityEvaluation(BaseModel):
-    """내용 및 문제 품질 평가 (40점)"""
-    passage_quality: int
-    instruction_clarity: int
-    answer_accuracy: int
-    distractor_quality: int
-    total_score: int
-    rationale: str
-
-
-class ExplanationQualityEvaluation(BaseModel):
-    """해설 품질 평가 (30점)"""
-    logical_explanation: int
-    incorrect_answer_analysis: int
-    additional_information: int
-    total_score: int
-    rationale: str
-
-
 class ValidationMetrics(BaseModel):
     """검증 메트릭 (로깅 및 분석용)"""
     question_id: str

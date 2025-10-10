@@ -2,28 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
-import json
-import random
 
 from app.database import get_db
 from app.core.config import get_settings
 from app.schemas.generation import WorksheetGenerationRequest
 from app.schemas.worksheet import (
-    WorksheetSaveRequest, WorksheetResponse, WorksheetSummary
+    WorksheetSaveRequest, WorksheetSummary
 )
 from app.models import (
     GradingResult, QuestionResult, Worksheet, Passage, Question
 )
-from app.services.generation.question_generator import PromptGenerator
 from app.tasks import generate_english_worksheet_task
 from app.celery_app import celery_app
-
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    print("⚠️ Gemini 라이브러리가 설치되지 않았습니다.")
 
 router = APIRouter(tags=["Worksheets"])
 settings = get_settings()
@@ -274,7 +264,6 @@ async def save_worksheet(request: WorksheetSaveRequest, db: Session = Depends(ge
         return {
             "message": "문제지가 성공적으로 저장되었습니다.",
             "worksheet_id": db_worksheet.worksheet_id,
-            "worksheet_id": db_worksheet.worksheet_id,
             "status": "success"
         }
         
@@ -420,16 +409,6 @@ async def get_worksheet_for_solving(worksheet_id: int, db: Session = Depends(get
                 "original_content": passage.original_content,
                 "korean_translation": passage.korean_translation,
                 "related_questions": passage.related_questions
-            })
-        
-        # 예문 데이터 추가 (한글 번역 포함)
-        for example in worksheet.examples:
-            worksheet_data["examples"].append({
-                "example_id": example.example_id,
-                "example_content": example.example_content,
-                "original_content": example.original_content,
-                "korean_translation": example.korean_translation,
-                "related_question": example.related_question
             })
         
         # 문제 데이터 추가 (답안 제외)
