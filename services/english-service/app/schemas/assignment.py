@@ -35,6 +35,7 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: datetime
     assignment_id: int
+    classroom_id: int
 
     class Config:
         orm_mode = True

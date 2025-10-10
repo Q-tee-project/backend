@@ -293,7 +293,8 @@ async def get_student_assignments(
                 total_questions=assignment.total_questions,
                 status=deployment.status,
                 deployed_at=deployment.deployed_at,
-                assignment_id=assignment.id
+                assignment_id=assignment.id,
+                classroom_id=deployment.classroom_id
             ))
         
         return response_data

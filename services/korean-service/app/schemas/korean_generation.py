@@ -129,6 +129,7 @@ class StudentAssignmentResponse(BaseModel):
     status: str
     deployed_at: str
     assignment_id: int
+    classroom_id: int
 
     class Config:
         from_attributes = True
@@ -144,6 +145,7 @@ class StudentAssignmentResponse(BaseModel):
             question_type=assignment.question_type,
             problem_count=assignment.problem_count,
             status=deployment.status,
+            classroom_id=deployment.classroom_id,
             deployed_at=deployment.deployed_at.isoformat(),
             assignment_id=assignment.id
         )
