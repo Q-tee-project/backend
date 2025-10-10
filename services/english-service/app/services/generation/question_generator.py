@@ -10,65 +10,89 @@ from sqlalchemy.orm import Session
 from app.models import Word
 
 
+# Korean to English mappings for prompt data
+SUBJECT_MAPPING = {
+    '독해': 'Reading Comprehension',
+    '문법': 'Grammar',
+    '어휘': 'Vocabulary'
+}
+
+DIFFICULTY_MAPPING = {
+    '상': 'High',
+    '중': 'Medium',
+    '하': 'Low'
+}
+
+FORMAT_MAPPING = {
+    '객관식': 'Multiple Choice',
+    '단답형': 'Short Answer',
+    '서술형': 'Long Answer'
+}
+
+SCHOOL_LEVEL_MAPPING = {
+    '중학교': 'Middle School',
+    '고등학교': 'High School'
+}
+
 # 소재 카테고리 (모든 학년 공통)
 TOPIC_CATEGORIES = {
-    "개인생활": [
-        "취미, 오락, 여행, 운동, 쇼핑 등 여가 선용",
-        "보건, 위생, 영양 등 개인 건강 관리",
-        "생일, 관심사, 생활 방식 등 개인 일상"
+    "Personal Life": [
+        "Hobbies, entertainment, travel, sports, shopping and leisure activities",
+        "Health, hygiene, nutrition and personal health management",
+        "Birthdays, interests, lifestyle and daily routines"
     ],
-    "가정생활": [
-        "의복, 음식, 주거",
-        "명절, 가족 행사, 집안일 등 가정 일상"
+    "Family Life": [
+        "Clothing, food, housing",
+        "Holidays, family events, household chores and family routines"
     ],
-    "학교생활": [
-        "다양한 교육 내용 및 방법, 학교 활동",
-        "교우 관계, 진로, 진학 등 학교 일상"
+    "School Life": [
+        "Various educational content and methods, school activities",
+        "Peer relationships, career planning, academic advancement and school routines"
     ],
-    "사회생활": [
-        "일, 노동, 직업 윤리 등 근로",
-        "서신 왕래, 소셜 미디어 등 온라인 활동, 면대면 대화 등 대인 관계",
-        "회의, 지역 행사, 졸업, 결혼, 장례식 등 사회적 행사"
+    "Social Life": [
+        "Work, labor, work ethics and employment",
+        "Correspondence, social media and online activities, face-to-face communication and interpersonal relationships",
+        "Meetings, community events, graduation, weddings, funerals and social occasions"
     ],
-    "문화": [
-        "동일 문화권 내의 다른 세대, 성별 간의 문화적 차이",
-        "우리의 문화와 생활 양식 소개",
-        "우리 문화와 다른 문화의 언어⋅문화적 차이",
-        "다양한 문화권의 관습, 규범, 가치, 사고방식, 행동 양식, 의사소통 방식",
-        "세계 문화: 의식주, 명절과 축제, 종교, 언어, 문학, 음악, 예술, 대중문화, 여행 및 관광지, 건축물, 전통, 지리, 역사, 인물, 스포츠, 관혼상제 등",
-        "다양한 문화권의 사람들과의 의사소통, 교류, 협력"
+    "Culture": [
+        "Cultural differences between generations and genders within the same culture",
+        "Introduction to Korean culture and lifestyle",
+        "Linguistic and cultural differences between Korean and other cultures",
+        "Customs, norms, values, mindsets, behaviors, and communication styles of diverse cultures",
+        "World cultures: food/clothing/shelter, festivals, religion, language, literature, music, arts, pop culture, travel destinations, architecture, traditions, geography, history, notable figures, sports, life ceremonies",
+        "Communication, exchange, and cooperation with people from diverse cultural backgrounds"
     ],
-    "민주시민": [
-        "공중도덕, 예절, 협력, 배려, 봉사, 정의, 책임감 등 인성",
-        "인권, 양성평등, 글로벌 에티켓, 평화 등 민주시민 의식 및 세계시민 의식",
-        "올바른 미디어 리터러시를 통한 비판적 사고의 성찰, 사회적 공감과 의사소통",
-        "문제에 대한 비판적 사고와 민주적 의사 결정 및 갈등 해결",
-        "가난 및 기아 해결, 인구 문제, 청소년 문제, 고령화, 다문화 사회, 사회 정의와 불평등 해소",
-        "책임 있는 소비와 생산, 자원과 에너지 문제, 국제 문제 해결을 위한 협력 등 사회 현안",
-        "변화하는 사회 및 국제적 현안을 해결하기 위한 가정, 학교, 지역, 국가 및 세계 공동체의 참여"
+    "Democratic Citizenship": [
+        "Public morals, etiquette, cooperation, consideration, service, justice, responsibility and character development",
+        "Human rights, gender equality, global etiquette, peace, democratic citizenship and global citizenship awareness",
+        "Critical thinking through proper media literacy, social empathy and communication",
+        "Critical thinking for problem-solving, democratic decision-making and conflict resolution",
+        "Addressing poverty and hunger, population issues, youth issues, aging society, multicultural society, social justice and inequality",
+        "Responsible consumption and production, resource and energy issues, cooperation for solving international problems and social issues",
+        "Family, school, community, national and global community participation to address changing social and international issues"
     ],
-    "생태전환": [
-        "인간과 생태계의 관계, 자연환경과 생태 윤리, 생태 감수성과 책임감",
-        "현재 및 미래 세대의 권리로서 환경권 존중",
-        "생태계의 특성과 시스템 탐구, 생태 시스템과 인간 사회 시스템의 연관성",
-        "기후변화와 생태계 문제 탐구",
-        "생태전환을 위한 사회 체계의 변화 제안 및 실천",
-        "생태전환을 위한 지속가능한 과학 기술 제안 및 실천",
-        "일상생활에서의 생태 전환 참여와 실천"
+    "Ecological Transition": [
+        "Relationship between humans and ecosystems, natural environment and ecological ethics, ecological sensitivity and responsibility",
+        "Respect for environmental rights as rights of current and future generations",
+        "Exploring characteristics and systems of ecosystems, connections between ecological and human social systems",
+        "Exploring climate change and ecosystem problems",
+        "Proposing and practicing social system changes for ecological transition",
+        "Proposing and practicing sustainable science and technology for ecological transition",
+        "Participating and practicing ecological transition in daily life"
     ],
-    "디지털및인공지능": [
-        "컴퓨터와 인터넷 활용, 소프트웨어의 이해와 활용 등 디지털 기술의 이해와 활용",
-        "정보의 공유, 온라인 활동 참여와 협업 등 디지털 의사소통과 협력",
-        "정보의 수집, 관리, 분석, 표현 등 정보의 처리와 생성",
-        "디지털 기술과 정보의 안전한 사용 및 윤리적 사용"
+    "Digital and AI": [
+        "Understanding and utilizing digital technology including computer and internet usage, software understanding and application",
+        "Digital communication and collaboration including information sharing, online activity participation and teamwork",
+        "Information processing and creation including collection, management, analysis and presentation",
+        "Safe and ethical use of digital technology and information"
     ],
-    "일반교양": [
-        "생활 안전, 교통안전, 재난 안전, 직업 안전 등의 안전",
-        "동식물 또는 계절, 날씨 등의 자연 현상",
-        "애국심, 평화, 안보, 독도 교육 및 통일",
-        "정치, 경제, 금융, 역사, 지리, 수학, 과학, 교통, 정보 통신, 우주, 해양, 탐험 등 일반 교양",
-        "인문학, 사회 과학, 자연 과학, 예술 분야 등의 학문적 소양",
-        "언어, 문학, 예술 등 심미적 심성과 창의력, 상상력"
+    "General Knowledge": [
+        "Safety including daily safety, traffic safety, disaster safety, occupational safety",
+        "Natural phenomena including flora/fauna, seasons, weather",
+        "Patriotism, peace, security, Dokdo education and unification",
+        "General knowledge including politics, economics, finance, history, geography, mathematics, science, transportation, information technology, space, ocean, exploration",
+        "Academic knowledge in humanities, social sciences, natural sciences, and arts",
+        "Aesthetic sensibility, creativity and imagination through language, literature and arts"
     ]
 }
 
@@ -328,55 +352,55 @@ class PromptGenerator:
             return "B1"  # 기본값
 
     def _get_depth_guidelines(self, school_level: str, grade: int) -> dict:
-        """학년별 내용 깊이 가이드라인"""
+        """Grade-level content depth guidelines"""
 
         if school_level == "중학교":
             if grade in [1, 2]:
                 return {
-                    "vocabulary_level": "기초 어휘 (CEFR A2 수준)",
-                    "sentence_structure": "단문 중심, 기본 접속사(and, but, because) 사용",
-                    "abstraction": "구체적 사례와 일상 경험 중심",
-                    "information_density": "단일 주제, 명확한 주제문",
-                    "cognitive_level": "사실 확인, 내용 이해 중심 (Remember, Understand)",
-                    "content_approach": "개인 경험, 관찰 가능한 현상, 간단한 행동 묘사"
+                    "vocabulary_level": "Basic vocabulary (CEFR A2 level)",
+                    "sentence_structure": "Simple sentences with basic conjunctions (and, but, because)",
+                    "abstraction": "Concrete examples and everyday experiences",
+                    "information_density": "Single topic with clear topic sentence",
+                    "cognitive_level": "Fact verification and content comprehension (Remember, Understand)",
+                    "content_approach": "Personal experiences, observable phenomena, simple action descriptions"
                 }
             else:  # grade 3
                 return {
-                    "vocabulary_level": "중급 어휘 (CEFR B1 수준)",
-                    "sentence_structure": "복문 사용, 기본 관계대명사, 접속부사",
-                    "abstraction": "원인-결과 관계, 비교와 대조",
-                    "information_density": "2-3개 관련 아이디어 연결",
-                    "cognitive_level": "이유 설명, 간단한 추론 (Apply, Analyze)",
-                    "content_approach": "행동의 이유와 결과, 간단한 문제-해결 구조"
+                    "vocabulary_level": "Intermediate vocabulary (CEFR B1 level)",
+                    "sentence_structure": "Complex sentences with basic relative pronouns and conjunctive adverbs",
+                    "abstraction": "Cause-effect relationships, comparison and contrast",
+                    "information_density": "2-3 related ideas connected",
+                    "cognitive_level": "Explanation of reasons and simple inference (Apply, Analyze)",
+                    "content_approach": "Reasons and consequences of actions, simple problem-solution structure"
                 }
 
         else:  # 고등학교
             if grade == 1:
                 return {
-                    "vocabulary_level": "중급-고급 어휘 (CEFR B1-B2)",
-                    "sentence_structure": "다양한 종속절, 분사구문, 관계절",
-                    "abstraction": "사회적 맥락, 다양한 관점 소개",
-                    "information_density": "다층적 정보, 구체적 예시 포함",
-                    "cognitive_level": "비교 분석, 타당성 평가 (Evaluate)",
-                    "content_approach": "개인과 사회 연결, 현상의 배경 설명, 다양한 입장"
+                    "vocabulary_level": "Intermediate-advanced vocabulary (CEFR B1-B2)",
+                    "sentence_structure": "Various subordinate clauses, participial phrases, relative clauses",
+                    "abstraction": "Social context and diverse perspectives",
+                    "information_density": "Multilayered information with concrete examples",
+                    "cognitive_level": "Comparative analysis and validity evaluation (Evaluate)",
+                    "content_approach": "Connection between individual and society, background explanation of phenomena, diverse positions"
                 }
             elif grade == 2:
                 return {
-                    "vocabulary_level": "고급 어휘 (CEFR B2)",
-                    "sentence_structure": "복잡한 구문, 수동태, 도치, 강조",
-                    "abstraction": "추상적 개념, 철학적 질문",
-                    "information_density": "복합적 논점, 암시적 의미",
-                    "cognitive_level": "비판적 사고, 가치 판단 (Evaluate)",
-                    "content_approach": "이론과 실제 연결, 윤리적 딜레마, 대안 탐색"
+                    "vocabulary_level": "Advanced vocabulary (CEFR B2)",
+                    "sentence_structure": "Complex constructions, passive voice, inversion, emphasis",
+                    "abstraction": "Abstract concepts and philosophical questions",
+                    "information_density": "Multiple arguments and implicit meanings",
+                    "cognitive_level": "Critical thinking and value judgment (Evaluate)",
+                    "content_approach": "Theory-practice connection, ethical dilemmas, exploring alternatives"
                 }
             else:  # grade 3
                 return {
-                    "vocabulary_level": "고급 어휘 (CEFR B2+, 학술 어휘 포함)",
-                    "sentence_structure": "학술적 문체, 복합 구문, 가정법",
-                    "abstraction": "패러다임 전환, 메타 인지적 사고",
-                    "information_density": "다학제적 접근, 함축적 의미",
-                    "cognitive_level": "창의적 종합, 새로운 관점 제시 (Create, Synthesize)",
-                    "content_approach": "개념 간 통합, 미래 전망, 근본적 질문"
+                    "vocabulary_level": "Advanced vocabulary (CEFR B2+, including academic vocabulary)",
+                    "sentence_structure": "Academic writing style, complex constructions, subjunctive mood",
+                    "abstraction": "Paradigm shifts and metacognitive thinking",
+                    "information_density": "Interdisciplinary approach and implicit meanings",
+                    "cognitive_level": "Creative synthesis and new perspective presentation (Create, Synthesize)",
+                    "content_approach": "Integration of concepts, future outlook, fundamental questions"
                 }
 
     def _format_topic_categories(self) -> str:
@@ -389,48 +413,52 @@ class PromptGenerator:
         return "\n".join(result)
 
     def _get_topic_guidelines(self, school_level: str, grade: int) -> str:
-        """학년별 소재 가이드라인을 반환합니다."""
+        """Returns grade-level topic guidelines in English."""
         if school_level == '중학교':
             if grade <= 2:
                 return """
-- 개인생활: 취미, 여행, 운동, 건강 등 (일상적이고 친숙한 주제)
-- 가정생활: 음식, 주거, 가족 행사 등 (구체적인 경험)
-- 학교생활: 교육, 학교 활동, 진로 등 (학생 주변 환경)
-- 친구 관계: 우정, 놀이, 대화 등 (또래 문화)
-- 동물과 자연: 반려동물, 계절, 날씨 등 (관찰 가능한 대상)
+- Personal Life: Hobbies, travel, sports, health (daily and familiar topics)
+- Family Life: Food, housing, family events (concrete experiences)
+- School Life: Education, school activities, career exploration (student environment)
+- Friendships: Friendship, play, conversation (peer culture)
+- Animals and Nature: Pets, seasons, weather (observable subjects)
 
-**중요**: 친숙하고 구체적인 소재 중심, 학생의 직접 경험과 관련된 내용"""
+Important: Focus on familiar and concrete topics related to students' direct experiences"""
             else:  # 중3
-                return """- 사회적 이슈: 환경 보호, 건강한 생활습관, 청소년 문화 등
-- 대중문화: 음악, 영화, 스포츠, SNS 등
-- 과학 상식: 간단한 과학 원리, 기술 발전 등
-- 진로와 직업: 다양한 직업 소개, 진로 탐색 등
-- 문화 다양성: 다른 나라의 문화, 전통, 생활 방식 등
+                return """
+- Social Issues: Environmental protection, healthy lifestyle, youth culture
+- Popular Culture: Music, movies, sports, social media
+- Science Knowledge: Simple scientific principles, technological advancement
+- Career and Jobs: Introduction to various occupations, career exploration
+- Cultural Diversity: Cultures, traditions, and lifestyles of different countries
 
-**중요**: 추상적 개념이 일부 포함되지만 이해 가능한 수준, 사회적 관심사"""
+Important: Some abstract concepts included but at comprehensible level, topics of social interest"""
         elif school_level == '고등학교':
             if grade == 1:
-                return """- 사회적 이슈: 환경 문제, 사회 정의, 기술 윤리 등
-- 인문학적 주제: 역사, 문화, 예술의 기본 개념
-- 과학과 기술: 현대 과학 기술, 디지털 시대 등
-- 심리와 관계: 인간 심리, 사회적 관계, 소통 등
-- 글로벌 이슈: 국제 협력, 세계 시민의식 등
+                return """
+- Social Issues: Environmental problems, social justice, technology ethics
+- Humanities Topics: Basic concepts of history, culture, and arts
+- Science and Technology: Modern science and technology, digital era
+- Psychology and Relationships: Human psychology, social relationships, communication
+- Global Issues: International cooperation, global citizenship
 
-**중요**: 논리적 사고가 필요한 주제, 다양한 관점 제시"""
+Important: Topics requiring logical thinking, presentation of diverse perspectives"""
             else:  # 고2~고3
-                return """- 철학적 주제: 가치관, 윤리, 존재와 의미 등
-- 심리학: 인간 행동의 원리, 인지 과학, 사회 심리 등
-- 첨단 과학: 인공지능, 생명공학, 우주과학 등
-- 경제와 사회: 경제 원리, 사회 구조, 정책 등
-- 예술과 문화 이론: 예술 사조, 문화 비평, 미학 등
+                return """
+- Philosophical Topics: Values, ethics, existence and meaning
+- Psychology: Principles of human behavior, cognitive science, social psychology
+- Advanced Science: Artificial intelligence, biotechnology, space science
+- Economics and Society: Economic principles, social structure, policy
+- Arts and Cultural Theory: Art movements, cultural criticism, aesthetics
 
-**중요**: 전문적이고 추상적인 개념, 고차원적 사고력 요구, 복합적 관점"""
+Important: Professional and abstract concepts requiring higher-order thinking and multiple perspectives"""
         else:
-            return """- 개인생활: 취미, 여행, 운동, 건강 등
-- 가정생활: 음식, 주거, 가족 행사 등
-- 학교생활: 교육, 학교 활동, 진로 등
-- 사회생활: 대인 관계, 직업 등
-- 문화: 다른 문화권의 관습 등"""
+            return """
+- Personal Life: Hobbies, travel, sports, health
+- Family Life: Food, housing, family events
+- School Life: Education, school activities, career
+- Social Life: Interpersonal relationships, occupations
+- Culture: Customs from different cultures"""
 
     def generate_question_prompts(
         self,
@@ -452,7 +480,7 @@ class PromptGenerator:
         # 학년별 설정 가져오기
         word_count_range = self._get_word_count_range(school_level, grade)
         cefr_level = self._get_cefr_level(school_level, grade)
-        topic_guidelines = self._get_topic_guidelines(school_level, grade)
+        # topic_guidelines = self._get_topic_guidelines(school_level, grade)  # 현재 미사용 (프롬프트에 하드코딩됨)
 
         # 영역별 분배 계산
         subject_dist = self.calculator.calculate_distribution(total_questions, subject_ratios)
@@ -564,13 +592,26 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
 # Question Types
 {chr(10).join(subject_types_info)}
 
-# Grade-Level Depth Guidelines (Strictly Follow)
+# Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS
+YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected content.
+
 - Vocabulary Level: {depth_guide['vocabulary_level']}
+  → Use ONLY words appropriate for this level. Check every word.
+
 - Sentence Structure: {depth_guide['sentence_structure']}
+  → Match sentence complexity exactly to this specification.
+
 - Abstraction Level: {depth_guide['abstraction']}
+  → Content must match this abstraction level precisely.
+
 - Information Density: {depth_guide['information_density']}
+  → Follow this density requirement strictly.
+
 - Cognitive Level: {depth_guide['cognitive_level']}
+  → Questions must target exactly this cognitive level.
+
 - Content Approach: {depth_guide['content_approach']}
+  → Approach content following this guideline exactly.
 
 # Passage Generation Guidelines
 
@@ -580,7 +621,11 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
 - Difficulty: Match vocabulary and sentence structure to {difficulty} (see above)
 - Select appropriate passage type and optimize content/structure for question type
 - Strictly follow depth guidelines above
-- Mix various topics and passage types
+
+**IMPORTANT - Variety Requirement:**
+- Vary passage GENRE/TYPE across questions (articles, stories, letters, advertisements, reviews, dialogues, etc.)
+- Vary TOPICS across questions using the topic categories below
+- Consider the topic categories and select diverse subjects for each passage
 
 ## Topic Categories (Common for all grades - adjust depth only):
 {topic_categories_str}
@@ -594,23 +639,23 @@ Important: These topics are common across all grades. Adjust complexity and abst
 ## Passage Type JSON Structures:
 
 1. article (General text):
-   Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts (most versatile type)
+   Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts, etc. (most versatile type)
    Required format: passage_content must contain {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}}
 
 2. informational (Informational format):
-   Description: Advertisements, notices, posters, schedules, menus, receipts
+   Description: Advertisements, notices, posters, schedules, menus, receipts, etc.
    Required format: passage_content must contain {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}}
 
 3. dialogue (Conversation):
-   Description: Text messages, chat, interviews, play scripts
+   Description: Text messages, chat, interviews, play scripts, etc.
    Required format: passage_content must contain {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}}
 
 4. correspondence (Letters/Communication):
-   Description: Emails, letters, memos, internal notices
+   Description: Emails, letters, memos, internal notices, etc.
    Required format: passage_content must contain {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
 
 5. review (Reviews/Feedback):
-   Description: Product reviews, movie ratings, restaurant reviews
+   Description: Product reviews, movie ratings, restaurant reviews, etc.
    Required format: passage_content must contain {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
 
 ## Important Notes for Passage Writing:
@@ -690,7 +735,7 @@ KOREAN Content (Instructions and explanations):
         "example_korean_translation": "Korean translation if example exists, null otherwise",
         "question_passage_id": {passage_id},
         "question_choices": ["Choice 1 in English", "Choice 2 in English", ...],
-        "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+        "correct_answer": start with 1 (multiple choice) | "answer text" (short answer),
         "explanation": "Korean explanation",
         "learning_point": "Korean learning point"
     }}
@@ -723,13 +768,26 @@ Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 # Question Types
 {chr(10).join(subject_types_info)}
 
-# Grade-Level Depth Guidelines (Strictly Follow)
+# Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS
+YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected content.
+
 - Vocabulary Level: {depth_guide['vocabulary_level']}
+  → Use ONLY words appropriate for this level. Check every word.
+
 - Sentence Structure: {depth_guide['sentence_structure']}
+  → Match sentence complexity exactly to this specification.
+
 - Abstraction Level: {depth_guide['abstraction']}
+  → Content must match this abstraction level precisely.
+
 - Information Density: {depth_guide['information_density']}
+  → Follow this density requirement strictly.
+
 - Cognitive Level: {depth_guide['cognitive_level']}
+  → Questions must target exactly this cognitive level.
+
 - Content Approach: {depth_guide['content_approach']}
+  → Approach content following this guideline exactly.
 
 # Example Sentence and Choices Guidelines
 
@@ -814,7 +872,7 @@ KOREAN Content (Instructions and explanations):
     "example_korean_translation": "Korean translation if example exists, null otherwise",
     "question_passage_id": null,
     "question_choices": ["Choice 1", "Choice 2", ...],
-    "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+    "correct_answer": start with 1 (multiple choice) | "answer text" (short answer | long answer),
     "explanation": "Korean explanation",
     "learning_point": "Korean learning point"
 }}
