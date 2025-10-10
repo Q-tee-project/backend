@@ -6,60 +6,94 @@ AI 기반 교육 플랫폼을 위한 마이크로서비스 아키텍처 백엔�
 
 ### MSA 아키텍처 흐름도
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                      Client (Frontend)                        │
-└───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-        ┌─────────────────────────────────────────────┐
-        │                                             │
-        │  ┌─────────────┐  ┌─────────────┐         │
-        │  │Auth Service │  │   Market    │         │
-        │  │  (Port      │  │   Service   │         │
-        │  │   8003)     │  │ (Port 8005) │         │
-        │  └──────┬──────┘  └──────┬──────┘         │
-        │         │                │                 │
-        │         │  JWT 인증      │ 포인트/구매     │
-        │         ▼                ▼                 │
-        │  ┌──────────────────────────────────────┐ │
-        │  │      Content Generation Services      │ │
-        │  │  ┌──────┐  ┌──────┐  ┌──────┐       │ │
-        │  │  │ Math │  │Korean│  │English│       │ │
-        │  │  │ 8001 │  │ 8004 │  │ 8002 │       │ │
-        │  │  └───┬──┘  └───┬──┘  └───┬──┘       │ │
-        │  └──────┼─────────┼─────────┼───────────┘ │
-        │         └─────────┼─────────┘             │
-        │                   ▼                        │
-        │         ┌────────────────────┐            │
-        │         │  Notification      │            │
-        │         │    Service (8006)  │            │
-        │         │  (SSE Real-time)   │            │
-        │         └────────────────────┘            │
-        └─────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  PostgreSQL  │◄───┤ Celery/Redis │───►│     Redis    │
-│ (Port 5433)  │    │ Task Queue   │    │  (Port 6379) │
-│              │    │              │    │              │
-│ 서비스별 스키마 │    │ • Math Worker│    │ • Task Queue │
-│ 독립 관리     │    │ • Korean     │    │ • Result     │
-│              │    │   Worker     │    │   Backend    │
-│              │    │ • English    │    │              │
-│              │    │   Worker     │    │              │
-└──────────────┘    └──────────────┘    └──────────────┘
+```mermaid
+graph TB
+    Client[Client Frontend]
 
-[데이터 흐름]
+    subgraph Services["🔷 Microservices Layer"]
+        Auth[Auth Service<br/>Port 8003<br/>JWT 인증]
+        Market[Market Service<br/>Port 8005<br/>포인트/구매]
+
+        subgraph Content["Content Generation Services"]
+            Math[Math Service<br/>Port 8001]
+            Korean[Korean Service<br/>Port 8004]
+            English[English Service<br/>Port 8002]
+        end
+
+        Notification[Notification Service<br/>Port 8006<br/>SSE Real-time]
+    end
+
+    subgraph Infrastructure["🔶 Infrastructure Layer"]
+        DB[(PostgreSQL<br/>Port 5433<br/>서비스별 스키마)]
+
+        subgraph Workers["Celery Workers"]
+            MathWorker[Math Worker]
+            KoreanWorker[Korean Worker]
+            EnglishWorker[English Worker]
+        end
+
+        Redis[(Redis<br/>Port 6379<br/>Task Queue)]
+        AI[AI APIs<br/>Gemini 2.5 Pro<br/>GPT-4o-mini]
+    end
+
+    Client --> Auth
+    Client --> Market
+    Client --> Math
+    Client --> Korean
+    Client --> English
+
+    Auth -.JWT 검증.-> Math
+    Auth -.JWT 검증.-> Korean
+    Auth -.JWT 검증.-> English
+    Auth -.JWT 검증.-> Market
+
+    Math --> Notification
+    Korean --> Notification
+    English --> Notification
+    Market --> Notification
+
+    Math -.비동기 Task.-> Redis
+    Korean -.비동기 Task.-> Redis
+    English -.비동기 Task.-> Redis
+
+    Redis --> MathWorker
+    Redis --> KoreanWorker
+    Redis --> EnglishWorker
+
+    MathWorker -.AI 호출.-> AI
+    KoreanWorker -.AI 호출.-> AI
+    EnglishWorker -.AI 호출.-> AI
+
+    MathWorker --> DB
+    KoreanWorker --> DB
+    EnglishWorker --> DB
+    Market --> DB
+    Auth --> DB
+
+    Notification --> Client
+
+    style Client fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style Auth fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Market fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style Math fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Korean fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style English fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Notification fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    style DB fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Redis fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    style MathWorker fill:#c5e1a5,stroke:#33691e,stroke-width:2px
+    style KoreanWorker fill:#c5e1a5,stroke:#33691e,stroke-width:2px
+    style EnglishWorker fill:#c5e1a5,stroke:#33691e,stroke-width:2px
+    style AI fill:#b2dfdb,stroke:#004d40,stroke-width:2px
+```
+
+**데이터 흐름:**
 1. 사용자 요청 → Auth Service (JWT 발급/검증)
 2. 인증된 요청 → Content Services (Math/Korean/English)
 3. 콘텐츠 생성 → Celery Task Queue (비동기)
 4. Worker → Gemini/GPT API 호출 → AI Judge 검증
 5. 완료 시 → Notification Service (SSE) → 사용자 실시간 알림
 6. 마켓 거래 → Market Service → PostgreSQL 트랜잭션 보장
-```
 
 ### 아키텍처 특징
 
@@ -225,115 +259,65 @@ AI 기반 교육 플랫폼을 위한 마이크로서비스 아키텍처 백엔�
 
 ### 1. AI 문제 생성 및 검증 파이프라인 (Feedback-Enhanced QA Flow)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ [1] 사용자 요청 접수                                              │
-│   POST /api/worksheets/generate                                 │
-│   {grade, unit, difficulty_ratio, problem_count, ...}           │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [2] Celery 비동기 태스크 생성                                     │
-│   • FastAPI → Celery.delay() → Task ID 즉시 반환                │
-│   • 사용자 체감 응답 시간: 3초 이내 (202 Accepted)               │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [3] Celery Worker - 백그라운드 처리 시작                          │
-│   • 교육과정 데이터 로드 (curriculum.json)                       │
-│   • 프롬프트 구성 (난이도/유형 분배)                             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [4] AI 문제 생성 (Gemini 2.5 Pro)                                │
-│                                                                  │
-│   Math Service:                                                 │
-│   • TikZ 그래프 자동 생성                                        │
-│   • 난이도 3단계 (A/B/C)                                         │
-│   • 병렬 처리 (ThreadPoolExecutor)                               │
-│                                                                  │
-│   Korean Service:                                               │
-│   • 유형별 핵심 발췌 (Context Engineering)                       │
-│     - 소설: 갈등/대화 중심 (800-1200자)                          │
-│     - 비문학: 논지/증거 중심 (800-1200자)                        │
-│   • 작품별 병렬 생성 (max_workers=5)                             │
-│   • Input Token 92% 절감                                         │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [5] AI Judge 검증 (GPT-4o-mini) - 각 문제별                       │
-│                                                                  │
-│   검증 기준 (1-5점):                                             │
-│   ┌────────────────────────────────────────────────┐            │
-│   │ Math:                                          │            │
-│   │ • mathematical_accuracy (수학적 정확성)        │            │
-│   │ • consistency (정답 일치도) ≥ 4.0 (필수)       │            │
-│   │ • completeness (완결성)                        │            │
-│   │ • logic_flow (논리성)                          │            │
-│   ├────────────────────────────────────────────────┤            │
-│   │ Korean:                                        │            │
-│   │ • literary_accuracy / narrative_comprehension  │            │
-│   │ • relevance (지문 관련성)                      │            │
-│   │ • textual_analysis / critical_thinking         │            │
-│   │ • answer_clarity (정답 명확성)                 │            │
-│   └────────────────────────────────────────────────┘            │
-│                                                                  │
-│   합격 조건: 모든 점수 ≥ 3.5 (또는 consistency ≥ 4.0)            │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                ┌──────────┴──────────┐
-                ▼                     ▼
-        ┌──────────────┐      ┌──────────────┐
-        │   VALID      │      │   INVALID    │
-        │   (합격)     │      │   (불합격)   │
-        └──────┬───────┘      └──────┬───────┘
-               │                     │
-               │              피드백 저장:
-               │              • 점수: {accuracy: 3.0, ...}
-               │              • 이슈: "정답 불일치"
-               │                     │
-               ▼                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [6] 재시도 메커니즘 (최대 3회)                                    │
-│                                                                  │
-│   len(valid_problems) < target_count?                           │
-│   ├─ NO  → [7] DB 저장 (성공)                                   │
-│   └─ YES → 피드백 기반 프롬프트 재구성                           │
-│                                                                  │
-│   재구성 프롬프트 예시:                                          │
-│   """                                                            │
-│   **IMPORTANT: Previous attempt had issues. Fix these:**        │
-│                                                                  │
-│   Problem 1 feedback:                                           │
-│   - Scores: consistency=2.5, accuracy=4.0                       │
-│   - Issue: 풀이 과정의 마지막 답이 정답과 일치하지 않습니다     │
-│                                                                  │
-│   **MUST ensure**: consistency ≥ 4.0, all scores ≥ 3.5          │
-│   """                                                            │
-│                                                                  │
-│   → [4] AI 문제 생성으로 돌아가 부족한 개수만 재생성             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [7] PostgreSQL 저장                                              │
-│   • Worksheet 생성                                               │
-│   • Problem 저장 (TikZ 코드 포함)                                │
-│   • Transaction 커밋                                             │
-└──────────────────────────┬──────────────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ [8] 실시간 알림 (Notification Service)                           │
-│   • SSE (Server-Sent Events) 스트리밍                            │
-│   • 진행 상태: 대기 → 생성 중 → 검증 중 → 완료                   │
-│   • 사용자에게 실시간 피드백                                      │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    Start([사용자 요청<br/>POST /api/worksheets/generate])
+    Start --> Async[Celery 비동기 태스크 생성<br/>FastAPI → Celery.delay<br/>응답: 3초 이내]
+    Async --> Worker[Celery Worker<br/>백그라운드 처리 시작]
+    Worker --> Load[교육과정 데이터 로드<br/>프롬프트 구성]
 
-[핵심 성과]
-• 초기 통과율: 78% (First-Pass Yield)
-• 최종 합격률: 99% (Feedback-Enhanced Regeneration)
-• 교육 품질 신뢰도: 95% (Independent AI Audit)
-• 검증 비용: 전체 생성 비용의 0.8% (하이브리드 아키텍처)
+    Load --> Generate[AI 문제 생성<br/>Gemini 2.5 Pro]
+
+    Generate --> MathFeatures{Math or<br/>Korean?}
+
+    MathFeatures -->|Math| MathProcess[• TikZ 그래프 자동 생성<br/>• 난이도 3단계 A/B/C<br/>• 병렬 처리 ThreadPool]
+    MathFeatures -->|Korean| KoreanProcess[• Context Engineering<br/>• 소설: 갈등/대화 800-1200자<br/>• 비문학: 논지/증거 800-1200자<br/>• 토큰 92% 절감]
+
+    MathProcess --> Judge
+    KoreanProcess --> Judge
+
+    Judge[AI Judge 검증<br/>GPT-4o-mini<br/><br/>Math: accuracy/consistency≥4.0/completeness/logic<br/>Korean: literary/relevance/textual/clarity<br/><br/>합격 기준: 모든 점수 ≥ 3.5]
+
+    Judge --> Decision{검증 결과}
+
+    Decision -->|VALID<br/>≥ 3.5점| Valid[✓ 합격 문제 누적<br/>valid_problems]
+    Decision -->|INVALID<br/>< 3.5점| Invalid[✗ 불합격<br/>피드백 저장<br/>점수/이슈]
+
+    Valid --> Check{목표 개수<br/>달성?}
+    Invalid --> Check
+
+    Check -->|YES<br/>완료| Save[PostgreSQL 저장<br/>• Worksheet 생성<br/>• Problem TikZ 코드<br/>• Transaction 커밋]
+    Check -->|NO<br/>재시도 < 3| Retry[피드백 기반 재구성<br/><br/>Previous attempt issues:<br/>- Scores: consistency=2.5<br/>- Fix: 정답 불일치<br/><br/>MUST: consistency≥4.0]
+
+    Retry --> Generate
+
+    Save --> Notify[실시간 알림<br/>Notification Service<br/>SSE 스트리밍]
+    Notify --> End([사용자 피드백<br/>대기→생성→검증→완료])
+
+    style Start fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    style Async fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Worker fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style Load fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Generate fill:#e8f5e9,stroke:#2e7d32,stroke-width:3px
+    style Judge fill:#fce4ec,stroke:#c2185b,stroke-width:3px
+    style Valid fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Invalid fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    style Save fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Notify fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    style End fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    style Retry fill:#ffe0b2,stroke:#e65100,stroke-width:2px
+    style Decision fill:#fff3e0,stroke:#ff6f00,stroke-width:3px
+    style Check fill:#e8eaf6,stroke:#283593,stroke-width:3px
+    style MathFeatures fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    style MathProcess fill:#e0f7fa,stroke:#006064,stroke-width:2px
+    style KoreanProcess fill:#e0f7fa,stroke:#006064,stroke-width:2px
 ```
+
+**핵심 성과:**
+- **초기 통과율:** 78% (First-Pass Yield)
+- **최종 합격률:** 99% (Feedback-Enhanced Regeneration)
+- **교육 품질 신뢰도:** 95% (Independent AI Audit)
+- **검증 비용:** 전체 생성 비용의 0.8% (하이브리드 아키텍처)
 
 ### 2. 워크시트 구매 플로우
 
