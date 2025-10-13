@@ -133,18 +133,3 @@ GRADE_SPECIFIC_GUIDELINES = {
         }
     }
 }
-
-
-def get_validation_config() -> Dict[str, Any]:
-    """검증 설정 전체 반환"""
-    return {
-        "criteria": VALIDATION_CRITERIA,
-        "thresholds": JUDGMENT_THRESHOLDS,
-        "settings": VALIDATION_SETTINGS,
-        "grade_guidelines": GRADE_SPECIFIC_GUIDELINES
-    }
-
-
-def get_grade_guidelines(school_level: str, grade: int) -> Dict[str, Any]:
-    """특정 학년의 검증 가이드라인 반환"""
-    return GRADE_SPECIFIC_GUIDELINES.get(school_level, {}).get(grade, {})

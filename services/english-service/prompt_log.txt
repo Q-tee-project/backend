@@ -1,0 +1,438 @@
+2025-10-10 13:06:10.687 | [2025-10-10 04:06:10,680: WARNING/ForkPoolWorker-4] You are a Korean English education expert specializing in Korean national curriculum standards.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | Generate 1 reading comprehension question WITH passage for Korean 중학교 Grade 1 students.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Question Information
+2025-10-10 13:06:10.687 | - Question ID: 8
+2025-10-10 13:06:10.687 | - Subject: 독해
+2025-10-10 13:06:10.687 | - Difficulty: 상
+2025-10-10 13:06:10.687 |   Note: Difficulty is RELATIVE to Grade 1 level within 중학교
+2025-10-10 13:06:10.687 |   - 하 (Low): Basic and easy within this grade
+2025-10-10 13:06:10.687 |   - 중 (Medium): Standard for this grade
+2025-10-10 13:06:10.687 |   - 상 (High): Challenging and complex within this grade
+2025-10-10 13:06:10.687 | - Format: 객관식
+2025-10-10 13:06:10.687 | - Passage ID: 8
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # 독해 출제 유형 (지문 작성 시 반드시 고려):
+2025-10-10 13:06:10.687 | - **내용 일치/불일치**: 제시된 글의 내용과 선택지의 내용이 일치하는지 혹은 불일치하는지 판단하는 유형
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 위 유형에 맞는 내용과 구조를 가진 지문을 작성해야 합니다.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Question Types
+2025-10-10 13:06:10.687 | - 독해 :
+2025-10-10 13:06:10.687 |   내용 일치/불일치 : 제시된 글의 내용과 선택지의 내용이 일치하는지 혹은 불일치하는지 판단하는 유형
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Grade-Level Depth Guidelines (Strictly Follow)
+2025-10-10 13:06:10.687 | - Vocabulary Level: 기초 어휘 (CEFR A2 수준)
+2025-10-10 13:06:10.687 | - Sentence Structure: 단문 중심, 기본 접속사(and, but, because) 사용
+2025-10-10 13:06:10.687 | - Abstraction Level: 구체적 사례와 일상 경험 중심
+2025-10-10 13:06:10.687 | - Information Density: 단일 주제, 명확한 주제문
+2025-10-10 13:06:10.687 | - Cognitive Level: 사실 확인, 내용 이해 중심 (Remember, Understand)
+2025-10-10 13:06:10.687 | - Content Approach: 개인 경험, 관찰 가능한 현상, 간단한 행동 묘사
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Passage Generation Guidelines
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Passage Requirements:
+2025-10-10 13:06:10.687 | - Word count: 50~150단어 (strictly follow for grade level)
+2025-10-10 13:06:10.687 | - CEFR level: A2 ~ B1 초반 (grade baseline)
+2025-10-10 13:06:10.687 | - Difficulty: Match vocabulary and sentence structure to 상 (see above)
+2025-10-10 13:06:10.687 | - Select appropriate passage type and optimize content/structure for question type
+2025-10-10 13:06:10.687 | - Strictly follow depth guidelines above
+2025-10-10 13:06:10.687 | - Mix various topics and passage types
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Topic Categories (Common for all grades - adjust depth only):
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **개인생활**:
+2025-10-10 13:06:10.687 |   - 취미, 오락, 여행, 운동, 쇼핑 등 여가 선용
+2025-10-10 13:06:10.687 |   - 보건, 위생, 영양 등 개인 건강 관리
+2025-10-10 13:06:10.687 |   - 생일, 관심사, 생활 방식 등 개인 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **가정생활**:
+2025-10-10 13:06:10.687 |   - 의복, 음식, 주거
+2025-10-10 13:06:10.687 |   - 명절, 가족 행사, 집안일 등 가정 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **학교생활**:
+2025-10-10 13:06:10.687 |   - 다양한 교육 내용 및 방법, 학교 활동
+2025-10-10 13:06:10.687 |   - 교우 관계, 진로, 진학 등 학교 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **사회생활**:
+2025-10-10 13:06:10.687 |   - 일, 노동, 직업 윤리 등 근로
+2025-10-10 13:06:10.687 |   - 서신 왕래, 소셜 미디어 등 온라인 활동, 면대면 대화 등 대인 관계
+2025-10-10 13:06:10.687 |   - 회의, 지역 행사, 졸업, 결혼, 장례식 등 사회적 행사
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **문화**:
+2025-10-10 13:06:10.687 |   - 동일 문화권 내의 다른 세대, 성별 간의 문화적 차이
+2025-10-10 13:06:10.687 |   - 우리의 문화와 생활 양식 소개
+2025-10-10 13:06:10.687 |   - 우리 문화와 다른 문화의 언어⋅문화적 차이
+2025-10-10 13:06:10.687 |   - 다양한 문화권의 관습, 규범, 가치, 사고방식, 행동 양식, 의사소통 방식
+2025-10-10 13:06:10.687 |   - 세계 문화: 의식주, 명절과 축제, 종교, 언어, 문학, 음악, 예술, 대중문화, 여행 및 관광지, 건축물, 전통, 지리, 역사, 인물, 스포츠, 관혼상제 등
+2025-10-10 13:06:10.687 |   - 다양한 문화권의 사람들과의 의사소통, 교류, 협력
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **민주시민**:
+2025-10-10 13:06:10.687 |   - 공중도덕, 예절, 협력, 배려, 봉사, 정의, 책임감 등 인성
+2025-10-10 13:06:10.687 |   - 인권, 양성평등, 글로벌 에티켓, 평화 등 민주시민 의식 및 세계시민 의식
+2025-10-10 13:06:10.687 |   - 올바른 미디어 리터러시를 통한 비판적 사고의 성찰, 사회적 공감과 의사소통
+2025-10-10 13:06:10.687 |   - 문제에 대한 비판적 사고와 민주적 의사 결정 및 갈등 해결
+2025-10-10 13:06:10.687 |   - 가난 및 기아 해결, 인구 문제, 청소년 문제, 고령화, 다문화 사회, 사회 정의와 불평등 해소
+2025-10-10 13:06:10.687 |   - 책임 있는 소비와 생산, 자원과 에너지 문제, 국제 문제 해결을 위한 협력 등 사회 현안
+2025-10-10 13:06:10.687 |   - 변화하는 사회 및 국제적 현안을 해결하기 위한 가정, 학교, 지역, 국가 및 세계 공동체의 참여
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **생태전환**:
+2025-10-10 13:06:10.687 |   - 인간과 생태계의 관계, 자연환경과 생태 윤리, 생태 감수성과 책임감
+2025-10-10 13:06:10.687 |   - 현재 및 미래 세대의 권리로서 환경권 존중
+2025-10-10 13:06:10.687 |   - 생태계의 특성과 시스템 탐구, 생태 시스템과 인간 사회 시스템의 연관성
+2025-10-10 13:06:10.687 |   - 기후변화와 생태계 문제 탐구
+2025-10-10 13:06:10.687 |   - 생태전환을 위한 사회 체계의 변화 제안 및 실천
+2025-10-10 13:06:10.687 |   - 생태전환을 위한 지속가능한 과학 기술 제안 및 실천
+2025-10-10 13:06:10.687 |   - 일상생활에서의 생태 전환 참여와 실천
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **디지털및인공지능**:
+2025-10-10 13:06:10.687 |   - 컴퓨터와 인터넷 활용, 소프트웨어의 이해와 활용 등 디지털 기술의 이해와 활용
+2025-10-10 13:06:10.687 |   - 정보의 공유, 온라인 활동 참여와 협업 등 디지털 의사소통과 협력
+2025-10-10 13:06:10.687 |   - 정보의 수집, 관리, 분석, 표현 등 정보의 처리와 생성
+2025-10-10 13:06:10.687 |   - 디지털 기술과 정보의 안전한 사용 및 윤리적 사용
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **일반교양**:
+2025-10-10 13:06:10.687 |   - 생활 안전, 교통안전, 재난 안전, 직업 안전 등의 안전
+2025-10-10 13:06:10.687 |   - 동식물 또는 계절, 날씨 등의 자연 현상
+2025-10-10 13:06:10.687 |   - 애국심, 평화, 안보, 독도 교육 및 통일
+2025-10-10 13:06:10.687 |   - 정치, 경제, 금융, 역사, 지리, 수학, 과학, 교통, 정보 통신, 우주, 해양, 탐험 등 일반 교양
+2025-10-10 13:06:10.687 |   - 인문학, 사회 과학, 자연 과학, 예술 분야 등의 학문적 소양
+2025-10-10 13:06:10.687 |   - 언어, 문학, 예술 등 심미적 심성과 창의력, 상상력
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines:
+2025-10-10 13:06:10.687 | - Grades 7-8 (Middle 1-2): Concrete examples, daily experiences
+2025-10-10 13:06:10.687 | - Grade 9 (Middle 3): Cause-effect, compare-contrast
+2025-10-10 13:06:10.687 | - Grade 10 (High 1): Social context, diverse perspectives
+2025-10-10 13:06:10.687 | - Grades 11-12 (High 2-3): Abstract concepts, philosophical thinking, complex arguments
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Passage Type JSON Structures:
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 1. article (General text):
+2025-10-10 13:06:10.687 |    Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts (most versatile type)
+2025-10-10 13:06:10.687 |    Required format: passage_content must contain {"content": [{"type": "title", "value": "..."}, {"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 2. informational (Informational format):
+2025-10-10 13:06:10.687 |    Description: Advertisements, notices, posters, schedules, menus, receipts
+2025-10-10 13:06:10.687 |    Required format: passage_content must contain {"content": [{"type": "title"}, {"type": "paragraph"}, {"type": "list", "items": [...]}, {"type": "key_value", "pairs": [...]}]}
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 3. dialogue (Conversation):
+2025-10-10 13:06:10.687 |    Description: Text messages, chat, interviews, play scripts
+2025-10-10 13:06:10.687 |    Required format: passage_content must contain {"metadata": {"participants": [...]}, "content": [{"speaker": "...", "line": "..."}]}
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 4. correspondence (Letters/Communication):
+2025-10-10 13:06:10.687 |    Description: Emails, letters, memos, internal notices
+2025-10-10 13:06:10.687 |    Required format: passage_content must contain {"metadata": {"sender": "...", "recipient": "...", "subject": "...", "date": "..."}, "content": [{"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 5. review (Reviews/Feedback):
+2025-10-10 13:06:10.687 |    Description: Product reviews, movie ratings, restaurant reviews
+2025-10-10 13:06:10.687 |    Required format: passage_content must contain {"metadata": {"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}, "content": [{"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Important Notes for Passage Writing:
+2025-10-10 13:06:10.687 | - passage_type: Choose one from: article, dialogue, correspondence, informational, review
+2025-10-10 13:06:10.687 | - passage_content: Use JSON structure matching the type (must distinguish between passage_content and type-specific content, never omit content key or metadata key)
+2025-10-10 13:06:10.687 | - passage_content: For students (may include blanks/underlines), optimized for question type
+2025-10-10 13:06:10.687 |   - Blank: Use `<u>___</u>` format
+2025-10-10 13:06:10.687 |   - Underline: Use `<u>text</u>` format
+2025-10-10 13:06:10.687 |   - Emphasis: Use `<strong>text</strong>` format
+2025-10-10 13:06:10.687 | - original_content: Complete original with same structure as passage_content (no blanks, no HTML tags)
+2025-10-10 13:06:10.687 | - korean_translation: Natural Korean translation of original_content with same structure
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Passage vs Example Distinction
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ### Passage: Main reading material for comprehension (Required)
+2025-10-10 13:06:10.687 | - Long text (50+ words of reading material)
+2025-10-10 13:06:10.687 | - Types: article, dialogue, correspondence, informational, review
+2025-10-10 13:06:10.687 | - Written in JSON structure
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ### Example: Additional reference separate from passage/question/choices
+2025-10-10 13:06:10.687 | - MUST be simple string only (no array, no object)
+2025-10-10 13:06:10.687 | - Add only when question type requires it, otherwise set to null
+2025-10-10 13:06:10.687 | - example_content: For students (may include blanks/underlines), optimized for question type
+2025-10-10 13:06:10.687 |   - Blank: Use `<u>___</u>` format
+2025-10-10 13:06:10.687 |   - Underline: Use `<u>text</u>` format
+2025-10-10 13:06:10.687 |   - Emphasis: Use `<strong>text</strong>` format
+2025-10-10 13:06:10.687 | - example_original_content: Complete original version
+2025-10-10 13:06:10.687 | - example_korean_translation: Korean translation of example_original_content
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | AVOID DUPLICATION:
+2025-10-10 13:06:10.687 | - Do NOT copy sentences from passage to example
+2025-10-10 13:06:10.687 | - Do NOT extract parts of passage into example
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | IMPORTANT NOTES for question_text:
+2025-10-10 13:06:10.687 | - question_text must be pure Korean instruction only
+2025-10-10 13:06:10.687 | - Do NOT include English examples, choices, or sentences in question_text
+2025-10-10 13:06:10.687 | - Underline negative expressions (ex: <u>does not</u> in English | <u>않은</u> in Korean)
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # OUTPUT LANGUAGE REQUIREMENTS - CRITICAL
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | You MUST generate content in TWO languages according to these strict rules:
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ENGLISH Content (Student reading material):
+2025-10-10 13:06:10.687 | - passage_content: Write in ENGLISH
+2025-10-10 13:06:10.687 | - example_content: Write in ENGLISH (if needed)
+2025-10-10 13:06:10.687 | - question_choices: Write in ENGLISH
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | KOREAN Content (Instructions and explanations):
+2025-10-10 13:06:10.687 | - question_text: Write in KOREAN (Korean instruction for students)
+2025-10-10 13:06:10.687 |   Example: "위 글의 주제로 가장 적절한 것은?"
+2025-10-10 13:06:10.687 | - question_detail_type: Write in KOREAN (Korean question type name)
+2025-10-10 13:06:10.687 |   Example: "주제 파악"
+2025-10-10 13:06:10.687 | - explanation: Write in KOREAN (Korean explanation)
+2025-10-10 13:06:10.687 |   Example: "정답은 2번입니다. 지문에서..."
+2025-10-10 13:06:10.687 | - learning_point: Write in KOREAN (Korean learning point)
+2025-10-10 13:06:10.687 |   Example: "주제문은 글의 첫 문장이나 마지막 문장에 위치합니다."
+2025-10-10 13:06:10.687 | - korean_translation: Write in KOREAN (Korean translation of passage)
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Response Format (JSON)
+2025-10-10 13:06:10.687 | {
+2025-10-10 13:06:10.687 |     "passage": {
+2025-10-10 13:06:10.687 |         "passage_id": 8,
+2025-10-10 13:06:10.687 |         "passage_type": "Choose one: article, dialogue, correspondence, informational, review",
+2025-10-10 13:06:10.687 |         "passage_content": {...see JSON structure above...},
+2025-10-10 13:06:10.687 |         "original_content": {...see JSON structure above...},
+2025-10-10 13:06:10.687 |         "korean_translation": {...see JSON structure above...}
+2025-10-10 13:06:10.687 |     },
+2025-10-10 13:06:10.687 |     "question": {
+2025-10-10 13:06:10.687 |         "question_id": 8,
+2025-10-10 13:06:10.687 |         "question_type": "객관식",
+2025-10-10 13:06:10.687 |         "question_subject": "독해",
+2025-10-10 13:06:10.687 |         "question_detail_type": "Korean question type name",
+2025-10-10 13:06:10.687 |         "question_difficulty": "상",
+2025-10-10 13:06:10.687 |         "question_text": "Pure Korean instruction only",
+2025-10-10 13:06:10.687 |         "example_content": "English example if needed, null otherwise",
+2025-10-10 13:06:10.687 |         "example_original_content": "Complete original English example if needed, null otherwise",
+2025-10-10 13:06:10.687 |         "example_korean_translation": "Korean translation if example exists, null otherwise",
+2025-10-10 13:06:10.687 |         "question_passage_id": 8,
+2025-10-10 13:06:10.687 |         "question_choices": ["Choice 1 in English", "Choice 2 in English", ...],
+2025-10-10 13:06:10.687 |         "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+2025-10-10 13:06:10.687 |         "explanation": "Korean explanation",
+2025-10-10 13:06:10.687 |         "learning_point": "Korean learning point"
+2025-10-10 13:06:10.687 |     }
+2025-10-10 13:06:10.687 | }
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | CRITICAL RULES:
+2025-10-10 13:06:10.687 | - Response MUST include both passage and question in JSON
+2025-10-10 13:06:10.687 | - example fields: Write only when question type requires (e.g. sentence insertion, fill-in-the-blank options)
+2025-10-10 13:06:10.687 | - Simple topic/title/content questions: Set example fields to null
+2025-10-10 13:06:10.687 | - question_text format: Must be in Korean like "위 글의 주제로 가장 적절한 것은?"
+2025-10-10 13:06:10.687 | - Return ONLY JSON, no other text or explanation
+2025-10-10 13:06:10.687 | 2025-10-10 04:06:10,680 - celery.redirected - WARNING - You are a Korean English education expert specializing in Korean national curriculum standards.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | Generate 1 reading comprehension question WITH passage for Korean 중학교 Grade 1 students.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Question Information
+2025-10-10 13:06:10.687 | - Question ID: 8
+2025-10-10 13:06:10.687 | - Subject: 독해
+2025-10-10 13:06:10.687 | - Difficulty: 상
+2025-10-10 13:06:10.687 |   Note: Difficulty is RELATIVE to Grade 1 level within 중학교
+2025-10-10 13:06:10.687 |   - 하 (Low): Basic and easy within this grade
+2025-10-10 13:06:10.687 |   - 중 (Medium): Standard for this grade
+2025-10-10 13:06:10.687 |   - 상 (High): Challenging and complex within this grade
+2025-10-10 13:06:10.687 | - Format: 객관식
+2025-10-10 13:06:10.687 | - Passage ID: 8
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # 독해 출제 유형 (지문 작성 시 반드시 고려):
+2025-10-10 13:06:10.687 | - **내용 일치/불일치**: 제시된 글의 내용과 선택지의 내용이 일치하는지 혹은 불일치하는지 판단하는 유형
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | 위 유형에 맞는 내용과 구조를 가진 지문을 작성해야 합니다.
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Question Types
+2025-10-10 13:06:10.687 | - 독해 :
+2025-10-10 13:06:10.687 |   내용 일치/불일치 : 제시된 글의 내용과 선택지의 내용이 일치하는지 혹은 불일치하는지 판단하는 유형
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Grade-Level Depth Guidelines (Strictly Follow)
+2025-10-10 13:06:10.687 | - Vocabulary Level: 기초 어휘 (CEFR A2 수준)
+2025-10-10 13:06:10.687 | - Sentence Structure: 단문 중심, 기본 접속사(and, but, because) 사용
+2025-10-10 13:06:10.687 | - Abstraction Level: 구체적 사례와 일상 경험 중심
+2025-10-10 13:06:10.687 | - Information Density: 단일 주제, 명확한 주제문
+2025-10-10 13:06:10.687 | - Cognitive Level: 사실 확인, 내용 이해 중심 (Remember, Understand)
+2025-10-10 13:06:10.687 | - Content Approach: 개인 경험, 관찰 가능한 현상, 간단한 행동 묘사
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | # Passage Generation Guidelines
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Passage Requirements:
+2025-10-10 13:06:10.687 | - Word count: 50~150단어 (strictly follow for grade level)
+2025-10-10 13:06:10.687 | - CEFR level: A2 ~ B1 초반 (grade baseline)
+2025-10-10 13:06:10.687 | - Difficulty: Match vocabulary and sentence structure to 상 (see above)
+2025-10-10 13:06:10.687 | - Select appropriate passage type and optimize content/structure for question type
+2025-10-10 13:06:10.687 | - Strictly follow depth guidelines above
+2025-10-10 13:06:10.687 | - Mix various topics and passage types
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | ## Topic Categories (Common for all grades - adjust depth only):
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **개인생활**:
+2025-10-10 13:06:10.687 |   - 취미, 오락, 여행, 운동, 쇼핑 등 여가 선용
+2025-10-10 13:06:10.687 |   - 보건, 위생, 영양 등 개인 건강 관리
+2025-10-10 13:06:10.687 |   - 생일, 관심사, 생활 방식 등 개인 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **가정생활**:
+2025-10-10 13:06:10.687 |   - 의복, 음식, 주거
+2025-10-10 13:06:10.687 |   - 명절, 가족 행사, 집안일 등 가정 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **학교생활**:
+2025-10-10 13:06:10.687 |   - 다양한 교육 내용 및 방법, 학교 활동
+2025-10-10 13:06:10.687 |   - 교우 관계, 진로, 진학 등 학교 일상
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **사회생활**:
+2025-10-10 13:06:10.687 |   - 일, 노동, 직업 윤리 등 근로
+2025-10-10 13:06:10.687 |   - 서신 왕래, 소셜 미디어 등 온라인 활동, 면대면 대화 등 대인 관계
+2025-10-10 13:06:10.687 |   - 회의, 지역 행사, 졸업, 결혼, 장례식 등 사회적 행사
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **문화**:
+2025-10-10 13:06:10.687 |   - 동일 문화권 내의 다른 세대, 성별 간의 문화적 차이
+2025-10-10 13:06:10.687 |   - 우리의 문화와 생활 양식 소개
+2025-10-10 13:06:10.687 |   - 우리 문화와 다른 문화의 언어⋅문화적 차이
+2025-10-10 13:06:10.687 |   - 다양한 문화권의 관습, 규범, 가치, 사고방식, 행동 양식, 의사소통 방식
+2025-10-10 13:06:10.687 |   - 세계 문화: 의식주, 명절과 축제, 종교, 언어, 문학, 음악, 예술, 대중문화, 여행 및 관광지, 건축물, 전통, 지리, 역사, 인물, 스포츠, 관혼상제 등
+2025-10-10 13:06:10.687 |   - 다양한 문화권의 사람들과의 의사소통, 교류, 협력
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **민주시민**:
+2025-10-10 13:06:10.687 |   - 공중도덕, 예절, 협력, 배려, 봉사, 정의, 책임감 등 인성
+2025-10-10 13:06:10.687 |   - 인권, 양성평등, 글로벌 에티켓, 평화 등 민주시민 의식 및 세계시민 의식
+2025-10-10 13:06:10.687 |   - 올바른 미디어 리터러시를 통한 비판적 사고의 성찰, 사회적 공감과 의사소통
+2025-10-10 13:06:10.687 |   - 문제에 대한 비판적 사고와 민주적 의사 결정 및 갈등 해결
+2025-10-10 13:06:10.687 |   - 가난 및 기아 해결, 인구 문제, 청소년 문제, 고령화, 다문화 사회, 사회 정의와 불평등 해소
+2025-10-10 13:06:10.687 |   - 책임 있는 소비와 생산, 자원과 에너지 문제, 국제 문제 해결을 위한 협력 등 사회 현안
+2025-10-10 13:06:10.687 |   - 변화하는 사회 및 국제적 현안을 해결하기 위한 가정, 학교, 지역, 국가 및 세계 공동체의 참여
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **생태전환**:
+2025-10-10 13:06:10.687 |   - 인간과 생태계의 관계, 자연환경과 생태 윤리, 생태 감수성과 책임감
+2025-10-10 13:06:10.687 |   - 현재 및 미래 세대의 권리로서 환경권 존중
+2025-10-10 13:06:10.687 |   - 생태계의 특성과 시스템 탐구, 생태 시스템과 인간 사회 시스템의 연관성
+2025-10-10 13:06:10.687 |   - 기후변화와 생태계 문제 탐구
+2025-10-10 13:06:10.687 |   - 생태전환을 위한 사회 체계의 변화 제안 및 실천
+2025-10-10 13:06:10.687 |   - 생태전환을 위한 지속가능한 과학 기술 제안 및 실천
+2025-10-10 13:06:10.687 |   - 일상생활에서의 생태 전환 참여와 실천
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **디지털및인공지능**:
+2025-10-10 13:06:10.687 |   - 컴퓨터와 인터넷 활용, 소프트웨어의 이해와 활용 등 디지털 기술의 이해와 활용
+2025-10-10 13:06:10.687 |   - 정보의 공유, 온라인 활동 참여와 협업 등 디지털 의사소통과 협력
+2025-10-10 13:06:10.687 |   - 정보의 수집, 관리, 분석, 표현 등 정보의 처리와 생성
+2025-10-10 13:06:10.687 |   - 디지털 기술과 정보의 안전한 사용 및 윤리적 사용
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | **일반교양**:
+2025-10-10 13:06:10.687 |   - 생활 안전, 교통안전, 재난 안전, 직업 안전 등의 안전
+2025-10-10 13:06:10.687 |   - 동식물 또는 계절, 날씨 등의 자연 현상
+2025-10-10 13:06:10.687 |   - 애국심, 평화, 안보, 독도 교육 및 통일
+2025-10-10 13:06:10.687 |   - 정치, 경제, 금융, 역사, 지리, 수학, 과학, 교통, 정보 통신, 우주, 해양, 탐험 등 일반 교양
+2025-10-10 13:06:10.687 |   - 인문학, 사회 과학, 자연 과학, 예술 분야 등의 학문적 소양
+2025-10-10 13:06:10.687 |   - 언어, 문학, 예술 등 심미적 심성과 창의력, 상상력
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.687 | Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines:
+2025-10-10 13:06:10.687 | - Grades 7-8 (Middle 1-2): Concrete examples, daily experiences
+2025-10-10 13:06:10.687 | - Grade 9 (Middle 3): Cause-effect, compare-contrast
+2025-10-10 13:06:10.687 | - Grade 10 (High 1): Social context, diverse perspectives
+2025-10-10 13:06:10.687 | - Grades 11-12 (High 2-3): Abstract concepts, philosophical thinking, complex arguments
+2025-10-10 13:06:10.687 | 
+2025-10-10 13:06:10.688 | ## Passage Type JSON Structures:
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | 1. article (General text):
+2025-10-10 13:06:10.688 |    Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts (most versatile type)
+2025-10-10 13:06:10.688 |    Required format: passage_content must contain {"content": [{"type": "title", "value": "..."}, {"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | 2. informational (Informational format):
+2025-10-10 13:06:10.688 |    Description: Advertisements, notices, posters, schedules, menus, receipts
+2025-10-10 13:06:10.688 |    Required format: passage_content must contain {"content": [{"type": "title"}, {"type": "paragraph"}, {"type": "list", "items": [...]}, {"type": "key_value", "pairs": [...]}]}
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | 3. dialogue (Conversation):
+2025-10-10 13:06:10.688 |    Description: Text messages, chat, interviews, play scripts
+2025-10-10 13:06:10.688 |    Required format: passage_content must contain {"metadata": {"participants": [...]}, "content": [{"speaker": "...", "line": "..."}]}
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | 4. correspondence (Letters/Communication):
+2025-10-10 13:06:10.688 |    Description: Emails, letters, memos, internal notices
+2025-10-10 13:06:10.688 |    Required format: passage_content must contain {"metadata": {"sender": "...", "recipient": "...", "subject": "...", "date": "..."}, "content": [{"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | 5. review (Reviews/Feedback):
+2025-10-10 13:06:10.688 |    Description: Product reviews, movie ratings, restaurant reviews
+2025-10-10 13:06:10.688 |    Required format: passage_content must contain {"metadata": {"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}, "content": [{"type": "paragraph", "value": "..."}]}
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | ## Important Notes for Passage Writing:
+2025-10-10 13:06:10.688 | - passage_type: Choose one from: article, dialogue, correspondence, informational, review
+2025-10-10 13:06:10.688 | - passage_content: Use JSON structure matching the type (must distinguish between passage_content and type-specific content, never omit content key or metadata key)
+2025-10-10 13:06:10.688 | - passage_content: For students (may include blanks/underlines), optimized for question type
+2025-10-10 13:06:10.688 |   - Blank: Use `<u>___</u>` format
+2025-10-10 13:06:10.688 |   - Underline: Use `<u>text</u>` format
+2025-10-10 13:06:10.688 |   - Emphasis: Use `<strong>text</strong>` format
+2025-10-10 13:06:10.688 | - original_content: Complete original with same structure as passage_content (no blanks, no HTML tags)
+2025-10-10 13:06:10.688 | - korean_translation: Natural Korean translation of original_content with same structure
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | ## Passage vs Example Distinction
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | ### Passage: Main reading material for comprehension (Required)
+2025-10-10 13:06:10.688 | - Long text (50+ words of reading material)
+2025-10-10 13:06:10.688 | - Types: article, dialogue, correspondence, informational, review
+2025-10-10 13:06:10.688 | - Written in JSON structure
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | ### Example: Additional reference separate from passage/question/choices
+2025-10-10 13:06:10.688 | - MUST be simple string only (no array, no object)
+2025-10-10 13:06:10.688 | - Add only when question type requires it, otherwise set to null
+2025-10-10 13:06:10.688 | - example_content: For students (may include blanks/underlines), optimized for question type
+2025-10-10 13:06:10.688 |   - Blank: Use `<u>___</u>` format
+2025-10-10 13:06:10.688 |   - Underline: Use `<u>text</u>` format
+2025-10-10 13:06:10.688 |   - Emphasis: Use `<strong>text</strong>` format
+2025-10-10 13:06:10.688 | - example_original_content: Complete original version
+2025-10-10 13:06:10.688 | - example_korean_translation: Korean translation of example_original_content
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | AVOID DUPLICATION:
+2025-10-10 13:06:10.688 | - Do NOT copy sentences from passage to example
+2025-10-10 13:06:10.688 | - Do NOT extract parts of passage into example
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | IMPORTANT NOTES for question_text:
+2025-10-10 13:06:10.688 | - question_text must be pure Korean instruction only
+2025-10-10 13:06:10.688 | - Do NOT include English examples, choices, or sentences in question_text
+2025-10-10 13:06:10.688 | - Underline negative expressions (ex: <u>does not</u> in English | <u>않은</u> in Korean)
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | # OUTPUT LANGUAGE REQUIREMENTS - CRITICAL
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | You MUST generate content in TWO languages according to these strict rules:
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | ENGLISH Content (Student reading material):
+2025-10-10 13:06:10.688 | - passage_content: Write in ENGLISH
+2025-10-10 13:06:10.688 | - example_content: Write in ENGLISH (if needed)
+2025-10-10 13:06:10.688 | - question_choices: Write in ENGLISH
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | KOREAN Content (Instructions and explanations):
+2025-10-10 13:06:10.688 | - question_text: Write in KOREAN (Korean instruction for students)
+2025-10-10 13:06:10.688 |   Example: "위 글의 주제로 가장 적절한 것은?"
+2025-10-10 13:06:10.688 | - question_detail_type: Write in KOREAN (Korean question type name)
+2025-10-10 13:06:10.688 |   Example: "주제 파악"
+2025-10-10 13:06:10.688 | - explanation: Write in KOREAN (Korean explanation)
+2025-10-10 13:06:10.688 |   Example: "정답은 2번입니다. 지문에서..."
+2025-10-10 13:06:10.688 | - learning_point: Write in KOREAN (Korean learning point)
+2025-10-10 13:06:10.688 |   Example: "주제문은 글의 첫 문장이나 마지막 문장에 위치합니다."
+2025-10-10 13:06:10.688 | - korean_translation: Write in KOREAN (Korean translation of passage)
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | # Response Format (JSON)
+2025-10-10 13:06:10.688 | {
+2025-10-10 13:06:10.688 |     "passage": {
+2025-10-10 13:06:10.688 |         "passage_id": 8,
+2025-10-10 13:06:10.688 |         "passage_type": "Choose one: article, dialogue, correspondence, informational, review",
+2025-10-10 13:06:10.688 |         "passage_content": {...see JSON structure above...},
+2025-10-10 13:06:10.688 |         "original_content": {...see JSON structure above...},
+2025-10-10 13:06:10.688 |         "korean_translation": {...see JSON structure above...}
+2025-10-10 13:06:10.688 |     },
+2025-10-10 13:06:10.688 |     "question": {
+2025-10-10 13:06:10.688 |         "question_id": 8,
+2025-10-10 13:06:10.688 |         "question_type": "객관식",
+2025-10-10 13:06:10.688 |         "question_subject": "독해",
+2025-10-10 13:06:10.688 |         "question_detail_type": "Korean question type name",
+2025-10-10 13:06:10.688 |         "question_difficulty": "상",
+2025-10-10 13:06:10.688 |         "question_text": "Pure Korean instruction only",
+2025-10-10 13:06:10.688 |         "example_content": "English example if needed, null otherwise",
+2025-10-10 13:06:10.688 |         "example_original_content": "Complete original English example if needed, null otherwise",
+2025-10-10 13:06:10.688 |         "example_korean_translation": "Korean translation if example exists, null otherwise",
+2025-10-10 13:06:10.688 |         "question_passage_id": 8,
+2025-10-10 13:06:10.688 |         "question_choices": ["Choice 1 in English", "Choice 2 in English", ...],
+2025-10-10 13:06:10.688 |         "correct_answer": answer_index (multiple choice) | "answer text" (short answer),
+2025-10-10 13:06:10.688 |         "explanation": "Korean explanation",
+2025-10-10 13:06:10.688 |         "learning_point": "Korean learning point"
+2025-10-10 13:06:10.688 |     }
+2025-10-10 13:06:10.688 | }
+2025-10-10 13:06:10.688 | 
+2025-10-10 13:06:10.688 | CRITICAL RULES:
+2025-10-10 13:06:10.688 | - Response MUST include both passage and question in JSON
+2025-10-10 13:06:10.688 | - example fields: Write only when question type requires (e.g. sentence insertion, fill-in-the-blank options)
+2025-10-10 13:06:10.688 | - Simple topic/title/content questions: Set example fields to null
+2025-10-10 13:06:10.688 | - question_text format: Must be in Korean like "위 글의 주제로 가장 적절한 것은?"
+2025-10-10 13:06:10.688 | - Return ONLY JSON, no other text or explanation

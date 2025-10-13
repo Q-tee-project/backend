@@ -14,7 +14,6 @@ from app.schemas.assignment import (
     StudentAssignmentResponse,
 )
 from app.schemas import SubmissionRequest
-from app.schemas.assignment_results import EnglishAssignmentResultResponse
 from typing import Dict, Any
 
 router = APIRouter()

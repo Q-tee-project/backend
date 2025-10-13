@@ -2,11 +2,11 @@
 
 ## 시스템 개요
 
-영어 문제 생성 시스템은 **Gemini 2.0 Flash**와 **Gemini 2.5 Pro**를 활용한 이중 검증 시스템입니다.
+영어 문제 생성 시스템은 **Gemini 2.5 Flash**와 **Gemini 2.5 Pro**를 활용한 이중 검증 시스템입니다.
 
 ### 핵심 특징
 
-- **이중 AI 모델**: Gemini 2.0 Flash(생성) + Gemini 2.5 Pro(검증)
+- **이중 AI 모델**: Gemini 2.5 Flash(생성) + Gemini 2.5 Pro(검증)
 - **AI Judge 검증**: 모든 문제는 3가지 카테고리, 10가지 세부 기준으로 평가 (총 100점)
 - **재시도 메커니즘**: 불합격 문제에 대한 자동 재생성 (최대 3회)
 - **병렬 처리**: ThreadPoolExecutor 활용한 고속 생성
@@ -16,8 +16,8 @@
 
 ### 사용 모델
 
-- **문제 생성**: Gemini 2.0 Flash (`gemini-2.0-flash-exp`)
-- **AI Judge 검증**: Gemini 2.5 Pro (`gemini-2.0-flash-thinking-exp`)
+- **문제 생성**: Gemini 2.0 Flash (`gemini-2.5-flash-exp`)
+- **AI Judge 검증**: Gemini 2.5 Pro (`gemini-2.5-flash-thinking-exp`)
 
 ---
 
