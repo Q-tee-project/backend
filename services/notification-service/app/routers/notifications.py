@@ -3,6 +3,15 @@ from fastapi.responses import StreamingResponse
 from typing import List
 from ..schemas.notification import (
     MessageNotificationRequest,
+    ProblemGenerationNotificationRequest,
+    ProblemRegenerationNotificationRequest,
+    AssignmentSubmittedNotificationRequest,
+    AssignmentDeployedNotificationRequest,
+    ClassJoinRequestNotificationRequest,
+    ClassApprovedNotificationRequest,
+    GradingUpdatedNotificationRequest,
+    MarketSaleNotificationRequest,
+    MarketNewProductNotificationRequest,
     BulkNotificationRequest,
     StoredNotificationsResponse
 )
@@ -212,4 +221,116 @@ async def send_test_notification(user_type: str, user_id: int):
 
     except Exception as e:
         logger.error(f"Error sending test notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# 문제 생성/재생성 알림
+@router.post("/problem/generation")
+async def send_problem_generation_notification(request: ProblemGenerationNotificationRequest):
+    """문제 생성 완료/실패 알림 전송"""
+    try:
+        success = notification_service.send_problem_generation_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Problem generation notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending problem generation notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/problem/regeneration")
+async def send_problem_regeneration_notification(request: ProblemRegenerationNotificationRequest):
+    """문제 재생성 완료/실패 알림 전송"""
+    try:
+        success = notification_service.send_problem_regeneration_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Problem regeneration notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending problem regeneration notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 과제 관련 알림
+@router.post("/assignment/submitted")
+async def send_assignment_submitted_notification(request: AssignmentSubmittedNotificationRequest):
+    """과제 제출 알림 전송 (선생님이 받음)"""
+    try:
+        success = notification_service.send_assignment_submitted_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Assignment submitted notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending assignment submitted notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/assignment/deployed")
+async def send_assignment_deployed_notification(request: AssignmentDeployedNotificationRequest):
+    """과제 배포 알림 전송 (학생이 받음)"""
+    try:
+        success = notification_service.send_assignment_deployed_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Assignment deployed notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending assignment deployed notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 클래스 관련 알림
+@router.post("/class/join-request")
+async def send_class_join_request_notification(request: ClassJoinRequestNotificationRequest):
+    """클래스 가입 요청 알림 전송 (선생님이 받음)"""
+    try:
+        success = notification_service.send_class_join_request_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Class join request notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending class join request notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/class/approved")
+async def send_class_approved_notification(request: ClassApprovedNotificationRequest):
+    """클래스 승인 알림 전송 (학생이 받음)"""
+    try:
+        success = notification_service.send_class_approved_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Class approved notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending class approved notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 채점 관련 알림
+@router.post("/grading/updated")
+async def send_grading_updated_notification(request: GradingUpdatedNotificationRequest):
+    """채점 수정 알림 전송 (학생이 받음)"""
+    try:
+        success = notification_service.send_grading_updated_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Grading updated notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending grading updated notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 마켓 관련 알림
+@router.post("/market/sale")
+async def send_market_sale_notification(request: MarketSaleNotificationRequest):
+    """마켓 판매 알림 전송 (판매자가 받음)"""
+    try:
+        success = notification_service.send_market_sale_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Market sale notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending market sale notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/market/new-product")
+async def send_market_new_product_notification(request: MarketNewProductNotificationRequest):
+    """마켓 신상품 알림 전송"""
+    try:
+        success = notification_service.send_market_new_product_notification(request.dict())
+        if success:
+            return {"success": True, "message": "Market new product notification sent"}
+        raise HTTPException(status_code=500, detail="Failed to send notification")
+    except Exception as e:
+        logger.error(f"Error sending market new product notification: {e}")
         raise HTTPException(status_code=500, detail=str(e))

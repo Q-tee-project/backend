@@ -170,6 +170,19 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
 
         db.commit()
 
+        # 문제 생성 완료 알림 전송
+        from .utils.notification_helper import safe_send_notification, send_problem_generation_notification
+        safe_send_notification(
+            send_problem_generation_notification,
+            teacher_id=user_id,
+            task_id=current_task.request.id,
+            subject="korean",
+            worksheet_id=worksheet.id,
+            worksheet_title=worksheet.title,
+            problem_count=len(saved_problems),
+            success=True
+        )
+
         # 진행 상황 업데이트
         current_task.update_state(
             state='PROGRESS',
@@ -191,6 +204,20 @@ def generate_korean_problems_task(self, request_data: dict, user_id: int):
             if 'worksheet' in locals() and worksheet:
                 worksheet.status = WorksheetStatus.FAILED
                 db.commit()
+
+                # 문제 생성 실패 알림 전송
+                from .utils.notification_helper import safe_send_notification, send_problem_generation_notification
+                safe_send_notification(
+                    send_problem_generation_notification,
+                    teacher_id=user_id,
+                    task_id=current_task.request.id,
+                    subject="korean",
+                    worksheet_id=worksheet.id,
+                    worksheet_title=worksheet.title,
+                    problem_count=0,
+                    success=False,
+                    error_message=str(e)
+                )
         except:
             pass
         finally:
@@ -421,6 +448,19 @@ def regenerate_korean_problem_task(self, problem_id: int, requirements: str, cur
 
         db.commit()
         db.refresh(problem)
+
+        # 문제 재생성 완료 알림 전송
+        from .utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+        safe_send_notification(
+            send_problem_regeneration_notification,
+            teacher_id=worksheet.teacher_id,
+            task_id=task_id,
+            subject="korean",
+            worksheet_id=worksheet.id,
+            worksheet_title=worksheet.title,
+            problem_indices=[problem.sequence_order],
+            success=True
+        )
 
         # 결과 데이터 구성
         result = {

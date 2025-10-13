@@ -113,7 +113,7 @@ async def update_grading_session(
             session.status = update_data["status"]
 
         # 선생님이 수정한 경우 teacher_id와 승인 시간 업데이트
-        session.teacher_id = current_teacher["id"]
+        session.teacher_id = current_teacher.get("user_id") or current_teacher.get("id")
         session.approved_at = datetime.now()
 
         # 문제별 정답/오답 수정사항 적용
@@ -200,6 +200,23 @@ async def update_grading_session(
 
         db.commit()
         db.refresh(session)
+
+        # 학생에게 채점 수정 알림 전송
+        from ..utils.notification_helper import send_grading_updated_notification
+        from ..models.korean_generation import Assignment
+
+        assignment = db.query(Assignment).filter(Assignment.worksheet_id == session.worksheet_id).first()
+        if assignment:
+            try:
+                await send_grading_updated_notification(
+                    student_id=session.student_id,
+                    assignment_id=assignment.id,
+                    assignment_title=assignment.title,
+                    score=session.total_score,
+                    feedback=update_data.get("feedback")
+                )
+            except Exception as e:
+                print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
 
         return {
             "id": session.id,

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     max_worksheet_duration: int = 180  # 분
     
     # === CORS 설정 ===
-    allowed_origins: List[str] = ["*"]  # 프로덕션에서는 특정 도메인만 허용
+    allowed_origins: List[str] = ["http://localhost:3000"]  # 프로덕션에서는 특정 도메인만 허용
     allowed_methods: List[str] = ["*"]
     allowed_headers: List[str] = ["*"]
     allow_credentials: bool = True

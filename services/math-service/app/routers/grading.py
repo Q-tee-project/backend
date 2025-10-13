@@ -433,6 +433,23 @@ async def update_grading_session(
         for pr in updated_problem_results:
             print(f"Problem {pr.problem_id}: user_answer='{pr.user_answer}', score={pr.score}, is_correct={pr.is_correct}")
 
+        # 채점 수정 알림 전송 (학생에게)
+        from ..models.math_generation import Assignment
+        from ..utils.notification_helper import send_grading_updated_notification
+
+        assignment = db.query(Assignment).filter(Assignment.worksheet_id == grading_session.worksheet_id).first()
+        if assignment:
+            try:
+                await send_grading_updated_notification(
+                    student_id=grading_session.graded_by,
+                    assignment_id=assignment.id,
+                    assignment_title=assignment.title,
+                    score=grading_session.total_score,
+                    feedback=update_data.get("feedback")
+                )
+            except Exception as e:
+                print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
         return {
             "message": "Grading session updated successfully",
             "session_id": session_id,

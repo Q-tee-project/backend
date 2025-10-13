@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 import logging
@@ -102,6 +102,22 @@ async def deploy_assignment(
             deployments.append(existing_deployment)
     
     db.commit()
+    
+    # 과제 배포 알림 전송
+    from ..utils.notification_helper import send_assignment_deployed_notification
+    for student_id in deploy_request.student_ids:
+        try:
+            await send_assignment_deployed_notification(
+                student_id=student_id,
+                class_id=deploy_request.classroom_id,
+                class_name=f"클래스 {deploy_request.classroom_id}",  # TODO: 실제 클래스명 조회
+                assignment_id=assignment.id,
+                assignment_title=assignment.title,
+                due_date=assignment.due_date.isoformat() if hasattr(assignment, 'due_date') and assignment.due_date else None
+            )
+        except Exception as e:
+            print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+    
     return [AssignmentDeploymentResponse.from_orm(d) for d in deployments]
 
 @router.get("/student/{student_id}", response_model=List[StudentAssignmentResponse])
@@ -126,6 +142,15 @@ async def get_student_assignments(
     ).all()
     
     return [StudentAssignmentResponse.from_orm(d) for d in deployments]
+
+@router.get("/{assignment_id}/details")
+async def get_assignment_details(
+    assignment_id: int,
+    student_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """학생용 과제 상세 정보 조회 (query param 버전)"""
+    return await get_assignment_detail(assignment_id, student_id, db)
 
 @router.get("/{assignment_id}/student/{student_id}")
 async def get_assignment_detail(
@@ -258,3 +283,31 @@ async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get
     # draft와 deployed 모든 과제를 반환
     assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id).all()
     return assignments
+
+@router.delete("/{assignment_id}")
+async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    """과제 삭제 (관련 deployment, session, answers 포함)"""
+    from ..models.math_generation import Assignment, AssignmentDeployment, TestSession, TestAnswer
+
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # 해당 과제의 모든 세션 조회
+    sessions = db.query(TestSession).filter(TestSession.assignment_id == assignment_id).all()
+
+    # 각 세션의 답변들 삭제
+    for session in sessions:
+        db.query(TestAnswer).filter(TestAnswer.session_id == session.session_id).delete()
+
+    # 관련 test sessions 삭제
+    db.query(TestSession).filter(TestSession.assignment_id == assignment_id).delete()
+
+    # 관련 deployments 삭제
+    db.query(AssignmentDeployment).filter(AssignmentDeployment.assignment_id == assignment_id).delete()
+
+    # 과제 삭제
+    db.delete(assignment)
+    db.commit()
+
+    return {"message": "Assignment deleted successfully", "assignment_id": assignment_id}

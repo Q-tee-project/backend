@@ -92,6 +92,22 @@ async def deploy_assignment(
             deployments.append(existing_deployment)
 
     db.commit()
+
+    # 배포된 학생들에게 알림 전송
+    from ..utils.notification_helper import send_assignment_deployed_notification
+    for student_id in deploy_request.student_ids:
+        try:
+            await send_assignment_deployed_notification(
+                student_id=student_id,
+                class_id=deploy_request.classroom_id,
+                class_name=f"클래스 {deploy_request.classroom_id}",
+                assignment_id=assignment.id,
+                assignment_title=assignment.title,
+                due_date=assignment.due_date.isoformat() if hasattr(assignment, 'due_date') and assignment.due_date else None
+            )
+        except Exception as e:
+            print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
     return [AssignmentDeploymentResponse.from_orm(d) for d in deployments]
 
 @router.get("/student/{student_id}", response_model=List[StudentAssignmentResponse])
@@ -254,6 +270,26 @@ async def submit_korean_assignment(
 
     db.commit()
 
+    # 선생님에게 과제 제출 알림 전송
+    from ..utils.notification_helper import send_assignment_submitted_notification
+    from ..models.worksheet import Worksheet
+
+    worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
+    if worksheet and deployment:
+        try:
+            await send_assignment_submitted_notification(
+                teacher_id=worksheet.teacher_id,
+                student_id=student_id,
+                student_name=f"학생{student_id}",  # TODO: auth-service에서 학생 이름 조회
+                class_id=deployment.classroom_id,
+                class_name=f"클래스 {deployment.classroom_id}",
+                assignment_id=assignment.id,
+                assignment_title=assignment.title,
+                submitted_at=deployment.submitted_at.isoformat() if deployment.submitted_at else datetime.utcnow().isoformat()
+            )
+        except Exception as e:
+            print(f"⚠️ 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
     return {
         "message": "Assignment submitted successfully.",
         "grading_session_id": grading_session.id,
@@ -268,3 +304,21 @@ async def get_assignments_for_classroom(class_id: int, db: Session = Depends(get
     # draft와 deployed 모든 과제를 반환
     assignments = db.query(Assignment).filter(Assignment.classroom_id == class_id).all()
     return assignments
+
+@router.delete("/{assignment_id}")
+async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    """과제 삭제 (관련 deployment 포함)"""
+    from ..models.korean_generation import AssignmentDeployment
+
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # 관련 deployments 삭제
+    db.query(AssignmentDeployment).filter(AssignmentDeployment.assignment_id == assignment_id).delete()
+
+    # 과제 삭제 (grading sessions는 워크시트와 연결되어 있으므로 유지)
+    db.delete(assignment)
+    db.commit()
+
+    return {"message": "Assignment deleted successfully", "assignment_id": assignment_id}
