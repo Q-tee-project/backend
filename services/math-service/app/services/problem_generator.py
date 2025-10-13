@@ -37,7 +37,8 @@ class ProblemGenerator:
             temperature=0.7,
             max_output_tokens=12288,
             top_p=0.8,
-            top_k=40
+            top_k=40,
+            response_mime_type="application/json"  # JSON mode 활성화
         )
 
         self.model = genai.GenerativeModel(
@@ -195,10 +196,21 @@ class ProblemGenerator:
                         print(f"⚠️ {problem_number}번 문제: 파싱 실패, 재시도 {attempt + 1}/{max_retries}")
                         continue
                     else:
+                        print(f"❌ {problem_number}번 문제: JSON 파싱 완전 실패")
                         return None
 
                 # 첫 번째 문제 선택
                 problem = problems[0]
+
+                # 필수 필드 확인 (question과 correct_answer가 비정상적으로 큰 경우 거부)
+                question = problem.get("question", "")
+                if len(question) > 5000:  # 정상적인 문제는 5000자를 넘지 않음
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ {problem_number}번 문제: question 필드가 비정상적으로 큼 ({len(question)}자), 재시도")
+                        continue
+                    else:
+                        print(f"❌ {problem_number}번 문제: question 필드 검증 실패")
+                        return None
 
                 # 기본 구조 검증
                 validated_problem = self._validate_basic_structure(problem)
@@ -409,27 +421,48 @@ class ProblemGenerator:
     
     def _extract_and_parse_json(self, content: str) -> List[Dict]:
         """JSON 추출 및 파싱 - 완전 개선 버전"""
+        # JSON mode가 활성화되어 있으면 직접 파싱 시도
+        try:
+            result = json.loads(content)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
+            else:
+                raise ValueError(f"Unexpected JSON type: {type(result)}")
+        except json.JSONDecodeError:
+            # JSON mode 실패 시 기존 로직으로 폴백
+            pass
+
         # 1. JSON 블록 추출
         json_str = self._extract_json_block(content)
-        
+
         # 2. JSON 문자열 전처리
         preprocessed = self._preprocess_json_string(json_str)
-        
+
         # 3. JSON 파싱 시도
         try:
             result = json.loads(preprocessed)
-            return result if isinstance(result, list) else [result]
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
+            else:
+                raise ValueError(f"Unexpected JSON type: {type(result)}")
         except json.JSONDecodeError as e:
             # 4. 고급 복구 시도
             recovered = self._advanced_json_recovery(preprocessed)
-            if recovered:
+            if recovered and len(recovered) > 0:
                 return recovered
-            
+
             # 5. 최후의 수단: 개별 객체 파싱
             individual_problems = self._parse_individual_problems(preprocessed)
-            if individual_problems:
+            if individual_problems and len(individual_problems) > 0:
                 return individual_problems
-            
+
+            # 6. 완전 실패 - 빈 리스트 반환 (None이 아닌)
+            print(f"❌ JSON 파싱 완전 실패: {str(e)}")
+            print(f"   원본 내용 (처음 500자): {content[:500]}")
             raise Exception(f"JSON 파싱 실패: {str(e)}\n원본: {json_str[:500]}...")
     
     def _extract_json_block(self, content: str) -> str:
@@ -653,6 +686,18 @@ class ProblemGenerator:
     
     def _validate_basic_structure(self, problem: Dict) -> Dict:
         """기본 구조 검증만 수행 - LaTeX는 Gemini가 완벽하게 생성"""
+        # 0. 필수 필드가 비정상적으로 큰지 확인 (JSON 파싱 실패로 전체 텍스트가 들어간 경우 감지)
+        question = problem.get("question", "")
+        correct_answer = problem.get("correct_answer", "")
+        explanation = problem.get("explanation", "")
+
+        # 정상적인 문제의 최대 길이 체크
+        if len(question) > 5000 or len(correct_answer) > 1000 or len(explanation) > 10000:
+            raise ValueError(
+                f"필드 크기가 비정상적으로 큼: "
+                f"question={len(question)}자, correct_answer={len(correct_answer)}자, explanation={len(explanation)}자"
+            )
+
         # 1. 필수 필드 확인 및 기본값 설정
         problem = self._ensure_required_fields(problem)
 
