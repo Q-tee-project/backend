@@ -543,7 +543,7 @@ Important: Professional and abstract concepts requiring higher-order thinking an
                 reading_types = db.query(ReadingType).filter(ReadingType.id.in_(reading_ids)).all()
                 if reading_types:
                     types_list = [f"- **{rt.name}**: {rt.description}" for rt in reading_types]
-                    reading_types_info = "\n# 독해 출제 유형 (지문 작성 시 반드시 고려):\n" + "\n".join(types_list) + "\n\n위 유형에 맞는 내용과 구조를 가진 지문을 작성해야 합니다."
+                    reading_types_info = "\n".join(types_list)
             except Exception as e:
                 print(f"독해 세부 유형 조회 오류: {e}")
 
@@ -587,10 +587,11 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
   - 상 (High): Challenging and complex within this grade
 - Format: {format_type}
 - Passage ID: {passage_id}
-{reading_types_info}
 
-# Question Types
-{chr(10).join(subject_types_info)}
+# Korean Learning Objectives for Passage & Question (지문 및 문제 출제 의도)
+# This section is in Korean and contains the specific learning objectives for the question to be generated. You MUST follow these objectives precisely when creating both the passage and the question.
+{reading_types_info}
+# Based on the objectives above, you must create a passage and question with appropriate content and structure.
 
 # Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS
 YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected content.
@@ -765,7 +766,8 @@ Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 - Format: {format_type}
 - CEFR level: {cefr_level} (grade baseline)
 
-# Question Types
+# Korean Learning Objectives (출제 의도)
+# This section is in Korean and contains the specific learning objectives for the question to be generated. You MUST follow these objectives precisely.
 {chr(10).join(subject_types_info)}
 
 # Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS

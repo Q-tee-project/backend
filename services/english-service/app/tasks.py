@@ -387,6 +387,98 @@ def generate_english_worksheet_task(self, request_data: dict):
             db.close()
             raise Exception(f"워크시트 조립 실패: {str(e)}")
 
+        # === 4단계: DB 자동 저장 ===
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'current': 95, 'total': 100, 'status': 'DB에 저장 중...'}
+        )
+
+        worksheet_id = None
+        teacher_id = request_data.get('teacher_id')
+
+        # teacher_id가 있으면 DB에 자동 저장
+        if teacher_id:
+            try:
+                from app.models.worksheet import Worksheet, Passage, Question
+
+                print(f"💾 DB 자동 저장 시작 (teacher_id: {teacher_id})...")
+
+                # 문제지 제목 생성 (없으면 자동 생성)
+                worksheet_name = request_data.get('worksheet_name')
+                if not worksheet_name:
+                    worksheet_name = f"{request.school_level} {request.grade}학년 영어 문제지"
+
+                # 1. Worksheet 저장
+                db_worksheet = Worksheet(
+                    teacher_id=teacher_id,
+                    worksheet_name=worksheet_name,
+                    school_level=request.school_level,
+                    grade=str(request.grade),
+                    subject="영어",
+                    problem_type=parsed_llm_response.get('problem_type', '혼합형'),
+                    total_questions=request.total_questions,
+                    duration=request_data.get('duration', 60),
+                    created_at=datetime.now()
+                )
+                db.add(db_worksheet)
+                db.flush()
+                worksheet_id = db_worksheet.worksheet_id
+
+                print(f"  ✅ Worksheet 저장 완료 (ID: {worksheet_id})")
+
+                # 2. Passages 저장
+                for passage_data in passages:
+                    db_passage = Passage(
+                        worksheet_id=worksheet_id,
+                        passage_id=passage_data['passage_id'],
+                        passage_type=passage_data['passage_type'],
+                        passage_content=passage_data['passage_content'],
+                        original_content=passage_data.get('original_content'),
+                        korean_translation=passage_data.get('korean_translation'),
+                        related_questions=passage_data.get('related_questions', []),
+                        created_at=datetime.now()
+                    )
+                    db.add(db_passage)
+
+                print(f"  ✅ Passages 저장 완료 ({len(passages)}개)")
+
+                # 3. Questions 저장
+                for question_data in questions:
+                    db_question = Question(
+                        worksheet_id=worksheet_id,
+                        question_id=question_data['question_id'],
+                        question_text=question_data['question_text'],
+                        question_type=question_data['question_type'],
+                        question_subject=question_data['question_subject'],
+                        question_difficulty=question_data['question_difficulty'],
+                        question_detail_type=question_data.get('question_detail_type'),
+                        question_choices=question_data.get('question_choices'),
+                        passage_id=question_data.get('question_passage_id'),
+                        correct_answer=str(question_data.get('correct_answer')) if question_data.get('correct_answer') else None,
+                        example_content=question_data.get('example_content') or '',
+                        example_original_content=question_data.get('example_original_content'),
+                        example_korean_translation=question_data.get('example_korean_translation'),
+                        explanation=question_data.get('explanation'),
+                        learning_point=question_data.get('learning_point'),
+                        created_at=datetime.now()
+                    )
+                    db.add(db_question)
+
+                print(f"  ✅ Questions 저장 완료 ({len(questions)}개)")
+
+                # 커밋
+                db.commit()
+                print(f"✅ DB 자동 저장 완료! worksheet_id: {worksheet_id}")
+
+            except Exception as save_error:
+                db.rollback()
+                print(f"⚠️ DB 자동 저장 실패: {save_error}")
+                import traceback
+                traceback.print_exc()
+                # 저장 실패해도 생성 결과는 반환
+        else:
+            print("⚠️ teacher_id가 없어 DB 저장을 건너뜁니다.")
+
         # 진행 상황 업데이트 - 완료 (100%)
         current_task.update_state(
             state='PROGRESS',
@@ -398,7 +490,7 @@ def generate_english_worksheet_task(self, request_data: dict):
         print("🎉 문제지 및 답안지 생성 완료!")
         print("=" * 80)
         if parsed_llm_response:
-            print(f"📄 문제지 ID: {parsed_llm_response.get('worksheet_id', 'N/A')}")
+            print(f"📄 문제지 ID: {worksheet_id if worksheet_id else 'N/A (저장 안 됨)'}")
             print(f"📝 문제지 제목: {parsed_llm_response.get('worksheet_name', 'N/A')}")
             print(f"📊 총 문제 수: {parsed_llm_response.get('total_questions', 'N/A')}개")
             print(f"🔍 문제 유형: {parsed_llm_response.get('problem_type', 'N/A')}")
@@ -406,10 +498,11 @@ def generate_english_worksheet_task(self, request_data: dict):
 
         db.close()
 
-        # 기존과 동일한 형태로 반환 (DB 저장하지 않음)
+        # DB 저장된 worksheet_id 포함하여 반환
         return {
             "message": "문제지와 답안지 생성이 완료되었습니다!",
             "status": "success",
+            "worksheet_id": worksheet_id,  # DB에 저장된 ID (없으면 None)
             "llm_response": parsed_llm_response,  # 생성된 JSON을 프론트엔드로 전달
             "llm_error": llm_error,
         }
