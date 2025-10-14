@@ -177,7 +177,10 @@ class OCRService:
             return None
 
     def _preprocess_with_cv2(self, image_data: bytes) -> Optional[bytes]:
-        """OpenCV를 이용한 고급 이미지 전처리"""
+        """
+        OpenCV 최소 전처리 - "API를 먼저 믿는 전략"
+        실패 사례가 수집되면 추가 처리를 활성화
+        """
         try:
             # bytes -> numpy array
             nparr = np.frombuffer(image_data, np.uint8)
@@ -196,40 +199,17 @@ class OCRService:
             h, w = gray.shape
             min_size = 1000
             if h < min_size or w < min_size:
-                scale = max(min_size / h, min_size / w, 3.0)
+                scale = max(min_size / h, min_size / w, 2.0)  # 3.0 → 2.0으로 축소
                 new_h, new_w = int(h * scale), int(w * scale)
                 gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
                 self._log(f"크기 확대: {w}x{h} → {new_w}x{new_h} (x{scale:.1f})")
 
-            # 3. 노이즈 제거
-            denoised = cv2.fastNlMeansDenoising(gray, None, h=10, templateWindowSize=7, searchWindowSize=21)
-
-            # 4. 대비 향상 (CLAHE - Contrast Limited Adaptive Histogram Equalization)
-            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(denoised)
-
-            # 5. 선명화
-            kernel = np.array([[-1, -1, -1],
-                               [-1,  9, -1],
-                               [-1, -1, -1]])
-            sharpened = cv2.filter2D(enhanced, -1, kernel)
-
-            # 6. Adaptive Thresholding (필기체 강조)
-            binary = cv2.adaptiveThreshold(
-                sharpened,
-                255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY,
-                11,
-                2
-            )
-
-            # 7. 모폴로지 연산 (필기 선 연결)
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-            morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+            # 3. 대비 향상 (CLAHE) - 어두운 이미지 대응
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
 
             # numpy array -> bytes (PNG)
-            success, buffer = cv2.imencode('.png', morph, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+            success, buffer = cv2.imencode('.png', enhanced, [cv2.IMWRITE_PNG_COMPRESSION, 0])
             if not success:
                 self._log("OpenCV 인코딩 실패")
                 return None
@@ -238,12 +218,41 @@ class OCRService:
             self._log(f"OpenCV 전처리 완료: {len(image_data)} → {len(processed_data)} bytes")
             return processed_data
 
+            # ========================================
+            # 🔪 필요시 활성화할 추가 처리 (현재 비활성화)
+            # ========================================
+            # # 노이즈 제거
+            # denoised = cv2.fastNlMeansDenoising(gray, None, h=10, templateWindowSize=7, searchWindowSize=21)
+            #
+            # # 선명화
+            # kernel = np.array([[-1, -1, -1],
+            #                    [-1,  9, -1],
+            #                    [-1, -1, -1]])
+            # sharpened = cv2.filter2D(enhanced, -1, kernel)
+            #
+            # # Adaptive Thresholding (필기체 강조)
+            # binary = cv2.adaptiveThreshold(
+            #     sharpened,
+            #     255,
+            #     cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            #     cv2.THRESH_BINARY,
+            #     11,
+            #     2
+            # )
+            #
+            # # 모폴로지 연산 (필기 선 연결)
+            # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+            # morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
         except Exception as e:
             self._log(f"OpenCV 전처리 실패: {e}")
             return None
 
     def _preprocess_with_pil(self, image_data: bytes) -> Optional[bytes]:
-        """PIL을 이용한 기본 이미지 전처리 (fallback)"""
+        """
+        PIL 최소 전처리 (fallback) - "API를 먼저 믿는 전략"
+        실패 사례가 수집되면 추가 처리를 활성화
+        """
         try:
             image = Image.open(io.BytesIO(image_data))
             self._log(f"원본 크기: {image.size}, 모드: {image.mode}")
@@ -260,15 +269,13 @@ class OCRService:
             w, h = image.size
             min_size = 1000
             if w < min_size or h < min_size:
-                scale = max(min_size / w, min_size / h, 3.0)
+                scale = max(min_size / w, min_size / h, 2.0)  # 3.0 → 2.0으로 축소
                 new_w, new_h = int(w * scale), int(h * scale)
                 image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
                 self._log(f"크기 확대: {w}x{h} → {new_w}x{new_h}")
 
-            # 대비, 선명도 향상
-            image = ImageEnhance.Contrast(image).enhance(2.0)
-            image = ImageEnhance.Sharpness(image).enhance(2.0)
-            image = ImageEnhance.Brightness(image).enhance(1.1)
+            # 대비 향상
+            image = ImageEnhance.Contrast(image).enhance(1.5)  # 2.0 → 1.5로 축소
 
             # PNG로 저장
             buffer = io.BytesIO()
@@ -278,16 +285,23 @@ class OCRService:
             self._log(f"PIL 전처리 완료: {len(image_data)} → {len(processed_data)} bytes")
             return processed_data
 
+            # ========================================
+            # 🔪 필요시 활성화할 추가 처리 (현재 비활성화)
+            # ========================================
+            # # 선명도 향상
+            # image = ImageEnhance.Sharpness(image).enhance(2.0)
+            #
+            # # 밝기 조정
+            # image = ImageEnhance.Brightness(image).enhance(1.1)
+
         except Exception as e:
             self._log(f"PIL 전처리 실패: {e}")
             return None
 
     def _clean_math_text(self, text: str) -> str:
         """
-        수학 답안 텍스트 정리
-        - 비ASCII 문자 제거 (한글, 일본어 등)
-        - 분수 패턴 인식
-        - 컨텍스트 기반 오인식 수정
+        수학 답안 텍스트 최소 정리 - "API를 먼저 믿는 전략"
+        실패 사례가 수집되면 추가 처리를 활성화
         """
         if not text or not text.strip():
             return ""
@@ -298,16 +312,10 @@ class OCRService:
         # 1. 비ASCII 문자 제거 (수학 답안은 ASCII만 필요)
         cleaned = re.sub(r'[^\x00-\x7F]', '', cleaned)
 
-        # 2. 분수 패턴 감지
-        fraction = self._detect_fraction(cleaned)
-        if fraction:
-            self._log(f"분수 인식: '{original}' → '{fraction}'")
-            return fraction
-
-        # 3. 컨텍스트 기반 오인식 수정
+        # 2. OCR 오류 수정 (명백한 오인식만)
         cleaned = self._fix_ocr_errors(cleaned)
 
-        # 4. 공백 정리
+        # 3. 공백 정리
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
         if cleaned != original:
@@ -315,8 +323,20 @@ class OCRService:
 
         return cleaned
 
+        # ========================================
+        # 🔪 필요시 활성화할 추가 처리 (현재 비활성화)
+        # ========================================
+        # # 분수 패턴 감지
+        # fraction = self._detect_fraction(cleaned)
+        # if fraction:
+        #     self._log(f"분수 인식: '{original}' → '{fraction}'")
+        #     return fraction
+
     def _detect_fraction(self, text: str) -> Optional[str]:
-        """분수 패턴 감지"""
+        """
+        분수 패턴 감지 (현재 비활성화)
+        필요시 _clean_math_text에서 활성화
+        """
         # 패턴 1: "17\n4" (세로 분수)
         match = re.search(r'^(\d+)\s*[\n\r]+\s*(\d+)$', text)
         if match:
@@ -368,30 +388,39 @@ class OCRService:
 
     def extract_answer_from_text(self, ocr_text: str, problem_id: int, problem_number: int) -> str:
         """
-        OCR 텍스트에서 특정 문제의 답안 추출
+        OCR 텍스트에서 특정 문제의 답안 추출 (현재 단순화)
+
+        "API를 먼저 믿는 전략": 사용자가 한 문제씩 제출하는 것을 가정
+        여러 문제를 한 번에 제출하는 경우가 생기면 로직 활성화
 
         Args:
             ocr_text: 전체 OCR 텍스트
-            problem_id: 문제 ID
-            problem_number: 문제 번호
+            problem_id: 문제 ID (현재 미사용)
+            problem_number: 문제 번호 (현재 미사용)
 
         Returns:
-            추출된 답안
+            추출된 답안 (현재는 전체 텍스트 반환)
         """
         if not ocr_text:
             return ""
 
-        lines = ocr_text.split('\n')
-
-        # 문제 번호로 답안 찾기
-        for i, line in enumerate(lines):
-            # "1.", "1)", "1:" 등의 패턴
-            pattern = rf'\b{problem_number}[\.\):]\s*(.+)'
-            match = re.search(pattern, line)
-            if match:
-                answer = match.group(1).strip()
-                self._log(f"문제 {problem_number} 답안 추출: {answer}")
-                return answer
-
-        # 패턴을 못 찾으면 전체 텍스트 반환
+        # 단순화: 전체 텍스트를 답안으로 반환
         return ocr_text.strip()
+
+        # ========================================
+        # 🔪 필요시 활성화할 추가 처리 (현재 비활성화)
+        # ========================================
+        # lines = ocr_text.split('\n')
+        #
+        # # 문제 번호로 답안 찾기
+        # for i, line in enumerate(lines):
+        #     # "1.", "1)", "1:" 등의 패턴
+        #     pattern = rf'\b{problem_number}[\.\):]\s*(.+)'
+        #     match = re.search(pattern, line)
+        #     if match:
+        #         answer = match.group(1).strip()
+        #         self._log(f"문제 {problem_number} 답안 추출: {answer}")
+        #         return answer
+        #
+        # # 패턴을 못 찾으면 전체 텍스트 반환
+        # return ocr_text.strip()
