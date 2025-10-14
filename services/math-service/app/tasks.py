@@ -461,7 +461,13 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                         ProblemGradingResult.problem_id == problem.id
                     ).first()
 
-                    if not existing_result:
+                    if existing_result:
+                        # 기존 결과가 있으면 업데이트 (객관식 결과 포함)
+                        existing_result.is_correct = is_correct
+                        existing_result.score = points_per_problem if is_correct else 0
+                        existing_result.user_answer = student_answer
+                        print(f"🔄 문제 {problem.id} 결과 업데이트: is_correct={is_correct}, score={existing_result.score}")
+                    else:
                         # 새로운 문제 결과 생성 (OCR 처리된 답안 확인)
                         original_answer = next((ans for ans in session_answers if ans.problem_id == problem.id), None)
                         input_method = "ai_grading_ocr" if original_answer and original_answer.id in ocr_processed_answers else "multiple_choice"
@@ -479,11 +485,13 @@ def process_assignment_ai_grading_task(self, assignment_id: int, user_id: int):
                             explanation=problem.explanation
                         )
                         db.add(problem_result)
+                        print(f"➕ 문제 {problem.id} 결과 생성: is_correct={is_correct}, score={problem_result.score}")
 
                 # 채점 세션 점수 업데이트
                 existing_grading.correct_count = correct_count
                 existing_grading.total_score = correct_count * points_per_problem
                 existing_grading.graded_at = datetime.now(timezone.utc)
+                print(f"✅ 채점 세션 업데이트: correct_count={correct_count}, total_score={existing_grading.total_score}")
                 updated_sessions.append(existing_grading.id)
 
             else:

@@ -15,7 +15,7 @@ import base64
 
 router = APIRouter()
 
-@router.post("/test-sessions/{session_id}/submit", response_model=TestSubmissionResponse)
+@router.post("/{session_id}/submit", response_model=TestSubmissionResponse)
 async def submit_test(
     session_id: str,
     answers: Dict[str, str] = Body(..., embed=True),
@@ -141,10 +141,28 @@ async def submit_test(
 
     db.commit()
 
-    # 6. 과제 제출 알림 전송 (선생님에게)
+    # 6-1. 단답형 문제가 있는 경우 자동으로 OCR 채점 task 트리거
+    has_short_answer = any(p.problem_type == 'short_answer' for p in problems)
+    has_handwriting_image = any(ans.startswith('data:image/') for ans in answers.values())
+
+    if has_short_answer and has_handwriting_image:
+        try:
+            from ..tasks import process_assignment_ai_grading_task
+            print(f"🤖 자동 OCR 채점 시작: assignment_id={assignment.id}, student_id={current_user['user_id']}")
+            # Celery task를 비동기로 실행 (학생은 기다리지 않음)
+            process_assignment_ai_grading_task.delay(
+                assignment_id=assignment.id,
+                user_id=current_user["user_id"]
+            )
+            print(f"✅ OCR 채점 task 트리거 완료")
+        except Exception as e:
+            # OCR 채점 실패해도 제출은 성공으로 처리
+            print(f"⚠️ 자동 OCR 채점 task 트리거 실패 (주요 로직 계속 진행): {e}")
+
+    # 7. 과제 제출 알림 전송 (선생님에게)
     from ..models.worksheet import Worksheet
     from ..utils.notification_helper import send_assignment_submitted_notification
-    
+
     worksheet = db.query(Worksheet).filter(Worksheet.id == assignment.worksheet_id).first()
     if worksheet and deployment:
         try:
@@ -168,7 +186,7 @@ async def submit_test(
         answered_problems=len(answers)
     )
 
-@router.post("/test-sessions/{session_id}/answers")
+@router.post("/{session_id}/answers")
 async def save_answer(
     session_id: str,
     answer_data: dict, # { "problem_id": int, "answer": str }
@@ -201,7 +219,7 @@ async def save_answer(
     db.commit()
     return {"message": "Answer saved"}
 
-@router.post("/test-sessions/{session_id}/answers/ocr")
+@router.post("/{session_id}/answers/ocr")
 async def save_answer_with_ocr(
     session_id: str,
     problem_id: int = Body(...),
