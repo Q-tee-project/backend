@@ -23,6 +23,11 @@ PUBLIC_PATHS: List[str] = [
     "/api/english/health/db",
 ]
 
+# Market 서비스 간 통신을 위한 내부 API (인증 불필요)
+INTERNAL_API_PREFIXES: List[str] = [
+    "/market/",
+]
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """모든 요청에 대해 JWT 토큰 검증을 수행하는 미들웨어"""
@@ -92,8 +97,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in PUBLIC_PATHS:
             return True
 
-        # prefix로 시작하는 경로 (예: /static/)
-        public_prefixes = ["/static/"]
+        # prefix로 시작하는 경로 (예: /static/, /market/)
+        public_prefixes = ["/static/"] + INTERNAL_API_PREFIXES
         for prefix in public_prefixes:
             if path.startswith(prefix):
                 return True

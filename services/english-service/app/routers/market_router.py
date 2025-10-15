@@ -14,12 +14,16 @@ async def get_worksheet_for_market(
     db: Session = Depends(get_db)
 ):
     """Market service용 워크시트 기본 정보 조회"""
+    print(f"[DEBUG] Market request for worksheet_id: {worksheet_id}")
     worksheet = db.query(Worksheet).filter(
         Worksheet.worksheet_id == worksheet_id
     ).first()
 
     if not worksheet:
+        print(f"[ERROR] Worksheet not found: {worksheet_id}")
         raise HTTPException(status_code=404, detail="Worksheet not found")
+
+    print(f"[DEBUG] Found worksheet: {worksheet.worksheet_name}, teacher_id: {worksheet.teacher_id}")
 
     # Market service가 기대하는 형식으로 변환
     return {
