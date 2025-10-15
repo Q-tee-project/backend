@@ -51,6 +51,11 @@ class WorksheetGenerationRequest(BaseModel):
     # 추가 요구사항
     additional_requirements: Optional[str] = Field(None, description="추가 요구사항 (선택사항)")
 
+    # DB 저장 관련 (자동 저장용)
+    teacher_id: Optional[int] = Field(default=None, description="선생님 ID (DB 저장 시 필요)")
+    worksheet_name: Optional[str] = Field(default=None, description="문제지 제목 (없으면 자동 생성)")
+    duration: Optional[int] = Field(default=60, description="시험 시간(분)")
+
     @validator('subject_ratios')
     def validate_subject_ratios(cls, v):
         if v:  # 비어있지 않을 때만 검증

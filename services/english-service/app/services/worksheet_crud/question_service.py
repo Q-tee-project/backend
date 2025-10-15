@@ -31,6 +31,10 @@ class QuestionService:
             if field in update_data:
                 new_value = update_data.get(field)
 
+                # 'example_content'가 null인 경우 빈 문자열로 대체
+                if field == "example_content" and new_value is None:
+                    new_value = ""
+
                 # 필드별 유효성 검사
                 self._validate_field(field, new_value)
 

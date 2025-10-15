@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
 
 from app.database import get_db
 from app.core.config import get_settings
+from app.core.dependencies import get_current_teacher
 from app.schemas.generation import WorksheetGenerationRequest
 from app.schemas.worksheet import (
     WorksheetSaveRequest, WorksheetSummary
@@ -19,14 +20,23 @@ router = APIRouter(tags=["Worksheets"])
 settings = get_settings()
 
 @router.post("/worksheet-generate")
-async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = Depends(get_db)):
+async def worksheet_generate(
+    request: WorksheetGenerationRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Dict[str, Any] = Depends(get_current_teacher)
+):
     """비동기 영어 문제 생성을 시작합니다. (AI Judge 검증 항상 활성화)"""
     print("🚨 비동기 문제 생성 요청 시작!")
 
     try:
+        # JWT 토큰에서 teacher_id 추출
+        teacher_id = current_teacher.get("user_id")
+        if not teacher_id:
+            raise HTTPException(status_code=401, detail="사용자 ID를 찾을 수 없습니다.")
+
         print("\n" + "="*80)
         print("🎯 문제 생성 옵션 입력 받음!")
-
+        print(f" 선생님 ID: {teacher_id}")
         print(f" 학교급: {request.school_level}")
         print(f" 학년: {request.grade}학년")
         print(f" 총 문제 수: {request.total_questions}개")
@@ -45,9 +55,10 @@ async def worksheet_generate(request: WorksheetGenerationRequest, db: Session = 
 
         print("="*80)
 
-        # 요청 데이터에 검증 항상 활성화
+        # 요청 데이터에 검증 활성화 및 teacher_id 추가
         request_data = request.model_dump()
         request_data['enable_validation'] = True
+        request_data['teacher_id'] = teacher_id
 
         # 비동기 태스크 시작
         task = generate_english_worksheet_task.delay(request_data)
