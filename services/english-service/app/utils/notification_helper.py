@@ -90,6 +90,113 @@ async def send_problem_regeneration_notification(
         return False
 
 
+async def send_assignment_deployed_notification(
+    student_id: int,
+    class_id: int,
+    class_name: str,
+    assignment_id: int,
+    assignment_title: str,
+    due_date: Optional[str] = None
+) -> bool:
+    """과제 배포 알림 전송 (선생님 → 학생)"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{NOTIFICATION_SERVICE_URL}/api/notifications/assignment/deployed",
+                json={
+                    "receiver_id": student_id,
+                    "receiver_type": "student",
+                    "class_id": class_id,
+                    "class_name": class_name,
+                    "assignment_id": assignment_id,
+                    "assignment_title": assignment_title,
+                    "due_date": due_date
+                },
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                print(f"✅ 과제 배포 알림 전송 성공: student_id={student_id}, assignment_id={assignment_id}")
+                return True
+            else:
+                print(f"⚠️ 과제 배포 알림 전송 실패: status={response.status_code}")
+                return False
+    except Exception as e:
+        print(f"❌ 과제 배포 알림 전송 실패: {e}")
+        return False
+
+
+async def send_assignment_submitted_notification(
+    teacher_id: int,
+    student_id: int,
+    student_name: str,
+    class_id: int,
+    class_name: str,
+    assignment_id: int,
+    assignment_title: str,
+    submitted_at: str
+) -> bool:
+    """과제 제출 알림 전송 (학생 → 선생님)"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{NOTIFICATION_SERVICE_URL}/api/notifications/assignment/submitted",
+                json={
+                    "receiver_id": teacher_id,
+                    "receiver_type": "teacher",
+                    "student_id": student_id,
+                    "student_name": student_name,
+                    "class_id": class_id,
+                    "class_name": class_name,
+                    "assignment_id": assignment_id,
+                    "assignment_title": assignment_title,
+                    "submitted_at": submitted_at
+                },
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                print(f"✅ 과제 제출 알림 전송 성공: teacher_id={teacher_id}, assignment_id={assignment_id}")
+                return True
+            else:
+                print(f"⚠️ 과제 제출 알림 전송 실패: status={response.status_code}")
+                return False
+    except Exception as e:
+        print(f"❌ 과제 제출 알림 전송 실패: {e}")
+        return False
+
+
+async def send_grading_updated_notification(
+    student_id: int,
+    assignment_id: int,
+    assignment_title: str,
+    score: int,
+    feedback: Optional[str] = None
+) -> bool:
+    """채점 수정 알림 전송 (선생님 → 학생)"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{NOTIFICATION_SERVICE_URL}/api/notifications/grading/updated",
+                json={
+                    "receiver_id": student_id,
+                    "receiver_type": "student",
+                    "assignment_id": assignment_id,
+                    "assignment_title": assignment_title,
+                    "score": score,
+                    "feedback": feedback
+                },
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                print(f"✅ 채점 수정 알림 전송 성공: student_id={student_id}, assignment_id={assignment_id}")
+                return True
+            else:
+                print(f"⚠️ 채점 수정 알림 전송 실패: status={response.status_code}")
+                return False
+    except Exception as e:
+        print(f"❌ 채점 수정 알림 전송 실패: {e}")
+        return False
+
+
 def safe_send_notification(notification_func, *args, **kwargs):
     """안전하게 알림 전송 (실패해도 주요 로직에 영향 없음)"""
     try:

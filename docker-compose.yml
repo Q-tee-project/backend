@@ -63,6 +63,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${ENGLISH_GEMINI_API_KEY:-${GEMINI_API_KEY}}
       - AUTH_SERVICE_URL=http://auth-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-qt_project_super_secret_key_for_jwt_tokens_change_in_production}
       - PORT=8000
     ports:
@@ -70,6 +71,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - notification-service
     volumes:
       - ./services/english-service:/app
     networks:
