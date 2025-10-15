@@ -46,8 +46,8 @@ def call_gemini_for_question(prompt_info: Dict[str, Any]) -> Dict[str, Any]:
         # Gemini API 키 설정
         genai.configure(api_key=settings.gemini_api_key)
 
-        # Gemini 모델 생성 (2.5 Flash 사용)
-        model = genai.GenerativeModel(settings.gemini_flash_model)
+        # Gemini 모델 생성 (Pro 사용 - 문제 생성은 품질 중요)
+        model = genai.GenerativeModel(settings.gemini_model)
 
         # API 호출
         response = model.generate_content(
@@ -78,7 +78,7 @@ def call_gemini_for_validation(prompt: str) -> QuestionValidationResult:
         # Gemini API 키 설정
         genai.configure(api_key=settings.gemini_api_key)
 
-        # Gemini 모델 생성 (Pro 모델 사용 - 검증은 더 정확한 모델 사용)
+        # Gemini 모델 생성 (Pro 사용 - 검증도 정확성 중요)
         model = genai.GenerativeModel(settings.gemini_model)
 
         # API 호출 (response_schema 없이 프롬프트만 사용)
@@ -375,7 +375,7 @@ def generate_english_worksheet_task(self, request_data: dict):
         parsed_llm_response = None
 
         try:
-            # 워크시트 조립
+            # 워크시트 조립 (worksheet_id는 나중에 DB 저장 후 업데이트)
             llm_response = assemble_worksheet(passages, questions, request_dict)
 
             # JSON 파싱
@@ -469,6 +469,11 @@ def generate_english_worksheet_task(self, request_data: dict):
                 # 커밋
                 db.commit()
                 print(f"✅ DB 자동 저장 완료! worksheet_id: {worksheet_id}")
+
+                # parsed_llm_response의 worksheet_id 업데이트
+                if parsed_llm_response:
+                    parsed_llm_response['worksheet_id'] = worksheet_id
+                    print(f"  ✅ worksheet_id 업데이트 완료: {worksheet_id}")
 
             except Exception as save_error:
                 db.rollback()

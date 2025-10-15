@@ -141,7 +141,7 @@ class QuestionJudge:
         # 문제 포맷팅
         formatted_question = QuestionJudge.format_question_for_evaluation(question_data)
 
-        prompt = f"""You are an expert English education content evaluator for Korean students. Your task is to rigorously evaluate an AI-generated English question based on the provided context and criteria.
+        prompt = f"""You are an expert English education content evaluator for Korean students. Your task is to evaluate an AI-generated English question based on the provided context and criteria.
 
 **[Context]**
 
@@ -149,28 +149,48 @@ class QuestionJudge:
 * **Target Difficulty (CEFR):** {cefr_level}
 * **Intended Difficulty:** {difficulty} (상: 도전적, 중: 표준적, 하: 기본적 - within the grade level)
 
+**[IMPORTANT EVALUATION CONTEXT]**
+
+This question was generated specifically for KOREAN {school_level} Grade {grade} students following Korean national curriculum standards. Please evaluate with these considerations:
+
+1. **Difficulty is RELATIVE to Grade {grade} level**, not absolute
+   - {difficulty} (상/중/하) means challenging/standard/easy FOR THESE STUDENTS at this grade level
+   - A "상" difficulty question for Grade 1 middle school is easier than a "하" difficulty question for Grade 3 high school
+
+2. **CEFR level {cefr_level} is a GUIDELINE, not a strict rule**
+   - Some vocabulary/structures slightly above or below are acceptable for natural, authentic English
+   - What matters most is whether Korean students at this grade can comprehend and learn from it
+
+3. **Cultural and educational context matters**
+   - Topics should be appropriate for Korean students' cultural background and interests
+   - Content should align with what Korean students study at this grade level
+
+4. **Generation flexibility was allowed**
+   - The generation prompt allowed some flexibility for natural language
+   - Minor variations from strict CEFR guidelines are acceptable if content quality is high
+
 **[Generated Question & Explanation]**
 
 {formatted_question}
 
 **[Evaluation Task]**
-Evaluate the provided question and explanation using the following rubric. Provide a score for each sub-item, calculate total scores, determine a final judgment, and provide detailed rationales.
+Evaluate the provided question and explanation using the following rubric. Be fair and consider the context above when scoring.
 
 **[Evaluation Rubric]**
 
 **A. Alignment (30 points total)**
 
 1. **Curriculum Relevance (0-10 pts):** How well does the question align with the specified learner's grade level curriculum?
-   - 10: Perfect alignment with grade-level curriculum standards
-   - 7-9: Good alignment with minor issues
-   - 4-6: Moderate alignment, some content may be too advanced or too simple
+   - 10: Excellent alignment with grade-level curriculum standards
+   - 7-9: Good alignment, appropriate for this grade
+   - 4-6: Acceptable alignment, some content may be slightly advanced or simple but still usable
    - 1-3: Poor alignment, content mostly inappropriate for grade level
    - 0: Completely misaligned
 
-2. **Difficulty Consistency (0-10 pts):** Does the question's actual difficulty match the target CEFR level and intended difficulty?
-   - 10: Perfect match with target CEFR and difficulty level
-   - 7-9: Good match with minor discrepancies
-   - 4-6: Moderate match, noticeable difficulty mismatch
+2. **Difficulty Consistency (0-10 pts):** Does the question's actual difficulty match the target CEFR level and intended difficulty relative to this grade?
+   - 10: Excellent match considering grade level and Korean curriculum context
+   - 7-9: Good match, difficulty is appropriate for intended level
+   - 4-6: Acceptable match, minor difficulty variance but still usable
    - 1-3: Poor match, significantly easier or harder than intended
    - 0: Completely inconsistent
 
@@ -222,10 +242,10 @@ Evaluate the provided question and explanation using the following rubric. Provi
 
 2. **Incorrect Answer Analysis (0-10 pts):** Does the explanation clarify why the other options are incorrect?
    - 10: All incorrect options thoroughly explained
-   - 7-9: Most incorrect options well explained
-   - 4-6: Some explanation but incomplete
+   - 7-9: Most incorrect options explained, or at least brief mention of why others are wrong
+   - 4-6: Some explanation provided for incorrect options
    - 1-3: Minimal explanation of incorrect options
-   - 0: No explanation of incorrect options
+   - 0: No explanation of incorrect options at all
 
 3. **Additional Information (0-10 pts):** Is the supplementary information (vocabulary, syntax) accurate and helpful?
    - 10: Highly accurate and very helpful

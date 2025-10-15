@@ -589,44 +589,72 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
 - Passage ID: {passage_id}
 
 # Korean Learning Objectives for Passage & Question (지문 및 문제 출제 의도)
-# This section is in Korean and contains the specific learning objectives for the question to be generated. You MUST follow these objectives precisely when creating both the passage and the question.
+# This section is in Korean and contains the specific learning objectives for the question to be generated.
 {reading_types_info}
-# Based on the objectives above, you must create a passage and question with appropriate content and structure.
+# Based on the objectives above, create a passage and question with appropriate content and structure.
 
-# Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS
-YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected content.
+# Grade-Level Content Guidelines
+These guidelines help match content to {school_level} Grade {grade} students. Some flexibility is acceptable for natural, authentic language.
 
 - Vocabulary Level: {depth_guide['vocabulary_level']}
-  → Use ONLY words appropriate for this level. Check every word.
+  Primary vocabulary should match this level. Some words slightly above/below are acceptable if contextually appropriate.
 
 - Sentence Structure: {depth_guide['sentence_structure']}
-  → Match sentence complexity exactly to this specification.
+  Most sentences should follow this pattern. Natural variation is acceptable.
 
 - Abstraction Level: {depth_guide['abstraction']}
-  → Content must match this abstraction level precisely.
+  Content should generally match this abstraction level.
 
 - Information Density: {depth_guide['information_density']}
-  → Follow this density requirement strictly.
+  Content density should align with this guideline.
 
 - Cognitive Level: {depth_guide['cognitive_level']}
-  → Questions must target exactly this cognitive level.
+  Questions should primarily target this cognitive level.
 
 - Content Approach: {depth_guide['content_approach']}
-  → Approach content following this guideline exactly.
+  Content should follow this approach while maintaining natural English.
 
 # Passage Generation Guidelines
 
 ## Passage Requirements:
-- Word count: {word_count_range} (strictly follow for grade level)
-- CEFR level: {cefr_level} (grade baseline)
-- Difficulty: Match vocabulary and sentence structure to {difficulty} (see above)
+- Word count: {word_count_range} (target range for grade level)
+- CEFR level: {cefr_level} (baseline guideline)
+- Difficulty: {difficulty} is relative to Grade {grade} level - what would be challenging/standard/easy for these specific students
 - Select appropriate passage type and optimize content/structure for question type
-- Strictly follow depth guidelines above
+- Follow depth guidelines above while maintaining natural, authentic English
 
-**IMPORTANT - Variety Requirement:**
-- Vary passage GENRE/TYPE across questions (articles, stories, letters, advertisements, reviews, dialogues, etc.)
-- Vary TOPICS across questions using the topic categories below
-- Consider the topic categories and select diverse subjects for each passage
+**IMPORTANT - Passage Type Selection:**
+
+You MUST choose an appropriate passage type based on the question type and topic. Distribute passage types naturally across questions - DO NOT use only one type.
+
+## Passage Type Selection Guide:
+
+Choose passage type based on content and question type:
+
+1. **article** - For most general topics
+   Best for: General knowledge, educational content, opinion pieces, explanatory texts
+   Examples: "Benefits of Reading", "Climate Change Effects", "Healthy Eating Habits"
+   Required format: passage_content must contain {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}}
+
+2. **dialogue** - For conversational contexts
+   Best for: Personal interactions, interviews, casual conversations, plays
+   Examples: "Planning Weekend Activities", "School Club Meeting", "Job Interview"
+   Required format: passage_content must contain {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}}
+
+3. **correspondence** - For letters and formal communication
+   Best for: Emails, letters, invitations, requests, announcements
+   Examples: "Invitation to School Event", "Customer Service Email", "Thank You Letter"
+   Required format: passage_content must contain {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
+
+4. **informational** - For structured information and notices
+   Best for: Schedules, advertisements, menus, posters, forms, guides
+   Examples: "Library Hours", "Concert Poster", "Bus Schedule", "Restaurant Menu"
+   Required format: passage_content must contain {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}}
+
+5. **review** - For opinions about products/services/experiences
+   Best for: Product reviews, movie reviews, restaurant reviews, book reviews
+   Examples: "Headphone Review", "Movie Rating", "Restaurant Experience"
+   Required format: passage_content must contain {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
 
 ## Topic Categories (Common for all grades - adjust depth only):
 {topic_categories_str}
@@ -637,30 +665,9 @@ Important: These topics are common across all grades. Adjust complexity and abst
 - Grade 10 (High 1): Social context, diverse perspectives
 - Grades 11-12 (High 2-3): Abstract concepts, philosophical thinking, complex arguments
 
-## Passage Type JSON Structures:
-
-1. article (General text):
-   Description: Expository writing, editorials, news articles, research reports, blog posts, book excerpts, etc. (most versatile type)
-   Required format: passage_content must contain {{"content": [{{"type": "title", "value": "..."}}, {{"type": "paragraph", "value": "..."}}]}}
-
-2. informational (Informational format):
-   Description: Advertisements, notices, posters, schedules, menus, receipts, etc.
-   Required format: passage_content must contain {{"content": [{{"type": "title"}}, {{"type": "paragraph"}}, {{"type": "list", "items": [...]}}, {{"type": "key_value", "pairs": [...]}}]}}
-
-3. dialogue (Conversation):
-   Description: Text messages, chat, interviews, play scripts, etc.
-   Required format: passage_content must contain {{"metadata": {{"participants": [...]}}, "content": [{{"speaker": "...", "line": "..."}}]}}
-
-4. correspondence (Letters/Communication):
-   Description: Emails, letters, memos, internal notices, etc.
-   Required format: passage_content must contain {{"metadata": {{"sender": "...", "recipient": "...", "subject": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
-
-5. review (Reviews/Feedback):
-   Description: Product reviews, movie ratings, restaurant reviews, etc.
-   Required format: passage_content must contain {{"metadata": {{"rating": 4.5, "product_name": "...", "reviewer": "...", "date": "..."}}, "content": [{{"type": "paragraph", "value": "..."}}]}}
-
 ## Important Notes for Passage Writing:
-- passage_type: Choose one from: article, dialogue, correspondence, informational, review
+- passage_type: Select the MOST APPROPRIATE type from: article, dialogue, correspondence, informational, review
+- Match passage type to topic naturally (e.g., schedule information → informational, conversation → dialogue)
 - passage_content: Use JSON structure matching the type (must distinguish between passage_content and type-specific content, never omit content key or metadata key)
 - passage_content: For students (may include blanks/underlines), optimized for question type
   - Blank: Use `<u>___</u>` format
@@ -710,7 +717,11 @@ KOREAN Content (Instructions and explanations):
 - question_detail_type: Write in KOREAN (Korean question type name)
   Example: "주제 파악"
 - explanation: Write in KOREAN (Korean explanation)
-  Example: "정답은 2번입니다. 지문에서..."
+  IMPORTANT: Include ALL of the following in explanation:
+  1. State the correct answer clearly (e.g., "정답은 2번입니다")
+  2. Provide evidence from the passage supporting the correct answer
+  3. Explain why OTHER choices are incorrect (at least briefly mention each wrong answer)
+  Example: "정답은 2번입니다. 지문에서 '남편의 취미가 가족의 유대를 강하게 만들었다'고 했으므로 긍정적 영향을 미쳤습니다. 1번은 전문 요리사라는 내용이 없고, 3번은 케이크가 완벽했다고 했으므로 틀렸으며, 4번은 처음에는 불안했다고 했으므로 오답입니다."
 - learning_point: Write in KOREAN (Korean learning point)
   Example: "주제문은 글의 첫 문장이나 마지막 문장에 위치합니다."
 - korean_translation: Write in KOREAN (Korean translation of passage)
@@ -767,29 +778,29 @@ Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 - CEFR level: {cefr_level} (grade baseline)
 
 # Korean Learning Objectives (출제 의도)
-# This section is in Korean and contains the specific learning objectives for the question to be generated. You MUST follow these objectives precisely.
+# This section is in Korean and contains the specific learning objectives for the question to be generated.
 {chr(10).join(subject_types_info)}
 
-# Grade-Level Depth Guidelines - MANDATORY REQUIREMENTS
-YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected content.
+# Grade-Level Content Guidelines
+These guidelines help match content to {school_level} Grade {grade} students. Some flexibility is acceptable for natural, authentic language.
 
 - Vocabulary Level: {depth_guide['vocabulary_level']}
-  → Use ONLY words appropriate for this level. Check every word.
+  Primary vocabulary should match this level. Some words slightly above/below are acceptable if contextually appropriate.
 
 - Sentence Structure: {depth_guide['sentence_structure']}
-  → Match sentence complexity exactly to this specification.
+  Most sentences should follow this pattern. Natural variation is acceptable.
 
 - Abstraction Level: {depth_guide['abstraction']}
-  → Content must match this abstraction level precisely.
+  Content should generally match this abstraction level.
 
 - Information Density: {depth_guide['information_density']}
-  → Follow this density requirement strictly.
+  Content density should align with this guideline.
 
 - Cognitive Level: {depth_guide['cognitive_level']}
-  → Questions must target exactly this cognitive level.
+  Questions should primarily target this cognitive level.
 
 - Content Approach: {depth_guide['content_approach']}
-  → Approach content following this guideline exactly.
+  Content should follow this approach while maintaining natural English.
 
 # Example Sentence and Choices Guidelines
 
@@ -799,9 +810,9 @@ YOU MUST STRICTLY FOLLOW these guidelines. Violation will result in rejected con
 Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines.
 
 ## Sentence Structure and Vocabulary:
-- Use sentence structure and vocabulary matching CEFR {cefr_level} level
+- Use sentence structure and vocabulary generally matching CEFR {cefr_level} level
 - Example sentences should be appropriate length and complexity for {school_level} Grade {grade}
-- Strictly follow depth guidelines above for grade-appropriate examples
+- Follow depth guidelines above while maintaining natural, authentic English
 
 ### Example: Additional reference separate from passage/question/choices
 - MUST be simple string only (no array, no object)
@@ -856,7 +867,11 @@ KOREAN Content (Instructions and explanations):
 - question_detail_type: Write in KOREAN (Korean question type name)
   Example: "빈칸 추론"
 - explanation: Write in KOREAN (Korean explanation)
-  Example: "정답은 2번입니다. 주어가 3인칭 단수이므로..."
+  IMPORTANT: For multiple choice questions, include:
+  1. State the correct answer clearly (e.g., "정답은 2번입니다")
+  2. Provide reasoning for the correct answer
+  3. Briefly explain why other choices are incorrect when applicable
+  Example: "정답은 2번입니다. 주어가 3인칭 단수 'She'이므로 동사에 -s를 붙인 'goes'가 정답입니다. 1번 'go'는 3인칭 단수 주어와 함께 쓸 수 없고, 3번 'went'는 과거형이며, 4번 'gone'은 과거분사로 단독으로 사용할 수 없습니다."
 - learning_point: Write in KOREAN (Korean learning point)
   Example: "현재 시제에서 주어가 3인칭 단수일 때 동사에 -s를 붙입니다."
 - example_korean_translation: Write in KOREAN (Korean translation of example)
