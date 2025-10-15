@@ -58,6 +58,27 @@ class StudentResponse(BaseModel):
     grade: int
     is_active: bool
     created_at: datetime
-    
+
+    class Config:
+        from_attributes = True
+
+# Activity Statistics Schemas
+class TeacherStatistics(BaseModel):
+    created_worksheets: int
+    total_classrooms: int
+    total_students: int
+
+class StudentStatistics(BaseModel):
+    completed_assignments: int
+    joined_classrooms: int
+    average_score: float
+
+# Recent Activity Schemas
+class RecentActivity(BaseModel):
+    id: int
+    description: str
+    timestamp: datetime
+    activity_type: str  # "worksheet", "grading", "classroom", etc.
+
     class Config:
         from_attributes = True
