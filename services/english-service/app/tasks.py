@@ -93,13 +93,194 @@ def call_gemini_for_validation(prompt: str) -> QuestionValidationResult:
         result_dict = json.loads(response.text)
         validation_result = QuestionValidationResult.model_validate(result_dict)
 
-        print(f"✅ AI Judge 검증 완료: {validation_result.final_judgment} ({validation_result.total_score}/100)")
+        # 검증 결과 전체 출력
+        print("=" * 80)
+        print(f"📊 AI Judge 검증 결과 상세")
+        print("=" * 80)
+        print(f"총점: {validation_result.total_score}/100")
+        print(f"최종 판정: {validation_result.final_judgment}")
+        print("-" * 80)
+
+        # A. Alignment (정렬성) - 30점
+        print(f"\n📌 A. Alignment (정렬성): {validation_result.alignment_total}/30")
+        print(f"   • 교육과정 연관성: {validation_result.curriculum_relevance}/10")
+        print(f"   • 난이도 일관성: {validation_result.difficulty_consistency}/10")
+        print(f"   • 주제 적절성: {validation_result.topic_appropriateness}/10")
+        print(f"   💬 평가: {validation_result.alignment_rationale}")
+
+        # B. Content Quality (내용 품질) - 40점
+        print(f"\n📌 B. Content Quality (내용 품질): {validation_result.content_quality_total}/40")
+        print(f"   • 지문 품질: {validation_result.passage_quality}/10")
+        print(f"   • 지시문 명확성: {validation_result.instruction_clarity}/10")
+        print(f"   • 정답 정확성: {validation_result.answer_accuracy}/10")
+        print(f"   • 오답 품질: {validation_result.distractor_quality}/10")
+        print(f"   💬 평가: {validation_result.content_quality_rationale}")
+
+        # C. Explanation Quality (해설 품질) - 30점
+        print(f"\n📌 C. Explanation Quality (해설 품질): {validation_result.explanation_quality_total}/30")
+        print(f"   • 논리적 설명: {validation_result.logical_explanation}/10")
+        print(f"   • 오답 분석: {validation_result.incorrect_answer_analysis}/10")
+        print(f"   • 추가 정보: {validation_result.additional_information}/10")
+        print(f"   💬 평가: {validation_result.explanation_quality_rationale}")
+
+        # 개선 제안
+        if validation_result.suggestions_for_improvement:
+            print(f"\n💡 개선 제안:")
+            for i, suggestion in enumerate(validation_result.suggestions_for_improvement, 1):
+                print(f"   {i}. {suggestion}")
+
+        print("\n" + "=" * 80)
 
         return validation_result
 
     except Exception as e:
         print(f"❌ AI Judge 검증 실패: {str(e)}")
         raise Exception(f"AI Judge 검증 실패: {str(e)}")
+
+
+def create_revision_prompt(original_question: Dict[str, Any], validation_result: QuestionValidationResult, metadata: Dict[str, Any]) -> str:
+    """검증 결과를 바탕으로 문제 수정 프롬프트 생성"""
+
+    # 검증 피드백 정리
+    feedback_sections = []
+
+    # A. Alignment 피드백
+    if validation_result.alignment_total < 25:  # 30점 만점 중 25점 미만이면 문제 있음
+        feedback_sections.append(f"\n**A. Alignment (정렬성) - {validation_result.alignment_total}/30:**")
+        feedback_sections.append(f"  교육과정 연관성: {validation_result.curriculum_relevance}/10")
+        feedback_sections.append(f"  난이도 일관성: {validation_result.difficulty_consistency}/10")
+        feedback_sections.append(f"  주제 적절성: {validation_result.topic_appropriateness}/10")
+        feedback_sections.append(f"  평가: {validation_result.alignment_rationale}")
+
+    # B. Content Quality 피드백
+    if validation_result.content_quality_total < 32:  # 40점 만점 중 32점 미만이면 문제 있음
+        feedback_sections.append(f"\n**B. Content Quality (내용 품질) - {validation_result.content_quality_total}/40:**")
+        feedback_sections.append(f"  지문 품질: {validation_result.passage_quality}/10")
+        feedback_sections.append(f"  지시문 명확성: {validation_result.instruction_clarity}/10")
+        feedback_sections.append(f"  정답 정확성: {validation_result.answer_accuracy}/10")
+        feedback_sections.append(f"  오답 품질: {validation_result.distractor_quality}/10")
+        feedback_sections.append(f"  평가: {validation_result.content_quality_rationale}")
+
+    # C. Explanation Quality 피드백
+    if validation_result.explanation_quality_total < 24:  # 30점 만점 중 24점 미만이면 문제 있음
+        feedback_sections.append(f"\n**C. Explanation Quality (해설 품질) - {validation_result.explanation_quality_total}/30:**")
+        feedback_sections.append(f"  논리적 설명: {validation_result.logical_explanation}/10")
+        feedback_sections.append(f"  오답 분석: {validation_result.incorrect_answer_analysis}/10")
+        feedback_sections.append(f"  추가 정보: {validation_result.additional_information}/10")
+        feedback_sections.append(f"  평가: {validation_result.explanation_quality_rationale}")
+
+    # 개선 제안
+    if validation_result.suggestions_for_improvement:
+        feedback_sections.append(f"\n**개선 제안:**")
+        for suggestion in validation_result.suggestions_for_improvement:
+            feedback_sections.append(f"- {suggestion}")
+
+    feedback_text = "\n".join(feedback_sections) if feedback_sections else "일반적인 품질 개선 필요"
+
+    # 문제 유형에 따라 다른 프롬프트 생성
+    needs_passage = 'passage' in original_question
+
+    if needs_passage:
+        # 독해 문제 수정 프롬프트
+        prompt = f"""You are a Korean English education expert. You need to REVISE an existing reading comprehension question based on validation feedback.
+
+# Original Question and Passage (JSON format):
+```json
+{json.dumps(original_question, ensure_ascii=False, indent=2)}
+```
+
+# Validation Score: {validation_result.total_score}/100
+# Judgment: {validation_result.final_judgment}
+
+# Issues Found:
+{feedback_text}
+
+# Required Metadata:
+- School Level: {metadata.get('school_level', '중학교')}
+- Grade: {metadata.get('grade', 1)}
+- CEFR Level: {metadata.get('cefr_level', 'B1')}
+- Difficulty: {metadata.get('difficulty', '중')}
+- Subject: {metadata.get('subject', '독해')}
+- Format: {metadata.get('format_type', '객관식')}
+
+# Your Task:
+REVISE the question and passage to fix the issues mentioned above. DO NOT create a completely new question - instead, IMPROVE the existing one by:
+
+1. Adjusting vocabulary and sentence complexity to match the grade level
+2. Fixing any format or structural errors
+3. Improving clarity and quality while maintaining the original topic/theme
+4. Ensuring the difficulty matches the required level
+5. Correcting any language errors
+
+# IMPORTANT:
+- Keep the same general topic and theme
+- Maintain the original question type (주제 파악, 세부 정보 등)
+- Preserve the passage type (article, dialogue, etc.)
+- Only modify what needs to be fixed based on the feedback
+- Return the COMPLETE revised question in the EXACT SAME JSON format as the original
+
+# Response Format (JSON):
+Return the complete revised question with both passage and question in the same JSON structure as the original.
+```json
+{{
+    "passage": {{...}},
+    "question": {{...}}
+}}
+```
+
+Return ONLY the JSON, no other text."""
+
+    else:
+        # 문법/어휘 문제 수정 프롬프트
+        prompt = f"""You are a Korean English education expert. You need to REVISE an existing {metadata.get('subject', '문법')} question based on validation feedback.
+
+# Original Question (JSON format):
+```json
+{json.dumps(original_question, ensure_ascii=False, indent=2)}
+```
+
+# Validation Score: {validation_result.total_score}/100
+# Judgment: {validation_result.final_judgment}
+
+# Issues Found:
+{feedback_text}
+
+# Required Metadata:
+- School Level: {metadata.get('school_level', '중학교')}
+- Grade: {metadata.get('grade', 1)}
+- CEFR Level: {metadata.get('cefr_level', 'B1')}
+- Difficulty: {metadata.get('difficulty', '중')}
+- Subject: {metadata.get('subject', '문법')}
+- Format: {metadata.get('format_type', '객관식')}
+
+# Your Task:
+REVISE the question to fix the issues mentioned above. DO NOT create a completely new question - instead, IMPROVE the existing one by:
+
+1. Adjusting vocabulary and sentence complexity to match the grade level
+2. Fixing any format or structural errors
+3. Improving clarity and quality while maintaining the original grammar/vocabulary point
+4. Ensuring the difficulty matches the required level
+5. Correcting any language errors
+
+# IMPORTANT:
+- Keep the same grammar/vocabulary concept being tested
+- Maintain the original question type
+- Only modify what needs to be fixed based on the feedback
+- Return the COMPLETE revised question in the EXACT SAME JSON format as the original
+
+# Response Format (JSON):
+Return the complete revised question in the same JSON structure as the original.
+```json
+{{
+    "question_id": ...,
+    "question_type": "...",
+    ...
+}}
+```
+
+Return ONLY the JSON, no other text."""
+
+    return prompt
 
 
 def generate_questions_parallel(question_prompts: List[Dict[str, Any]], enable_validation: bool = False) -> Dict[str, Any]:
@@ -119,7 +300,7 @@ def generate_questions_parallel(question_prompts: List[Dict[str, Any]], enable_v
     validation_results = []
 
     def generate_with_validation(prompt_info: Dict[str, Any]) -> tuple:
-        """단일 문제 생성 + 검증"""
+        """단일 문제 생성 + 검증 (검증 실패 시 수정)"""
         question_id = prompt_info['question_id']
         metadata = prompt_info.get('metadata', {})
 
@@ -137,11 +318,27 @@ def generate_questions_parallel(question_prompts: List[Dict[str, Any]], enable_v
         best_question = None
         best_validation = None
         best_score = -1
+        current_question = None
 
         for attempt in range(1, VALIDATION_SETTINGS['max_retries'] + 1):
             try:
-                # 문제 생성
-                question_data = call_gemini_for_question(prompt_info)
+                # 첫 시도: 새로 생성
+                if attempt == 1:
+                    print(f"📝 문제 {question_id}: 초기 생성 (attempt {attempt})")
+                    question_data = call_gemini_for_question(prompt_info)
+                else:
+                    # 2회 이상: 기존 문제 + 검증 피드백으로 수정
+                    print(f"🔧 문제 {question_id}: 검증 피드백 기반 수정 (attempt {attempt})")
+                    revision_prompt_info = prompt_info.copy()
+                    revision_prompt_info['prompt'] = create_revision_prompt(
+                        current_question,
+                        best_validation,
+                        metadata
+                    )
+                    question_data = call_gemini_for_question(revision_prompt_info)
+
+                # 현재 문제 저장
+                current_question = question_data
 
                 # 검증 프롬프트 생성
                 judge_prompt = judge.create_judge_prompt(question_data, metadata)
@@ -162,6 +359,8 @@ def generate_questions_parallel(question_prompts: List[Dict[str, Any]], enable_v
 
                 # 재시도 필요
                 print(f"⚠️ 문제 {question_id}: {validation_result.final_judgment} (attempt {attempt}, score {validation_result.total_score}/100)")
+                if attempt < VALIDATION_SETTINGS['max_retries']:
+                    print(f"   → 다음 시도에서 검증 피드백 기반으로 수정합니다...")
 
             except Exception as e:
                 print(f"❌ 문제 {question_id} 검증 중 오류 (attempt {attempt}): {str(e)}")
@@ -475,6 +674,19 @@ def generate_english_worksheet_task(self, request_data: dict):
                     parsed_llm_response['worksheet_id'] = worksheet_id
                     print(f"  ✅ worksheet_id 업데이트 완료: {worksheet_id}")
 
+                # 문제 생성 완료 알림 전송
+                from app.utils.notification_helper import safe_send_notification, send_problem_generation_notification
+                safe_send_notification(
+                    send_problem_generation_notification,
+                    teacher_id=teacher_id,
+                    task_id=task_id,
+                    subject="english",
+                    worksheet_id=worksheet_id,
+                    worksheet_title=worksheet_name,
+                    problem_count=len(questions),
+                    success=True
+                )
+
             except Exception as save_error:
                 db.rollback()
                 print(f"⚠️ DB 자동 저장 실패: {save_error}")
@@ -514,6 +726,21 @@ def generate_english_worksheet_task(self, request_data: dict):
 
     except Exception as e:
         print(f"❌ 영어 워크시트 생성 실패: {str(e)}")
+
+        # 문제 생성 실패 알림 전송
+        if 'worksheet_id' in locals() and worksheet_id and 'teacher_id' in locals() and teacher_id:
+            from app.utils.notification_helper import safe_send_notification, send_problem_generation_notification
+            safe_send_notification(
+                send_problem_generation_notification,
+                teacher_id=teacher_id,
+                task_id=task_id,
+                subject="english",
+                worksheet_id=worksheet_id,
+                worksheet_title=request_data.get('worksheet_name', '영어 문제지'),
+                problem_count=0,
+                success=False,
+                error_message=str(e)
+            )
 
         # 태스크 실패 상태 업데이트
         current_task.update_state(
@@ -568,6 +795,9 @@ def regenerate_english_question_task(self, request_data: dict):
 
     task_id = self.request.id
     print(f"🔄 English question regeneration task started: {task_id}")
+
+    # teacher_id 추출 (토큰에서 전달받음)
+    teacher_id = request_data.get('teacher_id')
 
     try:
         # 요청 데이터 검증
@@ -628,6 +858,47 @@ def regenerate_english_question_task(self, request_data: dict):
             print(f"📄 재생성된 지문: {'있음' if regenerated_passage else '없음'}")
             print("=" * 80)
 
+            # 문제 재생성 완료 알림 전송
+            if regenerated_questions and len(regenerated_questions) > 0 and teacher_id:
+                try:
+                    from app.database import SessionLocal
+                    from app.models.worksheet import Worksheet
+
+                    db = SessionLocal()
+                    first_question = regenerated_questions[0]
+                    question_id = first_question.question_id if hasattr(first_question, 'question_id') else first_question.get('question_id')
+
+                    # DB에서 question으로 worksheet 조회 (worksheet_id와 title만 필요)
+                    from app.models.worksheet import Question as DBQuestion
+                    db_question = db.query(DBQuestion).filter(DBQuestion.question_id == question_id).first()
+
+                    if db_question and db_question.worksheet_id:
+                        worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == db_question.worksheet_id).first()
+
+                        if worksheet:
+                            from app.utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+
+                            # 재생성된 문제 ID 목록
+                            problem_indices = [
+                                q.question_id if hasattr(q, 'question_id') else q.get('question_id')
+                                for q in regenerated_questions
+                            ]
+
+                            safe_send_notification(
+                                send_problem_regeneration_notification,
+                                teacher_id=teacher_id,  # 토큰에서 전달받은 teacher_id 사용
+                                task_id=task_id,
+                                subject="english",
+                                worksheet_id=worksheet.worksheet_id,
+                                worksheet_title=worksheet.worksheet_name,
+                                problem_indices=problem_indices,
+                                success=True
+                            )
+
+                    db.close()
+                except Exception as notif_error:
+                    print(f"⚠️ 재생성 알림 전송 중 오류 (무시): {notif_error}")
+
             # Pydantic 객체를 딕셔너리로 변환
             serialized_questions = None
             if regenerated_questions:
@@ -653,6 +924,47 @@ def regenerate_english_question_task(self, request_data: dict):
 
     except Exception as e:
         print(f"❌ 영어 문제 재생성 실패: {str(e)}")
+
+        # 문제 재생성 실패 알림 전송
+        if 'request' in locals() and request.questions and len(request.questions) > 0 and teacher_id:
+            try:
+                from app.database import SessionLocal
+                from app.models.worksheet import Worksheet, Question as DBQuestion
+
+                db = SessionLocal()
+                first_question = request.questions[0]
+                question_id = first_question.question_id if hasattr(first_question, 'question_id') else first_question.get('question_id')
+
+                # DB에서 question으로 worksheet 조회 (worksheet_id와 title만 필요)
+                db_question = db.query(DBQuestion).filter(DBQuestion.question_id == question_id).first()
+
+                if db_question and db_question.worksheet_id:
+                    worksheet = db.query(Worksheet).filter(Worksheet.worksheet_id == db_question.worksheet_id).first()
+
+                    if worksheet:
+                        from app.utils.notification_helper import safe_send_notification, send_problem_regeneration_notification
+
+                        # 재생성 시도한 문제 ID 목록
+                        problem_indices = [
+                            q.question_id if hasattr(q, 'question_id') else q.get('question_id')
+                            for q in request.questions
+                        ]
+
+                        safe_send_notification(
+                            send_problem_regeneration_notification,
+                            teacher_id=teacher_id,  # 토큰에서 전달받은 teacher_id 사용
+                            task_id=task_id,
+                            subject="english",
+                            worksheet_id=worksheet.worksheet_id,
+                            worksheet_title=worksheet.worksheet_name,
+                            problem_indices=problem_indices,
+                            success=False,
+                            error_message=str(e)
+                        )
+
+                db.close()
+            except Exception as notif_error:
+                print(f"⚠️ 재생성 실패 알림 전송 중 오류 (무시): {notif_error}")
 
         # 태스크 실패 상태 업데이트
         current_task.update_state(
