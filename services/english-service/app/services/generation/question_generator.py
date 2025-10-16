@@ -217,6 +217,7 @@ class PromptGenerator:
         format_ratios = request_data.get('format_ratios', [])
         difficulty_distribution = request_data.get('difficulty_distribution', [])
         subject_details = request_data.get('subject_details', {})
+        additional_requirements = request_data.get('additional_requirements')
 
         school_level = request_data.get('school_level', '중학교')
         grade = request_data.get('grade', 1)
@@ -328,7 +329,8 @@ class PromptGenerator:
                     cefr_level=cefr_level,
                     depth_guide=depth_guide,
                     reading_types_info=reading_types_info,
-                    topic_categories_str=topic_categories_str
+                    topic_categories_str=topic_categories_str,
+                    additional_requirements=additional_requirements
                 )
             else:
                 prompt = PromptBuilder.build_grammar_vocabulary_prompt(
@@ -341,7 +343,8 @@ class PromptGenerator:
                     cefr_level=cefr_level,
                     depth_guide=depth_guide,
                     subject_types_info=chr(10).join(subject_types_info),
-                    topic_categories_str=topic_categories_str
+                    topic_categories_str=topic_categories_str,
+                    additional_requirements=additional_requirements
                 )
 
             prompts.append({

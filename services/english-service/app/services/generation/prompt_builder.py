@@ -31,7 +31,8 @@ class PromptBuilder:
         cefr_level: str,
         depth_guide: Dict[str, str],
         reading_types_info: str,
-        topic_categories_str: str
+        topic_categories_str: str,
+        additional_requirements: str = None
     ) -> str:
         """독해 문제 생성 프롬프트를 빌드합니다 (지문 포함)"""
         return f"""You are a Korean English education expert specializing in Korean national curriculum standards.
@@ -42,10 +43,11 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
 - Question ID: {question_id}
 - Subject: {subject}
 - Difficulty: {difficulty}
-  Note: Difficulty is RELATIVE to Grade {grade} level within {school_level}
-  - 하 (Low): Basic and easy within this grade
-  - 중 (Medium): Standard for this grade
-  - 상 (High): Challenging and complex within this grade
+  **IMPORTANT: Difficulty (하/중/상) is RELATIVE difficulty WITHIN {school_level} Grade {grade} level ONLY**
+  - 하 (Low): Easy within Grade {grade} level
+  - 중 (Medium): Standard within Grade {grade} level
+  - 상 (High): Challenging within Grade {grade} level
+  This means "중" (Medium) for Grade 1 should remain at Grade 1 level, NOT move up to Grade 2-3 level
 - Format: {format_type}
 - Passage ID: {passage_id}
 
@@ -54,35 +56,35 @@ Generate 1 reading comprehension question WITH passage for Korean {school_level}
 {reading_types_info}
 # Based on the objectives above, create a passage and question with appropriate content and structure.
 
-# Grade-Level Content Guidelines
-These guidelines help match content to {school_level} Grade {grade} students. Some flexibility is acceptable for natural, authentic language.
+# Grade-Level Content Guidelines (MUST STRICTLY FOLLOW)
+**These guidelines are MANDATORY for {school_level} Grade {grade} level. Do NOT exceed these limits.**
 
 - Vocabulary Level: {depth_guide['vocabulary_level']}
-  Primary vocabulary should match this level. Some words slightly above/below are acceptable if contextually appropriate.
+  **STRICTLY use only vocabulary at this level. Do NOT use words above this level.**
 
 - Sentence Structure: {depth_guide['sentence_structure']}
-  Most sentences should follow this pattern. Natural variation is acceptable.
+  **MUST follow this sentence structure. Do NOT use more complex structures.**
 
 - Abstraction Level: {depth_guide['abstraction']}
-  Content should generally match this abstraction level.
+  **Content MUST match this abstraction level exactly.**
 
 - Information Density: {depth_guide['information_density']}
-  Content density should align with this guideline.
+  **STRICTLY follow this information density guideline.**
 
 - Cognitive Level: {depth_guide['cognitive_level']}
-  Questions should primarily target this cognitive level.
+  **Questions MUST target this cognitive level only.**
 
 - Content Approach: {depth_guide['content_approach']}
-  Content should follow this approach while maintaining natural English.
+  **MUST follow this content approach strictly.**
 
 # Passage Generation Guidelines
 
 ## Passage Requirements:
-- Word count: {word_count_range} (target range for grade level)
-- CEFR level: {cefr_level} (baseline guideline)
-- Difficulty: {difficulty} is relative to Grade {grade} level - what would be challenging/standard/easy for these specific students
+- Word count: {word_count_range} (STRICTLY stay within this range)
+- CEFR level: {cefr_level} (MUST NOT exceed this level)
+- Difficulty: {difficulty} is relative to Grade {grade} level ONLY - what would be challenging/standard/easy for Grade {grade} students specifically
 - Select appropriate passage type and optimize content/structure for question type
-- Follow depth guidelines above while maintaining natural, authentic English
+- **STRICTLY follow all depth guidelines above - these are MANDATORY limits, not suggestions**
 
 **IMPORTANT - Passage Type Selection:**
 
@@ -126,6 +128,11 @@ Important: These topics are common across all grades. Adjust complexity and abst
 - Grade 10 (High 1): Social context, diverse perspectives
 - Grades 11-12 (High 2-3): Abstract concepts, philosophical thinking, complex arguments
 
+{f'''## Additional Requirements from Teacher:
+{additional_requirements}
+
+**Please incorporate these requirements when selecting topics and generating content.**
+''' if additional_requirements else ''}
 ## Important Notes for Passage Writing:
 - passage_type: Select the MOST APPROPRIATE type from: article, dialogue, correspondence, informational, review
 - Match passage type to topic naturally (e.g., schedule information → informational, conversation → dialogue)
@@ -233,7 +240,8 @@ CRITICAL RULES:
         cefr_level: str,
         depth_guide: Dict[str, str],
         subject_types_info: str,
-        topic_categories_str: str
+        topic_categories_str: str,
+        additional_requirements: str = None
     ) -> str:
         """문법/어휘 문제 생성 프롬프트를 빌드합니다 (지문 없음)"""
         return f"""You are a Korean English education expert specializing in Korean national curriculum standards.
@@ -244,10 +252,11 @@ Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 - Question ID: {question_id}
 - Subject: {subject}
 - Difficulty: {difficulty}
-  Note: Difficulty is RELATIVE to Grade {grade} level within {school_level}
-  - 하 (Low): Basic and easy within this grade
-  - 중 (Medium): Standard for this grade
-  - 상 (High): Challenging and complex within this grade
+  **IMPORTANT: Difficulty (하/중/상) is RELATIVE difficulty WITHIN {school_level} Grade {grade} level ONLY**
+  - 하 (Low): Easy within Grade {grade} level
+  - 중 (Medium): Standard within Grade {grade} level
+  - 상 (High): Challenging within Grade {grade} level
+  This means "중" (Medium) for Grade 1 should remain at Grade 1 level, NOT move up to Grade 2-3 level
 - Format: {format_type}
 - CEFR level: {cefr_level} (grade baseline)
 
@@ -255,26 +264,26 @@ Generate 1 {subject} question for Korean {school_level} Grade {grade} students.
 # This section is in Korean and contains the specific learning objectives for the question to be generated.
 {subject_types_info}
 
-# Grade-Level Content Guidelines
-These guidelines help match content to {school_level} Grade {grade} students. Some flexibility is acceptable for natural, authentic language.
+# Grade-Level Content Guidelines (MUST STRICTLY FOLLOW)
+**These guidelines are MANDATORY for {school_level} Grade {grade} level. Do NOT exceed these limits.**
 
 - Vocabulary Level: {depth_guide['vocabulary_level']}
-  Primary vocabulary should match this level. Some words slightly above/below are acceptable if contextually appropriate.
+  **STRICTLY use only vocabulary at this level. Do NOT use words above this level.**
 
 - Sentence Structure: {depth_guide['sentence_structure']}
-  Most sentences should follow this pattern. Natural variation is acceptable.
+  **MUST follow this sentence structure. Do NOT use more complex structures.**
 
 - Abstraction Level: {depth_guide['abstraction']}
-  Content should generally match this abstraction level.
+  **Content MUST match this abstraction level exactly.**
 
 - Information Density: {depth_guide['information_density']}
-  Content density should align with this guideline.
+  **STRICTLY follow this information density guideline.**
 
 - Cognitive Level: {depth_guide['cognitive_level']}
-  Questions should primarily target this cognitive level.
+  **Questions MUST target this cognitive level only.**
 
 - Content Approach: {depth_guide['content_approach']}
-  Content should follow this approach while maintaining natural English.
+  **MUST follow this content approach strictly.**
 
 # Example Sentence and Choices Guidelines
 
@@ -283,10 +292,15 @@ These guidelines help match content to {school_level} Grade {grade} students. So
 
 Important: These topics are common across all grades. Adjust complexity and abstraction according to grade-level guidelines.
 
+{f'''## Additional Requirements from Teacher:
+{additional_requirements}
+
+**Please incorporate these requirements when selecting topics and generating example sentences.**
+''' if additional_requirements else ''}
 ## Sentence Structure and Vocabulary:
-- Use sentence structure and vocabulary generally matching CEFR {cefr_level} level
-- Example sentences should be appropriate length and complexity for {school_level} Grade {grade}
-- Follow depth guidelines above while maintaining natural, authentic English
+- **MUST use only sentence structure and vocabulary at CEFR {cefr_level} level - DO NOT exceed this level**
+- Example sentences MUST be appropriate length and complexity for {school_level} Grade {grade}
+- **STRICTLY follow all depth guidelines above - these are MANDATORY limits, not suggestions**
 
 ### Example: Additional reference separate from passage/question/choices
 - MUST be simple string only (no array, no object)
