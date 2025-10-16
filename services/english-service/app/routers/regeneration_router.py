@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List
 
 from app.schemas.regeneration import (
@@ -10,13 +10,15 @@ from app.schemas.regeneration import (
 from app.services.regeneration.question_regenerator import QuestionRegenerator
 from app.tasks import regenerate_english_question_task
 from app.celery_app import celery_app
+from app.core.dependencies import get_current_teacher
 
 router = APIRouter(tags=["English Question Regeneration"])
 
 
 @router.post("/questions/regenerate")
 async def regenerate_english_question(
-    request: RegenerateEnglishQuestionRequest
+    request: RegenerateEnglishQuestionRequest,
+    current_teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
     """
     영어 문제를 비동기로 재생성합니다.
@@ -71,8 +73,14 @@ async def regenerate_english_question(
     try:
         print("🚨 비동기 문제 재생성 요청 시작!")
 
-        # 요청 데이터를 딕셔너리로 변환
+        # JWT 토큰에서 teacher_id 추출
+        teacher_id = current_teacher.get("user_id")
+        if not teacher_id:
+            raise HTTPException(status_code=401, detail="사용자 ID를 찾을 수 없습니다.")
+
+        # 요청 데이터를 딕셔너리로 변환하고 teacher_id 추가
         request_data = request.model_dump()
+        request_data['teacher_id'] = teacher_id
 
         # 비동기 재생성 태스크 시작
         task = regenerate_english_question_task.delay(request_data)

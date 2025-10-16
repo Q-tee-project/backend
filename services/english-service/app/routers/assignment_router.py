@@ -148,6 +148,21 @@ async def deploy_assignment_simple(
 
         db.commit()
 
+        # 과제 배포 알림 전송 (각 학생에게)
+        from app.utils.notification_helper import send_assignment_deployed_notification
+        for student_id in deploy_request.student_ids:
+            try:
+                await send_assignment_deployed_notification(
+                    student_id=student_id,
+                    class_id=deploy_request.classroom_id,
+                    class_name=f"클래스 {deploy_request.classroom_id}",  # TODO: 실제 클래스명 조회
+                    assignment_id=assignment.id,
+                    assignment_title=assignment.title,
+                    due_date=None  # TODO: due_date 필드 추가 시 사용
+                )
+            except Exception as e:
+                print(f"⚠️ 과제 배포 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
         return {
             "success": True,
             "message": f"과제가 {deployed_count}명의 학생에게 배포되었습니다.",
@@ -229,7 +244,22 @@ async def deploy_assignment_detailed(
                 deployments.append(existing_deployment)
         
         db.commit()
-        
+
+        # 과제 배포 알림 전송 (각 학생에게)
+        from app.utils.notification_helper import send_assignment_deployed_notification
+        for student_id in deploy_request.student_ids:
+            try:
+                await send_assignment_deployed_notification(
+                    student_id=student_id,
+                    class_id=deploy_request.classroom_id,
+                    class_name=f"클래스 {deploy_request.classroom_id}",  # TODO: 실제 클래스명 조회
+                    assignment_id=assignment.id,
+                    assignment_title=assignment.title,
+                    due_date=None  # TODO: due_date 필드 추가 시 사용
+                )
+            except Exception as e:
+                print(f"⚠️ 과제 배포 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
         # 응답 데이터 생성
         response_data = []
         for deployment in deployments:
@@ -242,9 +272,9 @@ async def deploy_assignment_detailed(
                 status=deployment.status,
                 deployed_at=deployment.deployed_at
             ))
-        
+
         return response_data
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -533,6 +563,38 @@ async def submit_assignment(
                 deployment.status = "completed"
                 deployment.submitted_at = datetime.utcnow()
                 db.commit()
+
+                # 과제 제출 알림 전송 (학생 → 선생님)
+                from app.utils.notification_helper import send_assignment_submitted_notification
+                from sqlalchemy import text
+
+                # 학생 이름 조회
+                try:
+                    student_query = text("""
+                        SELECT name
+                        FROM auth_service.students
+                        WHERE id = :student_id
+                    """)
+                    student_result = db.execute(student_query, {"student_id": submission_data.student_id})
+                    student_info = student_result.fetchone()
+                    student_name = student_info[0] if student_info else f"학생{submission_data.student_id}"
+                except Exception as e:
+                    print(f"학생 정보 조회 실패: {e}")
+                    student_name = f"학생{submission_data.student_id}"
+
+                try:
+                    await send_assignment_submitted_notification(
+                        teacher_id=assignment.teacher_id,
+                        student_id=submission_data.student_id,
+                        student_name=student_name,
+                        class_id=assignment.classroom_id,
+                        class_name=f"클래스 {assignment.classroom_id}",  # TODO: 실제 클래스명 조회
+                        assignment_id=assignment.id,
+                        assignment_title=assignment.title,
+                        submitted_at=deployment.submitted_at.isoformat()
+                    )
+                except Exception as e:
+                    print(f"⚠️ 과제 제출 알림 전송 실패 (주요 로직 계속 진행): {e}")
 
         return {
             "message": "과제가 성공적으로 제출되었습니다.",

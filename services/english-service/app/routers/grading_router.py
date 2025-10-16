@@ -304,6 +304,27 @@ async def update_grading_result(
         db.commit()
         db.refresh(grading_result)
 
+        # 채점 수정 알림 전송 (선생님 → 학생)
+        from app.models.assignment import Assignment, AssignmentDeployment
+        from app.utils.notification_helper import send_grading_updated_notification
+
+        # worksheet_id로 assignment 찾기
+        assignment = db.query(Assignment).filter(
+            Assignment.worksheet_id == grading_result.worksheet_id
+        ).first()
+
+        if assignment:
+            try:
+                await send_grading_updated_notification(
+                    student_id=grading_result.student_id,
+                    assignment_id=assignment.id,
+                    assignment_title=assignment.title,
+                    score=grading_result.total_score,
+                    feedback=update_data.get("feedback")
+                )
+            except Exception as e:
+                print(f"⚠️ 채점 수정 알림 전송 실패 (주요 로직 계속 진행): {e}")
+
         return {
             "result_id": result_id,
             "status": "success",
