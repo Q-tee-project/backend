@@ -20,7 +20,7 @@ class PassageService:
 
         # 수정 가능한 필드들
         updatable_fields = [
-            "passage_content", "original_content",
+            "passage_type", "passage_content", "original_content",
             "korean_translation", "related_questions"
         ]
 
@@ -28,13 +28,8 @@ class PassageService:
             if field in update_data:
                 new_value = update_data.get(field)
 
-                # passage_type 변경 시도 시 에러
-                if field == "passage_type":
-                    raise ValueError("지문 유형은 변경할 수 없습니다.")
-
-                # JSON 구조 검증 (내용 변경 시)
-                if field in ["passage_content", "original_content", "korean_translation"]:
-                    self._validate_structure_preserved(getattr(passage, field), new_value)
+                # passage_type도 변경 가능하도록 수정
+                # JSON 구조 검증 제거 - 자유롭게 변경 가능
 
                 setattr(passage, field, new_value)
 
