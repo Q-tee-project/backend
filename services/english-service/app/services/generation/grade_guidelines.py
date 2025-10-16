@@ -27,7 +27,7 @@ class GradeGuidelines:
         """학년별 CEFR 레벨을 반환합니다."""
         if school_level == '중학교':
             if grade <= 2:
-                return "A2 ~ B1 초반"
+                return "A2"
             else:  # 중3
                 return "B1"
         elif school_level == '고등학교':
